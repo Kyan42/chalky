@@ -20,6 +20,7 @@ export class TurnMerger {
   private turnActive = false;
   private discardCurrent = false;
   private holding = false;
+  private windowMs: number;
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
@@ -28,6 +29,7 @@ export class TurnMerger {
     private readonly options: TurnMergerOptions,
     private readonly emit: (text: string, turns: number) => void,
   ) {
+    this.windowMs = options.mergeMs;
     this.now = options.now ?? (() => performance.now());
     this.setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = options.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
@@ -68,6 +70,14 @@ export class TurnMerger {
   }
 
   /**
+   * Changes the merge window from now on: longer when Chalky has just asked
+   * the learner something and a pause mid-answer must not end it.
+   */
+  setWindow(ms: number) {
+    this.windowMs = ms;
+  }
+
+  /**
    * While held (the barge-in key is down) the window never closes: the key
    * release ends the utterance, not Ink's pauses. Releasing arms the window.
    */
@@ -100,7 +110,7 @@ export class TurnMerger {
     this.timer = this.setTimer(() => {
       this.timer = null;
       this.flush();
-    }, this.options.mergeMs);
+    }, this.windowMs);
   }
 
   private stopTimer() {

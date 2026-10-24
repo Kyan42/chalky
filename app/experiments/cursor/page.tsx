@@ -143,6 +143,8 @@ export default function CursorPage() {
         <button onClick={() => run([{ target: "molecule", gesture: "circle" }])} data-testid="circle">Circle molecule</button>
         <button onClick={() => run([{ target: "blue-wave", gesture: "sweep", to: "red-wave" }])} data-testid="sweep">Sweep blue → red</button>
         <button onClick={() => run([{ target: "red-wave", gesture: "sweep" }])} data-testid="sweep-along">Sweep along red</button>
+        <button onClick={() => run([{ target: "red-wave", gesture: "underline" }])} data-testid="underline">Underline red</button>
+        <button onClick={() => run([{ target: "molecule", gesture: "tap" }])} data-testid="tap">Tap molecule</button>
         <button onClick={() => run([{ target: "sun", gesture: "point" }, { target: "molecule", gesture: "circle" }, { target: "blue-wave", gesture: "sweep", to: "red-wave" }, { target: "red-wave", gesture: "point" }])} data-testid="run-all">Run all</button>
         <button onClick={() => void speak()} disabled={speaking} data-testid="speak">{speaking ? "Speaking…" : "Speak (Sonic + timestamps)"}</button>
         <button onClick={reset} data-testid="reset">Reset</button>

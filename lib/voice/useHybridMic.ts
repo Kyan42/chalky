@@ -33,6 +33,14 @@ export interface HybridMicOptions {
   key?: string;
   /** Turns ending within this window merge into one utterance. */
   mergeMs?: number;
+  /**
+   * Chalky has just asked the learner something (an intake or check-in
+   * question): wait this long after a turn ends for more before calling it an
+   * utterance, so a pause mid-answer doesn't cut it off. Ink's eager end is
+   * never used. Barge-in timing is unaffected.
+   */
+  patient?: boolean;
+  patientMs?: number;
   /** A barge-in shorter than this (or without words) is ignored. */
   minHoldMs?: number;
   /** After the key is released, wait this long for Ink to end the turn. */
@@ -51,6 +59,11 @@ export function useHybridMic(options: HybridMicOptions) {
   opts.current = options;
   const key = options.key ?? "Space";
   const mergeMs = options.mergeMs ?? 700;
+  const patientMs = options.patientMs ?? 1800;
+  const windowMs = options.patient ? patientMs : mergeMs;
+  const windowRef = useRef(windowMs);
+  windowRef.current = windowMs;
+  useEffect(() => merger.current?.setWindow(windowMs), [windowMs]);
   const minHoldMs = options.minHoldMs ?? 300;
   const tailMs = options.tailMs ?? 1200;
 
@@ -94,7 +107,7 @@ export function useHybridMic(options: HybridMicOptions) {
     if (ink.current) return;
     try {
       await unlockAudio();
-      merger.current = new TurnMerger({ mergeMs }, (text, turns) => {
+      merger.current = new TurnMerger({ mergeMs: windowRef.current }, (text, turns) => {
         const via = tail.current || held.current ? "barge" : "open";
         const holdMs = tail.current?.holdMs;
         endTail();

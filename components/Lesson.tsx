@@ -57,6 +57,8 @@ const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"])
 const BASE_KEYTERMS = ["Chalky"];
 /** Seconds of silence after the intake question before the lesson just goes on. */
 const INTAKE_SILENCE_MS = 4000;
+/** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
+const CURSOR_LEAD_S = 0.5;
 /** Answers to the intake question that mean "just start". */
 const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
@@ -336,6 +338,8 @@ export default function Lesson() {
   const [heardNote, setHeardNote] = useState<string | null>(null);
   const voice = useHybridMic({
     speaking: MUTED.has(status) || speakingAudio,
+    // Chalky asked something (intake, check-in, a reply's check): a pause mid-answer must not end the turn.
+    patient: status === "waiting",
     // Space down while Chalky talks: stop now, keep the resume point, then listen.
     onBargeIn: () => pauseRef.current(),
     onUtterance: (text) => {
@@ -506,7 +510,7 @@ export default function Lesson() {
             const ts = timestamps;
             setCursorScript(cursorPoints.flatMap((p) => {
               const k = resolveAt(p.word, ts);
-              return k >= 0 ? [{ t: ts.start[k], target: p.id, gesture: "point" as const }] : [];
+              return k >= 0 ? [{ t: Math.max(0, ts.start[k] - CURSOR_LEAD_S), target: p.id, gesture: "circle" as const }] : [];
             }));
           }
         } else if (event.type === "done") {
@@ -892,7 +896,7 @@ export default function Lesson() {
      * so word timestamps (and the cursor's cues) share one clock. Returns the
      * trailer and what was said, or null if the learner cut in or it failed.
      */
-    const speakReply = async (utterance: string, i: number, wordIndex: number): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
+    const speakReply = async (utterance: string, i: number, wordIndex: number, onLevel?: (level: ConverseTrailer["level"]) => void): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
       const replyAbort = new AbortController();
       replyAbortRef.current = replyAbort;
       const onStop = () => replyAbort.abort();
@@ -926,7 +930,7 @@ export default function Lesson() {
           const want = normalizeWord(c.word);
           let seen = 0;
           const k = norm.findIndex((w) => w === want && ++seen === c.occurrence);
-          if (k >= 0) steps.push({ t: all.start[k], target: c.target, gesture: c.gesture, ...(c.to ? { to: c.to } : {}) });
+          if (k >= 0) steps.push({ t: Math.max(0, all.start[k] - CURSOR_LEAD_S), target: c.target, gesture: c.gesture, ...(c.to ? { to: c.to } : {}) });
         }
         setCursorScript(steps);
       };
@@ -953,6 +957,8 @@ export default function Lesson() {
               sentences.push({ text: ev.text });
               if (sentences.length - 1 <= playingIndex + 1) ensure(sentences.length - 1);
               wake();
+            } else if (ev.type === "level") {
+              onLevel?.(ev.level);
             } else if (ev.type === "trailer") {
               modelCues = ev.modelCues ?? [];
               trailer = ev.trailer;
@@ -1089,7 +1095,13 @@ export default function Lesson() {
           return resumeAt;
         }
         history.push({ who: "learner", text: heardText });
-        const reply = await speakReply(heardText, i, wordIndex);
+        // A detour is decided before the lead-in is spoken: start planning (and drawing) it right away.
+        const reply = await speakReply(heardText, i, wordIndex, (level) => {
+          if (level === "detour" && !(draft && draft.at === resumeAt)) {
+            dropDraft();
+            draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText);
+          }
+        });
         if (abort.signal.aborted) return -1;
         if (!reply) {
           setStatus("waiting");
@@ -1102,6 +1114,19 @@ export default function Lesson() {
           noteLearner();
         }
         setLastLevel(`${trailer.level} / ${trailer.resume}${trailer.cursor.length ? ` · cursor ${trailer.cursor.map((c) => `${c.gesture} ${c.target}`).join(", ")}` : ""}`);
+        /** Going on from a check-in: say its bridge first (written by the planner, no model call). */
+        const goOn = async () => {
+          escalation = 0;
+          dropDraft();
+          setPausedAt(null);
+          if (bridge && !abort.signal.aborted) {
+            logEv({ kind: "say", who: "chalky", role: "bridge", text: bridge });
+            setStatus("speaking");
+            await playBeat(line(bridge), abort.signal, null).catch(() => {});
+          }
+          return resumeAt;
+        };
+        if (trailer.level === "confirm") return await goOn();
         if (trailer.level === "replan") {
           escalation = 0;
           setPausedAt(null);
@@ -1129,12 +1154,7 @@ export default function Lesson() {
         // A brief answer: draft the detour now, in case they are still lost.
         escalation = Math.max(escalation, 1) as 1 | 2;
         if (!draft) draft = planDetour(resumeAt, trailer.planner_note, heardText);
-        if (trailer.resume === "continue" || trailer.resume === "replay_beat") {
-          escalation = 0;
-          dropDraft();
-          setPausedAt(null);
-          return resumeAt;
-        }
+        if (trailer.resume === "continue" || trailer.resume === "replay_beat") return await goOn();
         setStatus("waiting");
       }
     };
@@ -1151,11 +1171,13 @@ export default function Lesson() {
         setStatus("waiting");
         const answer = await (async () => {
           const waiting = awaitTurn(abort.signal);
-          let deadline = performance.now() + INTAKE_SILENCE_MS;
+          const deadline = performance.now() + INTAKE_SILENCE_MS;
+          let started = false;
           const timer = setInterval(() => {
-            // Hearing words or typing keeps the question open; silence lets the lesson go on.
-            if (partialRef.current.trim() || draftRef.current.trim()) deadline = performance.now() + INTAKE_SILENCE_MS;
-            else if (performance.now() > deadline) turnRef.current?.(null);
+            // Silence lets the lesson go on, but only if the learner hasn't started answering at all:
+            // once they speak or type, the patient turn end decides when they're done.
+            if (partialRef.current.trim() || draftRef.current.trim()) started = true;
+            if (!started && performance.now() > deadline) turnRef.current?.(null);
           }, 200);
           try {
             return await waiting;

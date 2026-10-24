@@ -19,9 +19,10 @@ export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
 export const CONVERSE_FALLBACK_MODEL = process.env.CONVERSE_FALLBACK_MODEL || "claude-sonnet-5-5";
 
 /** 1 answer: a brief grounded answer. 2 detour: a short side explanation with a drawing. 3 replan: change the lesson. */
-export type ConverseLevel = "answer" | "detour" | "replan";
+/** confirm: they got it, acknowledge and go on. answer: point at what's on the board. detour: draw what's missing. replan: change the lesson. */
+export type ConverseLevel = "confirm" | "answer" | "detour" | "replan";
 export type ConverseResume = "replay_beat" | "continue" | "wait";
-export type CursorGesture = "point" | "circle" | "sweep";
+export type CursorGesture = "point" | "circle" | "sweep" | "underline" | "tap";
 
 /** One cursor move while the reply is spoken, anchored to a word of the reply. */
 export interface CursorCue {
@@ -81,6 +82,8 @@ export interface ConverseInput {
 /** NDJSON events from POST /api/converse. */
 export type ConverseEvent =
   | { type: "start"; model: string; local: boolean; tMs: number }
+  /** The level the model chose, sent before it speaks, so a detour can start planning at once. */
+  | { type: "level"; level: ConverseLevel; tMs: number }
   | { type: "sentence"; text: string; tMs: number }
   | { type: "trailer"; trailer: ConverseTrailer; tMs: number; modelCues?: unknown[] }
   | { type: "done"; tMs: number; model: string; inputTokens: number; outputTokens: number; fellBack: boolean }
@@ -90,28 +93,31 @@ export { isResume };
 
 const SENTINEL = "<<<trailer>>>";
 
-const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard, mid-lesson. The learner just said something. Reply out loud, then hand control back to the lesson.
+const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard, mid-lesson. The learner just said something. Reply out loud, briefly, then hand control back to the lesson. The board does the explaining: you point at it or draw on it, you don't lecture.
 
-How to reply:
-- If they asked a question or are confused for the first time (escalation 0): a grounded answer in two or three spoken sentences, at most 60 words, that builds on what is already on the board and names the things you point at. Level "answer".
-- If they say they still don't get it, or ask something that needs a new drawing to explain (or escalation is already 1): a short detour, three or four sentences, at most 80 words, taking a fresh angle (a concrete case, an analogy, a number). Level "detour".
-- If a detour has already been given (escalation 2) and they are still lost: say in one or two sentences that you'll take it from a different direction, and set level "replan". Never use "replan" before a detour has happened.
-- If they ask something off the lesson's path, answer briefly and steer back.
-- Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
+Choose the level first:
+- "confirm": they summarised or restated the idea correctly (or nearly), or answered your check-in question correctly. Say one short sentence acknowledging it, plus at most one more correcting a small slip. No explanation and no question. The lesson goes straight on.
+- "answer": a question you can answer by pointing at things ALREADY on the board (the element list below). At most two spoken sentences, and they must name at least one of those elements, with a cursor cue on each one you name. Allowed only on a first question in this spot (escalation 0).
+- "detour": everything else that needs explaining: the answer needs something that is not on the board, they ask for a picture, they still don't get it, or they ask a follow-up in the same spot (escalation 1 or more). Don't talk around a missing picture: say one short sentence like "Let me draw that for you." and the lesson draws it next. Never more talk instead of a drawing.
+- "replan": a detour was already given (escalation 2) and they are still lost. One or two sentences saying you'll take it from a different direction. Never before a detour.
+- If they ask something off the lesson's path, use "answer" or "detour" by the same rules and steer back.
+Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
-End the spoken reply with a short check question when you explained something ("Does that part make sense?", "Want me to go on?"); set resume to "wait" in that case. Set resume to "replay_beat" if you were cut off mid-beat and your answer was a quick aside, so the beat is said again from its start. Set resume to "continue" when the learner confirmed and the lesson can simply go on.
+An "answer" may end with a short check question as its second sentence; set resume to "wait" then. Set resume to "replay_beat" if you were cut off mid-beat and the answer was a quick aside. "confirm" always has resume "continue".
 
-While you speak, a cursor (a teacher's hand) can point at, circle, or sweep between elements already on the board. Add a cursor cue for each element you mention, anchored to the exact word of your reply where you mention it (write the word as it appears; add #2 if it's the second occurrence of that word, e.g. "orbit#2"). Only use element ids from the board list. "sweep" needs "to": another element id. No cues if nothing on the board fits.
+While you speak, a cursor (a teacher's hand) moves over the board. Add a cue for each element you name, anchored to the exact word of your reply where you name it (as it appears; add #2 for its second occurrence, e.g. "orbit#2"), using only element ids from the board list. Gestures: "circle" to single out a shape (prefer it), "underline" for a label, a word or an equation, "tap" for a quick "this one", "point" to rest beside it, "sweep" to travel from it to another element ("to": that id).
 
-Everything before the trailer line is spoken aloud to the learner, word for word. Start speaking to them at once: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there; that all goes in the JSON.
+Everything between the first line and the trailer line is spoken aloud to the learner, word for word. Speak to them directly: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there.
 
-Output format, exactly: the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next"}
+Output format, exactly: a first line "level: confirm" | "level: answer" | "level: detour" | "level: replan", then the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
+{"level": "confirm" | "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what the learner needs and which picture or angle would show it"}
 Nothing else: no code fences, no commentary.`;
 
-const LEVELS = new Set<ConverseLevel>(["answer", "detour", "replan"]);
+const LEVELS = new Set<ConverseLevel>(["confirm", "answer", "detour", "replan"]);
+/** Spoken sentences allowed per level; the board does the rest. */
+const MAX_SENTENCES: Record<ConverseLevel, number> = { confirm: 2, answer: 2, detour: 2, replan: 2 };
 const RESUMES = new Set<ConverseResume>(["replay_beat", "continue", "wait"]);
-const GESTURES = new Set<CursorGesture>(["point", "circle", "sweep"]);
+const GESTURES = new Set<CursorGesture>(["point", "circle", "sweep", "underline", "tap"]);
 
 function context(o: ConverseInput): string {
   const beats = o.beats.length
@@ -215,7 +221,9 @@ export function groundCues(cues: CursorCue[], spoken: string, board: BoardElemen
     if (cued.has(e.id) || e.id.includes(".")) continue;
     const pos = tokens.findIndex((_, k) => namedAt(k, e.id));
     if (pos < 0) continue;
-    out.push({ cue: { word: tokens[pos], occurrence: occurrenceAt(pos), target: e.id, gesture: "point" }, pos });
+    // A label or text is underlined; a shape is circled.
+    const gesture: CursorGesture = /text|label|equation/.test(e.kind) ? "underline" : "circle";
+    out.push({ cue: { word: tokens[pos], occurrence: occurrenceAt(pos), target: e.id, gesture }, pos });
     cued.add(e.id);
   }
   // In spoken order; two cues on the same word would fight, so keep the first.
@@ -232,9 +240,13 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   // Replanning only after a detour has been tried; a request for a drawing is at least a detour.
   if (level === "replan" && input.escalation < 2) level = "detour";
   if (level === "answer" && (input.escalation >= 1 || WANTS_DRAWING.test(input.utterance))) level = "detour";
-  const check = typeof t.check === "string" && t.check.trim() ? t.check.trim() : null;
+  let check = typeof t.check === "string" && t.check.trim() ? t.check.trim() : null;
   let resume: ConverseResume = RESUMES.has(t.resume as ConverseResume) ? (t.resume as ConverseResume) : check ? "wait" : "replay_beat";
   if (check && resume !== "wait") resume = "wait";
+  if (level === "confirm") {
+    check = null;
+    resume = "continue";
+  }
   const cursor: CursorCue[] = [];
   if (Array.isArray(t.cursor)) {
     for (const c of t.cursor.slice(0, 8)) {
@@ -247,7 +259,15 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       cursor.push({ ...at, target, gesture, ...(to ? { to } : {}) });
     }
   }
-  return { level, resume, cursor: groundCues(cursor, spoken, input.board), check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "" };
+  const cues = groundCues(cursor, spoken, input.board);
+  let note = typeof t.planner_note === "string" ? t.planner_note.trim() : "";
+  // An answer has to be made on the board: one that points at nothing becomes a drawing detour.
+  if (level === "answer" && !cues.length) {
+    level = "detour";
+    if (resume === "wait") resume = "wait";
+    note = note || `The learner asked "${input.utterance}"; nothing on the board shows the answer, so draw it.`;
+  }
+  return { level, resume, cursor: cues, check, planner_note: note };
 }
 
 /** The trailer used when the model gave none (or unparsable JSON). */
@@ -293,8 +313,17 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
     let pending = "";
     let trailerText = "";
     let inTrailer = false;
+    /** The "level: ..." first line, until it has been read (or turned out to be missing). */
+    let header: string | null = "";
+    let early: ConverseLevel | null = null;
+    let capped = false;
     const usage = { input: 0, output: 0 };
     const say = (text: string): ConverseEvent | null => {
+      // Short by design: past the level's sentence budget, nothing more is spoken.
+      if (capped || sentences >= MAX_SENTENCES[early ?? "answer"]) {
+        capped = true;
+        return null;
+      }
       if (isMetaTalk(text)) {
         console.warn(`[converse] dropped a sentence that narrates the plan: "${text.slice(0, 160)}"`);
         return null;
@@ -312,7 +341,19 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
             trailerText += event.delta.text;
             continue;
           }
-          pending += event.delta.text;
+          if (header !== null) {
+            header += event.delta.text;
+            const nl = header.indexOf("\n");
+            if (nl < 0 && header.length < 40) continue;
+            const m = /^\s*level\s*:\s*(confirm|answer|detour|replan)\b/i.exec(header);
+            if (m) {
+              early = m[1].toLowerCase() as ConverseLevel;
+              yield { type: "level", level: early, tMs: ms() };
+            }
+            pending += m ? header.slice(nl >= 0 ? nl + 1 : header.length) : header;
+            header = null;
+          } else pending += event.delta.text;
+          if (capped && !pending.includes(SENTINEL)) continue;
           const cut = pending.indexOf(SENTINEL);
           if (cut >= 0) {
             // Everything before the sentinel is speech; after it, the trailer.
