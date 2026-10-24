@@ -159,8 +159,22 @@ export const SCENE_LAYOUT_SCHEMA = {
   },
 };
 
-export function sceneLayoutPrompt(question: string, beats: PlannedBeat[]) {
+/** A beat drawn before the layout pass ran (the live lesson draws its first beats right away). */
+export interface FixedBeat {
+  id: string;
+  region: LayoutBeat["region"];
+  ids: string[];
+}
+
+export function sceneLayoutPrompt(question: string, beats: PlannedBeat[], fixed: FixedBeat[] = []) {
   const list = beats.filter((b) => b.mode !== "talk").map((b) => `${b.id} (${b.mode}): says "${b.say}"\n   planned visual: ${b.visual}`).join("\n");
+  const already = fixed.length
+    ? `\n\nAlready drawn before this layout (keep them in scene 1 with exactly these regions and ids; other scene-1 regions must not overlap them, and later scene-1 beats can refer to their ids):\n${fixed.map((f) => `- ${f.id}: region x ${f.region.x}..${f.region.x + f.region.w}, y ${f.region.y}..${f.region.y + f.region.h}; elements ${f.ids.join(", ") || "(none)"}`).join("\n")}`
+    : "";
+  return sceneLayoutPromptBody(question, list) + already;
+}
+
+function sceneLayoutPromptBody(question: string, list: string) {
   return `You lay out a teacher's whiteboard for a spoken lesson before anything is drawn, so every beat's drawing can be made at the same time. The board is a 100x100 grid (x right, y down; 3:2 on screen).
 
 Lesson question: ${question}

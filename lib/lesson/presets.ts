@@ -32,7 +32,13 @@ export interface PresetElement {
   refs: string;
 }
 
-export const PRESET_KINDS = ["circle", "box", "label", "connect", "rays", "flow", "cycle", "equation", "arrow", "line", "plot", "bar", "move", "text", "highlight", "dim"] as const;
+/** Where the live lesson's first two beats go, before the layout pass has run. */
+export const FIRST_REGIONS = [
+  { x: 5, y: 8, w: 52, h: 62 },
+  { x: 62, y: 8, w: 33, h: 40 },
+];
+
+export const PRESET_KINDS =["circle", "box", "label", "connect", "rays", "flow", "cycle", "equation", "arrow", "line", "plot", "bar", "move", "text", "highlight", "dim"] as const;
 
 export interface Box {
   x1: number;

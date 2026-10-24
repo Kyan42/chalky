@@ -23,7 +23,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Orb, type OrbState } from "@/components/Orb";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
-import type { BoardElement } from "@/lib/lesson/board";
+import type { FixedBeat, LayoutBeat } from "@/experiments/board-layout/prompts";
+import { compilePresetBoard, FIRST_REGIONS, type PresetElement } from "@/lib/lesson/presets";
 import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { unlockAudio } from "@/lib/voice/audio";
@@ -46,11 +47,13 @@ interface BeatState {
   plannedAtMs: number;
   visual: "drawing" | "ready" | "failed" | "none";
   visualMs?: number;
+  /** The board as this beat plays it (compiled just before it plays); none for talk beats. */
   doc?: AnimationDocument;
-  cleared?: boolean;
-  boardSize?: number;
-  edits?: { added: number; highlights: number; dims: number };
-  /** Resolves when the visual request settles, with or without a document. */
+  /** This beat's drawing, in the preset scene language. */
+  elements?: PresetElement[];
+  /** Its scene and region from the layout (or a first-beat default). */
+  plan?: LayoutBeat;
+  /** Resolves when the visual request settles, with or without a drawing. */
   ready: Promise<void>;
 }
 
@@ -268,9 +271,34 @@ export default function Lesson() {
     let notify: () => void = () => {};
     const changed = () => new Promise<void>((r) => (notify = r));
 
-    // Planner: each beat's visual is drawn onto the board left by the beat before it,
-    // so visuals are generated in order, each as soon as its beat and the previous board exist.
-    let board: Promise<BoardElement[]> = Promise.resolve([]);
+    // Visuals: the board is planned as scenes (fresh boards of up to four drawings), then
+    // every beat is drawn independently. The first two beats can't wait for the layout pass
+    // (it needs the whole plan), so they go straight into default regions of scene 1:
+    // beat 1 with Haiku for speed, beat 2 with Sonnet once beat 1's element ids exist.
+    // The layout pass then places everything else around them and the rest draw at once.
+    const visualBeats: BeatState[] = [];
+    let resolveLayout: (plans: LayoutBeat[] | null) => void = () => {};
+    const layout = new Promise<LayoutBeat[] | null>((r) => (resolveLayout = r));
+    const ids = (s: BeatState) => (s.elements ?? []).filter((e) => e.kind !== "highlight" && e.kind !== "dim").map((e) => e.id);
+    const declared = (s: BeatState): LayoutBeat => ({ ...s.plan!, introduces: s.plan!.introduces.length ? s.plan!.introduces : ids(s).map((id) => ({ id, what: "" })) });
+    const draw = async (state: BeatState, plan: LayoutBeat, earlier: LayoutBeat[], model: string) => {
+      state.plan = plan;
+      const r: { elements?: PresetElement[]; ms?: number } = await fetch("/api/scene/draw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, beat: state.beat, plan, earlier, model }),
+        signal: abort.signal,
+      }).then((x) => x.json());
+      state.elements = r.elements ?? [];
+      state.visual = r.elements ? "ready" : "failed";
+      state.visualMs = r.ms;
+    };
+    const settle = (state: BeatState, p: Promise<void>) =>
+      p.catch(() => {
+        state.visual = "failed";
+        state.elements ??= [];
+      }).finally(() => setBeats([...list]));
+
     const planning = (async () => {
       const res = await fetch("/api/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }), signal: abort.signal });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
@@ -281,41 +309,43 @@ export default function Lesson() {
         } else if (event.type === "error") throw new Error(`planner: ${event.message}`);
         else if (event.type === "beat") {
           const state: BeatState = { beat: event.beat, plannedAtMs: Math.round(performance.now() - t0), visual: "drawing", ready: Promise.resolve() };
-          const before = board;
-          const drawn = before.then(async (prev) => {
-            if (event.beat.mode === "talk") {
-              state.visual = "none";
-              return prev;
+          if (event.beat.mode === "talk") state.visual = "none";
+          else {
+            const k = visualBeats.length;
+            visualBeats.push(state);
+            if (k === 0) {
+              state.ready = settle(state, draw(state, { id: event.beat.id, scene: 1, region: FIRST_REGIONS[0], introduces: [], refs: [] }, [], "claude-haiku-5-5"));
+            } else if (k === 1) {
+              const first = visualBeats[0];
+              state.ready = settle(state, first.ready.then(() => draw(state, { id: event.beat.id, scene: 1, region: FIRST_REGIONS[1], introduces: [], refs: [] }, [declared(first)], "claude-sonnet-5-5")));
+            } else {
+              state.ready = settle(state, layout.then((plans) => {
+                const plan = plans?.[k] ?? { id: event.beat.id, scene: 99, region: { x: 5, y: 5, w: 90, h: 90 }, introduces: [], refs: [] };
+                const earlier = (plans ?? []).slice(0, k).filter((p) => p.scene === plan.scene).map((p, i) => (i < 2 && visualBeats[i].plan ? declared(visualBeats[i]) : p));
+                return draw(state, plan, earlier, "claude-sonnet-5-5");
+              }));
             }
-            const r: { doc?: AnimationDocument; board?: BoardElement[]; cleared?: boolean; ms?: number; edits?: BeatState["edits"] } = await fetch("/api/visual", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ question: q, beat: event.beat, board: prev }),
-              signal: abort.signal,
-            }).then((x) => x.json());
-            state.doc = r.doc ?? undefined;
-            state.visual = r.doc ? "ready" : "failed";
-            state.visualMs = r.ms;
-            state.cleared = r.cleared;
-            state.boardSize = r.board?.length;
-            state.edits = r.edits;
-            // A failed beat leaves the board as it was.
-            return r.doc && r.board ? r.board : prev;
-          });
-          board = drawn.catch(() => before);
-          state.ready = drawn
-            .then(() => {})
-            .catch(() => {
-              state.visual = "failed";
-            })
-            .finally(() => setBeats([...list]));
+          }
           list.push(state);
           setBeats([...list]);
           notify();
         }
       }
+      // The whole plan is in: lay out the rest of the board around the first two drawings.
+      if (visualBeats.length > 2) {
+        await Promise.all(visualBeats.slice(0, 2).map((s) => s.ready));
+        const fixed: FixedBeat[] = visualBeats.slice(0, 2).map((s) => ({ id: s.beat.id, region: s.plan!.region, ids: ids(s) }));
+        const r: { plan?: LayoutBeat[]; error?: string } = await fetch("/api/scene/layout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, beats: list.map((s) => s.beat), fixed }),
+          signal: abort.signal,
+        }).then((x) => x.json());
+        resolveLayout(r.plan ?? null);
+      } else resolveLayout(null);
     })().finally(() => {
       planDone = true;
+      resolveLayout(null);
       notify();
     });
     planning.catch((e) => {
@@ -351,6 +381,17 @@ export default function Lesson() {
         setStatus("drawing");
         await list[i].ready;
         if (abort.signal.aborted) break;
+        // This beat's board: the earlier drawings of its scene, finished, plus this one animating in.
+        const state = list[i];
+        if (state.plan && state.elements) {
+          const scene = visualBeats.filter((s) => s.plan?.scene === state.plan!.scene && visualBeats.indexOf(s) <= visualBeats.indexOf(state));
+          try {
+            state.doc = compilePresetBoard(scene.map((s) => s.elements ?? []), scene.length - 1, `${state.beat.id}-${Date.now()}`).doc;
+          } catch (e) {
+            console.warn("[board] compile failed", e);
+            state.doc = undefined;
+          }
+        }
         setStatus("speaking");
         const beatAbort = new AbortController();
         beatAbortRef.current = beatAbort;
@@ -512,9 +553,8 @@ export default function Lesson() {
                   <span className="beat-say">{b.beat.say}</span>
                   <span className="beat-meta">
                     {b.beat.mode}{b.beat.check ? " · check-in" : ""} · planned at {(b.plannedAtMs / 1000).toFixed(1)} s · {b.visual === "none" ? "no drawing" : `visual ${b.visual === "drawing" ? "drawing…" : b.visual === "failed" ? "failed" : `${((b.visualMs ?? 0) / 1000).toFixed(1)} s`}`}
-                    {b.boardSize !== undefined && ` · ${b.cleared ? "new board, " : ""}+${b.edits?.added ?? 0} (${b.boardSize} on board)`}
-                    {!!b.edits?.highlights && ` · ${b.edits.highlights} highlight${b.edits.highlights > 1 ? "s" : ""}`}
-                    {!!b.edits?.dims && ` · ${b.edits.dims} dim${b.edits.dims > 1 ? "s" : ""}`}
+                    {b.plan && ` · scene ${b.plan.scene}`}
+                    {b.elements && ` · ${b.elements.length} element${b.elements.length === 1 ? "" : "s"}`}
                   </span>
                 </li>
               ))}
