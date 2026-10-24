@@ -17,7 +17,7 @@
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { H, PAPER, Scene, W, type Pt } from "@/experiments/visual-flex/doc";
 import { compileFn } from "@/experiments/visual-flex/scene";
-import { BLOCK_KINDS, drawBlockElement, highlightBlock, type BlockContext } from "@/lib/blocks/compile";
+import { BLOCK_KINDS, blockExtent, drawBlockElement, highlightBlock, scaleBlockArgs, shapesFirst, type BlockContext } from "@/lib/blocks/compile";
 
 /** One element as the model sends it (every field present; unused ones empty). */
 export interface PresetElement {
@@ -377,7 +377,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
   beats.forEach((elements, i) => {
     const still = currentBeat < 0 || i < currentBeat;
     if (currentBeat >= 0 && i > currentBeat) return;
-    for (const e of elements) {
+    for (const e of shapesFirst(elements)) {
       // An earlier beat's highlight is over; skip it when drawing finished beats.
       if (still && e.kind === "highlight") continue;
       draw(e, still);
@@ -430,6 +430,10 @@ export function fitToRegion(elements: PresetElement[], region: { x: number; y: n
       case "text":
         point(a[0], a[1]);
         break;
+      case "block":
+      case "travel":
+        for (const [x, y] of blockExtent(e)) point(x, y);
+        break;
     }
   }
   if (!xs.length) return elements;
@@ -461,6 +465,9 @@ export function fitToRegion(elements: PresetElement[], region: { x: number; y: n
       case "equation":
       case "text":
         return { ...e, args: [X(a[0]), Y(a[1]), ...a.slice(2)] };
+      case "block":
+      case "travel":
+        return { ...e, args: scaleBlockArgs(e, X, Y, k) };
       default:
         return e;
     }

@@ -88,11 +88,20 @@ function drawBlock(ctx: BlockContext, e: ElementLike, at: number) {
   anchorPoints.set(ctx.scene, points);
   const owners = ownerOf.get(ctx.scene) ?? new Map<string, string>();
   ownerOf.set(ctx.scene, owners);
+  // Arrows snap to a circle round the drawing's body, not its box (a leaf's box is half empty).
+  const [ccx, ccy] = r.anchors.center ?? [(r.box.x1 + r.box.x2) / 2, (r.box.y1 + r.box.y2) / 2];
+  const circle = { cx: ccx, cy: ccy, r: 0.4 * Math.min(r.box.x2 - r.box.x1, r.box.y2 - r.box.y1) };
+  // Sides every block answers to, for anchors the model guesses ("leaf.top"); named anchors win.
+  const sides: Record<string, Pt> = {
+    center: [ccx, ccy],
+    top: [ccx, r.box.y1], bottom: [ccx, r.box.y2], left: [r.box.x1, ccy], right: [r.box.x2, ccy],
+  };
+  const anchors = { ...sides, ...r.anchors };
   ids.forEach((id, i) => {
     if (i === 0) {
-      ctx.register({ id, kind: "block", box: r.box });
+      ctx.register({ id, kind: "block", box: r.box, circle });
       ctx.occupy(id, r.box);
-    } else ctx.placed.set(id, { id, kind: "block", box: r.box });
+    } else ctx.placed.set(id, { id, kind: "block", box: r.box, circle });
     byId.set(id, r);
     for (const [part, box] of Object.entries(r.parts)) {
       for (const k of keys(id, part)) {
@@ -100,7 +109,7 @@ function drawBlock(ctx: BlockContext, e: ElementLike, at: number) {
         owners.set(k, id);
       }
     }
-    for (const [name, [x, y]] of Object.entries(r.anchors)) {
+    for (const [name, [x, y]] of Object.entries(anchors)) {
       for (const k of keys(id, name)) {
         points.set(k, [x, y]);
         if (!r.parts[name]) ctx.placed.set(k, { id: k, kind: "anchor", box: { x1: x, y1: y, x2: x, y2: y }, circle: { cx: x, cy: y, r: 0 } });
@@ -162,4 +171,50 @@ export function highlightBlock(ctx: BlockContext, target: PlacedLike, at: number
   const owner = target.kind === "block" ? target.id : ownerOf.get(ctx.scene)?.get(target.id);
   if (owner) rendered.get(ctx.scene)?.get(owner)?.pulse(at + 0.35);
   return true;
+}
+
+const REF_KINDS = new Set(["connect", "rays", "label", "highlight", "dim"]);
+
+/**
+ * A beat's elements in drawing order: things that refer to others by id after everything else,
+ * keeping order otherwise. Models often write the arrow to a block before the block itself, and
+ * the compiler resolves refs against what it has drawn so far. Timing (`at`) is unaffected.
+ */
+export function shapesFirst<T extends ElementLike>(elements: T[]): T[] {
+  const late = (e: T) => REF_KINDS.has(e.kind) || (e.kind === "travel" && e.refs.split(",").some((r) => r.trim() && r.trim() !== "xy"));
+  return [...elements.filter((e) => !late(e)), ...elements.filter(late)];
+}
+
+/** Which travel ends come from args (not refs). */
+const argEnds = (e: ElementLike) => {
+  const refs = e.refs.split(",").map((r) => r.trim());
+  return [!refs[0] || refs[0] === "xy", !refs[1] || refs[1] === "xy"];
+};
+
+/** Grid points a `block` or `travel` covers, for fitting a beat into its region (fitToRegion). */
+export function blockExtent(e: ElementLike): Pt[] {
+  const a = e.args;
+  if (e.kind === "block") {
+    const block = blockById(e.text.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+    if (!block || a.length < 3) return [];
+    const [w, h] = block.size, m = Math.max(w, h);
+    const hx = (a[2] * w) / m / 2, hy = (a[2] * 1.5 * h) / m / 2;
+    return [[a[0] - hx, a[1] - hy], [a[0] + hx, a[1] + hy]];
+  }
+  if (e.kind === "travel" && a.length >= 4) {
+    const [from, to] = argEnds(e);
+    return [...(from ? [[a[0], a[1]] as Pt] : []), ...(to ? [[a[2], a[3]] as Pt] : [])];
+  }
+  return [];
+}
+
+/** A `block` or `travel`'s args moved by X/Y and scaled by k (fitToRegion). */
+export function scaleBlockArgs(e: ElementLike, X: (x: number) => number, Y: (y: number) => number, k: number): number[] {
+  const a = [...e.args];
+  if (e.kind === "block" && a.length >= 3) return [X(a[0]), Y(a[1]), a[2] * k, ...a.slice(3)];
+  if (e.kind === "travel" && a.length >= 4) {
+    const [from, to] = argEnds(e);
+    return [from ? X(a[0]) : a[0], from ? Y(a[1]) : a[1], to ? X(a[2]) : a[2], to ? Y(a[3]) : a[3], ...(a.length > 4 ? [a[4] * k, ...a.slice(5)] : [])];
+  }
+  return a;
 }
