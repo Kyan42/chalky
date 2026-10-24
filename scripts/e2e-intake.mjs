@@ -20,10 +20,16 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3004";
 const FIXTURE = process.env.FIXTURE ?? "";
 const QUESTION = process.env.QUESTION ?? "Why is the sky blue?";
 const ANSWER = process.env.ANSWER ?? "";
+// VOICE_ANSWER="first half|second half": the answer is spoken, with PAUSE seconds (default 1.2) of silence between the halves.
+const VOICE_ANSWER = process.env.VOICE_ANSWER ?? "";
+const PAUSE = Number(process.env.PAUSE ?? 1.2);
 const EXPECT = process.env.EXPECT ?? (ANSWER ? "" : "keep");
 const RUN = process.env.RUN ?? `intake-${FIXTURE ? "fixture" : "voice"}-${ANSWER ? "answer" : "silent"}`;
 const OUT = join(process.cwd(), "experiments/conversation-e2e", RUN);
 mkdirSync(OUT, { recursive: true });
+const voiceAnswer = VOICE_ANSWER
+  ? readFileSync((await speechWav(join(process.cwd(), `experiments/conversation-e2e/clips/answer-${PAUSE}.wav`), [{ silence: 0.2 }, { say: VOICE_ANSWER.split("|")[0] }, { silence: PAUSE }, { say: VOICE_ANSWER.split("|")[1] }, { silence: 0.3 }])).path).toString("base64")
+  : null;
 const question = readFileSync((await speechWav(join(process.cwd(), "experiments/conversation-e2e/clips/question.wav"), [{ silence: 0.2 }, { say: QUESTION }, { silence: 0.3 }])).path).toString("base64");
 
 const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
@@ -109,6 +115,11 @@ try {
   await page.goto(`${BASE}/lesson${FIXTURE ? `?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 6}` : ""}`, { waitUntil: "load" });
   let tAsked;
   if (FIXTURE) {
+    // A spoken answer needs the mic on: start talking (greeting), then type the question.
+    if (VOICE_ANSWER) {
+      await page.click('[data-testid="start-talking"]');
+      await waitFor((s) => s.status === "Listening", 20000);
+    }
     await page.fill('[data-testid="question"]', QUESTION);
     tAsked = Date.now();
     await page.click('[data-testid="ask"]');
@@ -126,14 +137,26 @@ try {
   const fsMs = Number(firstSound?.firstSound?.match(/First sound ([\d.]+) s/)?.[1] ?? NaN) * 1000;
   check("first sound under about 2 s after the question", fsMs < 2200, `${firstSound?.firstSound ?? "no first-sound line"} (Ink turn end to ask: ${FIXTURE ? "typed" : "~0.7 s merge window, not included"})`);
   const tQuestionAsked = Date.now();
-  if (ANSWER) {
+  if (voiceAnswer) {
+    await page.waitForTimeout(800);
+    const secs = await page.evaluate((b64) => window.__say(b64), voiceAnswer);
+    console.log(`${since().padStart(5)} s  [said] "${VOICE_ANSWER.replace("|", ` (${PAUSE} s pause) `)}" (${secs.toFixed(1)} s)`);
+  } else if (ANSWER) {
     await page.waitForTimeout(800);
     await page.fill('[data-testid="question"]', ANSWER);
     await page.click('[data-testid="ask"]');
     console.log(`${since().padStart(5)} s  [typed] "${ANSWER}"`);
   } else console.log(`${since().padStart(5)} s  [silent]`);
+  if (voiceAnswer) {
+    // The whole answer, both halves, must reach the intake decision as one utterance.
+    const decided = await waitFor((s) => /answer “/.test(s.intake ?? ""), 30000);
+    const heard = decided?.intake?.match(/answer “([^”]*)”/)?.[1] ?? "";
+    const [a, b] = VOICE_ANSWER.split("|").map((x) => x.toLowerCase().replace(/[^a-z ]/g, "").trim().split(" ").slice(-2).join(" "));
+    const norm = heard.toLowerCase().replace(/[^a-z ]/g, "");
+    check(`a ${PAUSE} s pause mid-answer doesn't cut the answer`, norm.includes(a) && norm.includes(b), `heard “${heard}”`);
+  }
   const b1 = await waitFor((s) => s.beat === "b1" && s.status === "Speaking", 30000);
-  check("beat 1 starts after the intake", !!b1, b1 ? `${((Date.now() - tQuestionAsked) / 1000).toFixed(1)} s after the intake question finished${ANSWER ? "" : " (silence)"}` : "");
+  check("beat 1 starts after the intake", !!b1, b1 ? `${((Date.now() - tQuestionAsked) / 1000).toFixed(1)} s after the intake question finished${ANSWER || VOICE_ANSWER ? "" : " (silence)"}` : "");
   const s1 = await st();
   console.log(`        intake: ${s1.intake}\n        learner: ${s1.learner ?? "(nothing known)"}`);
   const second = await waitFor((s) => s.beat && s.beat !== "b1", 240000);
