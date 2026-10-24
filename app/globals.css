@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+:root {
+  --background: #06070d;
+  --surface: #11131f;
+  --surface-2: #181b2b;
+  --border: rgba(255, 255, 255, 0.08);
+  --foreground: #f4f1ea;
+  --muted: #9aa0c3;
+  --accent: #4da3ff;
+  --accent-2: #2ed3b7;
+  --warn: #ffd84d;
+  --danger: #ff5a5a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@keyframes orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+/* BuildingLoader: each status word slides up and shimmers */
+@keyframes loader-word {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes loader-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.loader-word {
+  animation:
+    loader-word 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+    loader-shimmer 2.4s linear infinite;
+}
+
+/* Post-answer choice window: the bar empties over the countdown */
+@keyframes choice-countdown {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.choice-countdown {
+  animation: choice-countdown linear forwards;
+}

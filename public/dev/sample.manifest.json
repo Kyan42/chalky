@@ -1,0 +1,174 @@
+{
+  "beats": [
+    {
+      "index": 0,
+      "startTick": 96,
+      "endTick": 1480,
+      "narration": "Picture electricity as water flowing through a pipe. The push is voltage, the flow is current."
+    },
+    {
+      "index": 1,
+      "startTick": 1576,
+      "endTick": 3040,
+      "narration": "A resistor is a narrow section of pipe. It fights the flow, so less current gets through."
+    },
+    {
+      "index": 2,
+      "startTick": 3136,
+      "endTick": 4000,
+      "narration": "Ohm's law ties them together: voltage equals current times resistance."
+    },
+    {
+      "index": 3,
+      "startTick": 4096,
+      "endTick": 5656,
+      "narration": "So if you double the resistance and keep the voltage the same, the current is cut in half."
+    }
+  ],
+  "elements": [
+    {
+      "nodeId": "title",
+      "label": "title",
+      "concept": "Ohm's law",
+      "bounds": {
+        "x": 782.16,
+        "y": 92.5,
+        "width": 355.68,
+        "height": 95
+      },
+      "firstTick": 96,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "battery-text",
+      "label": "Voltage",
+      "concept": "voltage, the push",
+      "bounds": {
+        "x": 347.2,
+        "y": 535,
+        "width": 145.6,
+        "height": 50
+      },
+      "firstTick": 912,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "battery",
+      "label": "Voltage",
+      "concept": "voltage, the push",
+      "bounds": {
+        "x": 310,
+        "y": 410,
+        "width": 220,
+        "height": 300
+      },
+      "firstTick": 872,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "flow",
+      "label": "current arrow",
+      "concept": "current, the flow",
+      "bounds": {
+        "x": 548,
+        "y": 458,
+        "width": 824,
+        "height": 24
+      },
+      "firstTick": 440,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "flow-label",
+      "label": "current",
+      "concept": "current",
+      "bounds": {
+        "x": 898.12,
+        "y": 398.75,
+        "width": 123.76,
+        "height": 42.5
+      },
+      "firstTick": 536,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "resistor-text",
+      "label": "Resistor",
+      "concept": "resistance",
+      "bounds": {
+        "x": 876.8,
+        "y": 625,
+        "width": 166.4,
+        "height": 50
+      },
+      "firstTick": 1704,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "resistor",
+      "label": "Resistor",
+      "concept": "resistance",
+      "bounds": {
+        "x": 780,
+        "y": 590,
+        "width": 360,
+        "height": 120
+      },
+      "firstTick": 1664,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "equation",
+      "label": "V = I × R",
+      "concept": "Ohm's law equation",
+      "bounds": {
+        "x": 735.36,
+        "y": 800,
+        "width": 449.28000000000003,
+        "height": 120
+      },
+      "firstTick": 3568,
+      "lastTick": 5776
+    },
+    {
+      "nodeId": "halve",
+      "label": "2× R → ½ I",
+      "concept": "2× R → ½ I",
+      "bounds": {
+        "x": 1375.2,
+        "y": 620,
+        "width": 249.60000000000002,
+        "height": 60
+      },
+      "firstTick": 5568,
+      "lastTick": 5776
+    },
+    {
+      "nodeId": "question-kicker",
+      "label": "YOUR TURN · draw and talk",
+      "concept": "YOUR TURN · draw and talk",
+      "bounds": {
+        "x": 778,
+        "y": 852.5,
+        "width": 364,
+        "height": 35
+      },
+      "firstTick": 5848,
+      "lastTick": 7192
+    },
+    {
+      "nodeId": "question-text",
+      "label": "question",
+      "concept": "the question",
+      "bounds": {
+        "x": 180,
+        "y": 887,
+        "width": 1560,
+        "height": 110
+      },
+      "firstTick": 5872,
+      "lastTick": 7192
+    }
+  ],
+  "questionTick": 6016
+}
