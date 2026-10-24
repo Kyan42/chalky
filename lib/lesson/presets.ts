@@ -58,7 +58,7 @@ export interface LayoutReport {
 
 const sx = (x: number) => (x / 100) * W;
 const sy = (y: number) => (y / 100) * H;
-const clampAt = (at: number) => Math.max(0, Math.min(4.5, at || 0));
+const clampAt = (at: number) => Math.max(0, Math.min(18, at || 0));
 const clampDur = (dur: number) => Math.max(0.1, Math.min(3, dur || 0.6));
 const area = (b: Box) => Math.max(0, b.x2 - b.x1) * Math.max(0, b.y2 - b.y1);
 const intersect = (a: Box, b: Box): Box => ({ x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1), x2: Math.min(a.x2, b.x2), y2: Math.min(a.y2, b.y2) });

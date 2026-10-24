@@ -28,7 +28,7 @@ export const TPS = 240;
 export const FPS = 60;
 const FRAME = TPS / FPS;
 /** Every visual is this long; the beat's speech is shorter, so it holds at the end. */
-export const MAX_SECONDS = 6;
+export const MAX_SECONDS = 20;
 export const END = MAX_SECONDS * TPS;
 
 export const FONT_ID = "inter";
