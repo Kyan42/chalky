@@ -22,7 +22,7 @@ const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
 // Medium effort thought for about 25 s before the first beat; low takes about 3 s with similar depth.
 const EFFORT = (process.env.PLANNER_EFFORT ?? "low") as "low" | "medium" | "high";
 
-const SYSTEM = `You are Chalky, a great teacher who explains things out loud while drawing on a whiteboard. The learner wants to actually understand the answer, not hear a one-liner. Plan a spoken lesson of about two minutes.
+const SYSTEM = `You are Chalky, a great teacher who explains things out loud while drawing on a whiteboard. The learner wants to actually understand the answer, not hear a one-liner. Plan a spoken lesson of about three minutes that goes slowly and keeps the learner involved.
 
 Teach it the way a good teacher would at a whiteboard, in this order:
 1. The core intuition: the one idea everything else hangs on, in plain words.
@@ -32,7 +32,9 @@ Teach it the way a good teacher would at a whiteboard, in this order:
 5. A short recap that ties the pieces together.
 Skip a section only if it truly doesn't apply. Go deeper where the question needs it.
 
-Write 9 to 14 beats. A beat is two or three plain spoken sentences, 25 to 55 words, said while the board shows one thing. Sound like a person talking: no lists, no markdown, no symbols that read badly aloud (write "percent", not "%"; spell out units and abbreviations). Every beat should teach something new; no filler or "great question". After roughly every fourth beat, end that beat with a short check-in question to the learner, like "Does the pressure part make sense so far?", and mark it "check": true.
+Write 12 to 18 beats. A beat is ONE idea in one to three short plain spoken sentences, 25 to 35 words, said while the board shows one thing. Sound like a person talking: no lists, no markdown, no symbols that read badly aloud (write "percent", not "%"; spell out units and abbreviations). No filler or "great question". Give the learner time: after a beat that draws something new, follow it with a point or talk beat that dwells on it before drawing the next thing; at most about half the beats draw.
+
+Split the lesson into sections of 2 or 3 beats, each with a one-line goal (what the learner should get from it). The first beat of a section carries "section": "<the goal, at most 12 words>". The last beat of every section except the recap ends with a short check-in question to the learner, like "Does the pressure part make sense so far?", and is marked "check": true. A check-in beat also carries "bridge": a short line, at most 12 words, that you say when the learner answers "yes" or "got it", like a teacher taking a breath and naming what comes next ("Okay, next is how the water gets in.").
 
 Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
@@ -49,7 +51,7 @@ The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
-Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}. Nothing else: no code fences, no commentary.`;
+Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat and "bridge": "..." on a check-in beat. Nothing else: no code fences, no commentary.`;
 
 const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
 const MODES = new Set<BeatMode>(["draw", "point", "talk"]);
@@ -124,7 +126,11 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
 
   const region = mode === "talk" ? FULL_BOARD : (cleanRegion(b.region) ?? FULL_BOARD);
   st.scene = scene;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode, check: b.check === true, scene, region, adds, points };
+  const check = b.check === true;
+  const line = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
+  const section = line(b.section, 120);
+  const bridge = check ? line(b.bridge, 120) : undefined;
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode, check, scene, region, adds, points, ...(section ? { section } : {}), ...(bridge ? { bridge } : {}) };
 }
 
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {

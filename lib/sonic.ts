@@ -56,6 +56,11 @@ async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string
   if (buffer.trim().startsWith("data:")) yield buffer.trim().slice(5).trimStart();
 }
 
+function sonicSpeed(): number {
+  const v = Number(process.env.SONIC_SPEED ?? 0.92);
+  return Number.isFinite(v) && v >= 0.6 && v <= 1.5 ? v : 1;
+}
+
 export async function* sonicStream(text: string, signal: AbortSignal): AsyncGenerator<BeatAudioEvent> {
   // Locally the key comes from .env.local. In the cloud environment it is a
   // network secret: the egress proxy adds the Authorization header itself.
@@ -81,6 +86,8 @@ export async function* sonicStream(text: string, signal: AbortSignal): AsyncGene
       output_format: { container: "raw", encoding: "pcm_f32le", sample_rate: SONIC_SAMPLE_RATE },
       language: "en",
       add_timestamps: true,
+      // A touch slower than normal for teaching (Sonic 3 models: 0.6 to 1.5). SONIC_SPEED overrides; 1 turns it off.
+      ...(sonicSpeed() !== 1 ? { generation_config: { speed: sonicSpeed() } } : {}),
     }),
   });
   if (!response.ok || !response.body) {

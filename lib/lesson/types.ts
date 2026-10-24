@@ -36,6 +36,10 @@ export interface PlannedBeat {
   adds: { id: string; what: string }[];
   /** Elements from earlier beats in the same scene to highlight, each when `word` from `say` is spoken. */
   points: { id: string; word: string }[];
+  /** On a section's first beat: the section's one-line goal. */
+  section?: string;
+  /** On a check-in beat: what Chalky says when the learner answers "got it" (no model call), naming what comes next. */
+  bridge?: string;
 }
 
 /** NDJSON events from POST /api/plan. */

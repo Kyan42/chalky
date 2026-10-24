@@ -44,7 +44,8 @@ const TPS = 240;
 const FRAME_TICKS = 4;
 /** Documents are 20 s long (experiments/visual-flex/doc.ts), enough for any highlight in a beat. */
 const DOC_END = 20 * TPS;
-const GAP_SECONDS = 0.45;
+/** A breath between beats: the judges asked for a slower lesson. */
+const GAP_SECONDS = 0.65;
 /** Speakers ring on for a moment after the audio ends; keep the mic closed a little longer. */
 const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
@@ -860,7 +861,7 @@ export default function Lesson() {
      * Returns the list position to play next (`resumeAt` replays the beat cut
      * off), or -1 when the lesson was stopped.
      */
-    const converseAt = async (i: number, wordIndex: number, resumeAt: number): Promise<number> => {
+    const converseAt = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
       setStatus("waiting");
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
@@ -869,7 +870,12 @@ export default function Lesson() {
           escalation = 0;
           dropDraft();
           setPausedAt(null);
-          setLastLevel(heardText === null ? "continue (button)" : "continue (local, no model call)");
+          setLastLevel(heardText === null ? "continue (button)" : `continue (local, no model call${bridge ? ", bridge" : ""})`);
+          // At a check-in, take a breath and say what comes next: written by the planner, no model call.
+          if (bridge && !abort.signal.aborted) {
+            setStatus("speaking");
+            await playBeat(line(bridge), abort.signal, null).catch(() => {});
+          }
           return resumeAt;
         }
         history.push({ who: "learner", text: heardText });
@@ -978,7 +984,7 @@ export default function Lesson() {
         // A check-in question waits for the learner before the lesson goes on.
         const more = i + 1 < list.length || planOpen();
         if (list[i].beat.check && more) {
-          const next = await converseAt(i, -1, i + 1);
+          const next = await converseAt(i, -1, i + 1, list[i].beat.bridge);
           if (next < 0) break;
           i = next;
           continue;
@@ -1140,7 +1146,7 @@ export default function Lesson() {
                 <li key={b.beat.id} data-beat-id={b.beat.id} data-state={i === current ? "now" : i < current ? "done" : "next"} data-scene={b.beat.scene}>
                   <span className="beat-say">{b.beat.say}</span>
                   <span className="beat-meta">
-                    scene {b.beat.scene} · {b.beat.mode}{b.beat.check ? " · check-in" : ""} · planned at {(b.plannedAtMs / 1000).toFixed(1)} s · {drawLabel(b)}
+                    {b.beat.section ? `§ ${b.beat.section} · ` : ""}scene {b.beat.scene} · {b.beat.mode}{b.beat.check ? ` · check-in${b.beat.bridge ? ` → “${b.beat.bridge}”` : ""}` : ""} · planned at {(b.plannedAtMs / 1000).toFixed(1)} s · {drawLabel(b)}
                   </span>
                 </li>
               ))}

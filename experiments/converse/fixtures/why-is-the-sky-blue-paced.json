@@ -1,0 +1,411 @@
+{
+  "question": "Why is the sky blue?",
+  "title": "Why the Sky Is Blue",
+  "capturedAt": "2026-10-24T21:59:32.222Z",
+  "beats": [
+    {
+      "id": "b1",
+      "say": "Sunlight looks white, but it's really a mix of every color traveling together. Think of it as a bundle of waves, some long and red, some short and blue.",
+      "at": "sunlight",
+      "visual": "Draw the sun at left with a bundle of wavy lines leaving it to the right: a long stretched red wave on top, a tight short blue wave on the bottom, labeled 'white light'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 10,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "sun",
+          "what": "sun on the left"
+        },
+        {
+          "id": "waves",
+          "what": "bundle of colored waves, long red to short blue"
+        }
+      ],
+      "points": [],
+      "section": "Sunlight is a mix of colors with different wavelengths"
+    },
+    {
+      "id": "b2",
+      "say": "Look at these two waves. The red one has a long wavelength, the blue one a short wavelength. That difference in size is the one idea everything hangs on today.",
+      "at": "waves",
+      "visual": "Highlight the red and blue waves in the bundle, contrasting their spacing.",
+      "mode": "point",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 10,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "waves",
+          "word": "waves"
+        }
+      ]
+    },
+    {
+      "id": "b3",
+      "say": "Now picture that bundle hitting air. Air is mostly tiny nitrogen and oxygen molecules, far smaller than any of these light waves.",
+      "at": "air",
+      "visual": "Draw a scatter of small circles to the right of the waves labeled 'air molecules', with the wave bundle arrow pointing into them.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 68,
+        "y": 15,
+        "w": 27,
+        "h": 60
+      },
+      "adds": [
+        {
+          "id": "molecules",
+          "what": "cluster of tiny air molecule circles"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b4",
+      "say": "So we have long red waves, short blue waves, and tiny molecules in the way. Does that picture of light and air make sense so far?",
+      "at": "have",
+      "visual": "",
+      "mode": "talk",
+      "check": true,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": [],
+      "bridge": "Okay, now let's zoom in on one molecule."
+    },
+    {
+      "id": "b5",
+      "say": "Here's one molecule. When light passes, its electric field shakes the molecule's electrons, and those shaking electrons send light back out in new directions. That's called scattering.",
+      "at": "molecule",
+      "visual": "Draw one big circle in the center labeled 'molecule', an incoming wave from the left, and short arrows spraying outward in every direction labeled 'scattered'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 20,
+        "y": 15,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "mol",
+          "what": "one large molecule circle"
+        },
+        {
+          "id": "rays",
+          "what": "arrows radiating out in all directions"
+        }
+      ],
+      "points": [],
+      "section": "Air molecules scatter short blue light much more than red"
+    },
+    {
+      "id": "b6",
+      "say": "The key is how strongly it scatters. It's called Rayleigh scattering, and it goes as one over wavelength to the fourth power. Shorter waves scatter enormously more.",
+      "at": "rayleigh",
+      "visual": "Above the molecule, write 'scattering ∝ 1 / λ⁴' labeled 'Rayleigh'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 45,
+        "h": 12
+      },
+      "adds": [
+        {
+          "id": "law",
+          "what": "equation: scattering proportional to one over wavelength to the fourth"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b7",
+      "say": "That fourth power is what makes this so lopsided. Halve the wavelength and the scattering jumps sixteen times. Is the idea of scattering clicking for you?",
+      "at": "power",
+      "visual": "Highlight the exponent four in the equation.",
+      "mode": "point",
+      "check": true,
+      "scene": 2,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 45,
+        "h": 12
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "law",
+          "word": "power"
+        }
+      ],
+      "bridge": "Good, let's put real numbers on it."
+    },
+    {
+      "id": "b8",
+      "say": "Blue light is about four hundred fifty nanometers long. Red light is about seven hundred nanometers. Let's compare them as bars.",
+      "at": "blue",
+      "visual": "Draw two vertical bars, a shorter blue bar labeled '450 nm' and a taller red bar labeled '700 nm', titled 'wavelength'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 8,
+        "y": 15,
+        "w": 58,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "bars",
+          "what": "bar chart: blue 450 nanometers, red 700 nanometers"
+        }
+      ],
+      "points": [],
+      "section": "Real numbers show blue scatters about six times more"
+    },
+    {
+      "id": "b9",
+      "say": "Seven hundred divided by four hundred fifty is about one and a half. Raise that to the fourth power and you get roughly six.",
+      "at": "divided",
+      "visual": "Write '(700/450)⁴ ≈ 6' to the right of the bars, arrow from the bars to it.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 70,
+        "y": 15,
+        "w": 26,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "calc",
+          "what": "calculation 700 over 450, to the fourth, about 6"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b10",
+      "say": "So blue light gets scattered about six times more than red. That scattered blue comes at your eyes from every direction of the sky. Does that number make sense?",
+      "at": "blue",
+      "visual": "Highlight the result 'about 6'.",
+      "mode": "point",
+      "check": true,
+      "scene": 3,
+      "region": {
+        "x": 70,
+        "y": 15,
+        "w": 26,
+        "h": 30
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "calc",
+          "word": "six"
+        }
+      ],
+      "bridge": "Now here's the puzzle most people miss."
+    },
+    {
+      "id": "b11",
+      "say": "Violet light is even shorter than blue, so it scatters even more. So why isn't the sky violet? Picture the sunlight spectrum as a curve.",
+      "at": "violet",
+      "visual": "Draw a plot with color on the horizontal axis from violet to red and a curve that is low at violet and peaks in the middle, labeled 'sunlight'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 8,
+        "y": 15,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "spectrum",
+          "what": "plot of sunlight brightness across colors, low at violet"
+        }
+      ],
+      "points": [],
+      "section": "Why the sky isn't violet: sun and eyes"
+    },
+    {
+      "id": "b12",
+      "say": "First, the sun simply sends less violet, see how low the curve starts. Second, our eyes are much less sensitive to violet.",
+      "at": "sun",
+      "visual": "Highlight the low violet end of the sunlight curve.",
+      "mode": "point",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 8,
+        "y": 15,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "spectrum",
+          "word": "curve"
+        }
+      ]
+    },
+    {
+      "id": "b13",
+      "say": "Our color sensors blend all that scattered blue and violet, plus a bit of green, into the sky blue we actually perceive.",
+      "at": "sensors",
+      "visual": "Draw an eye to the right of the plot with an arrow from the violet and blue part of the curve into it, labeled 'looks blue'.",
+      "mode": "draw",
+      "check": true,
+      "scene": 4,
+      "region": {
+        "x": 72,
+        "y": 25,
+        "w": 24,
+        "h": 40
+      },
+      "adds": [
+        {
+          "id": "eye",
+          "what": "an eye receiving mixed light"
+        }
+      ],
+      "points": [],
+      "bridge": "Great, let's pull it all together."
+    },
+    {
+      "id": "b14",
+      "say": "So, sunlight is a mix of wavelengths. Tiny air molecules scatter short waves far more, about six times more for blue than red. Our eyes and the sun's output make it blue, not violet.",
+      "at": "sunlight",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": [],
+      "section": "Recap: wavelength, scattering, and our eyes"
+    },
+    {
+      "id": "b15",
+      "say": "And as a bonus, at sunset light crosses far more air, the blue gets scattered away before reaching you, and the reds left over paint the sky.",
+      "at": "bonus",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    }
+  ],
+  "board": [
+    {
+      "id": "sun",
+      "kind": "element",
+      "label": "sun on the left",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "waves",
+      "kind": "element",
+      "label": "bundle of colored waves, long red to short blue",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "molecules",
+      "kind": "element",
+      "label": "cluster of tiny air molecule circles",
+      "scene": 1,
+      "beat": "b3"
+    },
+    {
+      "id": "mol",
+      "kind": "element",
+      "label": "one large molecule circle",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "rays",
+      "kind": "element",
+      "label": "arrows radiating out in all directions",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "law",
+      "kind": "element",
+      "label": "equation: scattering proportional to one over wavelength to the fourth",
+      "scene": 2,
+      "beat": "b6"
+    },
+    {
+      "id": "bars",
+      "kind": "element",
+      "label": "bar chart: blue 450 nanometers, red 700 nanometers",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "calc",
+      "kind": "element",
+      "label": "calculation 700 over 450, to the fourth, about 6",
+      "scene": 3,
+      "beat": "b9"
+    },
+    {
+      "id": "spectrum",
+      "kind": "element",
+      "label": "plot of sunlight brightness across colors, low at violet",
+      "scene": 4,
+      "beat": "b11"
+    },
+    {
+      "id": "eye",
+      "kind": "element",
+      "label": "an eye receiving mixed light",
+      "scene": 4,
+      "beat": "b13"
+    }
+  ]
+}
