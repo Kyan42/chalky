@@ -333,6 +333,19 @@ export default function Lesson() {
   const inputViaRef = useRef<"voice" | "typed" | "button">("typed");
   /** Adds an event to the running lesson's transcript; set by the running lesson. */
   const logRef = useRef<(e: Record<string, unknown>) => void>(() => {});
+  /** Sends the running lesson's transcript now; set by the running lesson. */
+  const flushLogRef = useRef<() => void>(() => {});
+  // Closing or hiding the tab still saves the transcript (keepalive outlives the page).
+  useEffect(() => {
+    const save = () => flushLogRef.current();
+    window.addEventListener("pagehide", save);
+    const onHidden = () => document.visibilityState === "hidden" && save();
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", save);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+  }, []);
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
@@ -644,17 +657,26 @@ export default function Lesson() {
       end: null as string | null,
     };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
-    const flushLog = () => {
+    const flushLog = (closing = false) => {
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
-      // Not the lesson's abort signal: the last write must survive Stop.
-      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(transcript), keepalive: true }).catch(() => {});
+      const body = JSON.stringify(transcript);
+      // The tab is going away: a beacon outlives the page (browsers cap it at about 64 KB; a longer
+      // transcript keeps what the last regular save sent, at most 2 s old).
+      if (closing && body.length < 60_000 && navigator.sendBeacon?.("/api/live-log", new Blob([body], { type: "application/json" }))) return;
+      // Not the lesson's abort signal, so the final save survives Stop.
+      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => {});
     };
     const logEv = (e: Record<string, unknown>) => {
       transcript.events.push({ t: since(), ...e });
       flushTimer ??= setTimeout(flushLog, 2000);
     };
     logRef.current = logEv;
+    flushLogRef.current = () => {
+      transcript.learner = learner;
+      transcript.prefetch = { ...stats };
+      flushLog(true);
+    };
     logEv({ kind: "learner", via: transcript.askedVia, role: "question", text: q });
 
     // One beat of speech ahead: fetched while the beat before plays, dropped on any change of course.

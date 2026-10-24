@@ -2,8 +2,9 @@
  * POST /api/live-log  { id, ...transcript }  →  { ok, path }
  * Writes one lesson's transcript to experiments/live-runs/<id>.json, replacing
  * the previous write of the same lesson (the page sends the whole transcript
- * every few seconds and at the end). For reviewing live runs afterwards; not
- * available in production.
+ * every few seconds, at the end, and when the tab closes). For reviewing live
+ * runs afterwards. Writes only when CHALKY_LIVE_LOG=1 (in any NODE_ENV, so a
+ * frozen production build can record too); refuses otherwise.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 4_000_000;
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === "production") return Response.json({ error: "not found" }, { status: 404 });
+  if (process.env.CHALKY_LIVE_LOG !== "1") return Response.json({ error: "transcripts are off (set CHALKY_LIVE_LOG=1)" }, { status: 403 });
   const text = await request.text();
   if (text.length > MAX_BYTES) return Response.json({ error: "too large" }, { status: 413 });
   let body: { id?: unknown };
