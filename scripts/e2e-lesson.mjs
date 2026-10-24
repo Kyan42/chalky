@@ -27,6 +27,7 @@ const t0 = Date.now();
 await page.click('[data-testid="ask"]');
 
 const shot = new Set();
+const stalls = new Map();
 let last = "";
 for (;;) {
   const s = await page.evaluate(() => {
@@ -58,6 +59,8 @@ for (;;) {
   });
   const t = ((Date.now() - t0) / 1000).toFixed(1);
   const line = `${s.status} | beat ${s.current + 1}/${s.beats} | word "${s.word}" | board ink ${s.inked}px`;
+  // "Drawing" after the first beat started speaking means playback is waiting on a visual.
+  if (s.status === "Drawing…" && s.current > 0) stalls.set(s.current, (stalls.get(s.current) ?? 0) + 0.5);
   if (line !== last) console.log(`${t.padStart(5)} s  ${line}`);
   last = line;
   if (s.status === "Speaking" && s.current >= 0 && s.inked > 40 && !shot.has(s.current)) {
@@ -65,8 +68,11 @@ for (;;) {
     await page.screenshot({ path: join(OUT, `beat-${s.current + 1}.png`) });
     shot.add(s.current);
   }
+  // EVERY_FRAME=1 also saves a screenshot every poll, to catch short-lived marks like highlights.
+  if (process.env.EVERY_FRAME && s.status === "Speaking") await page.screenshot({ path: join(OUT, `t-${t.padStart(5, "0")}-beat${s.current + 1}.png`) });
   if (["Done", "Error", "Stopped"].includes(s.status) || Date.now() - t0 > 180_000) {
     console.log(`\ntitle: ${s.title}\n${s.firstSound}\nerror: ${s.error}\nTTS responses: ${tts.join(",")}`);
+    console.log(`waits for a visual mid-lesson: ${[...stalls].map(([b, sec]) => `before beat ${b + 1} about ${sec} s`).join(", ") || "none"}`);
     s.meta.forEach((m, i) => console.log(`beat ${i + 1}: ${m}`));
     break;
   }

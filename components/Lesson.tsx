@@ -6,13 +6,16 @@
  * beats play in order with Sonic voice. Audio is the clock: each frame the
  * board's Clayzo player is seeked to (speech time − anchor word start).
  *
- * Board model for now: each beat replaces the board with its own visual.
+ * The board grows: each beat's document holds everything drawn so far (earlier
+ * beats already finished, this beat animating in), and the player swaps to it
+ * at the beat boundary.
  */
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
+import type { BoardElement } from "@/lib/lesson/board";
 import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 
@@ -29,6 +32,9 @@ interface BeatState {
   visual: "drawing" | "ready" | "failed";
   visualMs?: number;
   doc?: AnimationDocument;
+  cleared?: boolean;
+  boardSize?: number;
+  edits?: { added: number; highlights: number; dims: number };
   /** Resolves when the visual request settles, with or without a document. */
   ready: Promise<void>;
 }
@@ -196,7 +202,9 @@ export default function Lesson() {
     let notify: () => void = () => {};
     const changed = () => new Promise<void>((r) => (notify = r));
 
-    // Planner: start each beat's visual the moment the beat arrives.
+    // Planner: each beat's visual is drawn onto the board left by the beat before it,
+    // so visuals are generated in order, each as soon as its beat and the previous board exist.
+    let board: Promise<BoardElement[]> = Promise.resolve([]);
     const planning = (async () => {
       const res = await fetch("/api/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }), signal: abort.signal });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
@@ -205,13 +213,26 @@ export default function Lesson() {
         else if (event.type === "error") throw new Error(`planner: ${event.message}`);
         else if (event.type === "beat") {
           const state: BeatState = { beat: event.beat, plannedAtMs: Math.round(performance.now() - t0), visual: "drawing", ready: Promise.resolve() };
-          state.ready = fetch("/api/visual", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q, beat: event.beat }), signal: abort.signal })
-            .then((r) => r.json())
-            .then((r: { doc?: AnimationDocument; ms?: number }) => {
-              state.doc = r.doc ?? undefined;
-              state.visual = r.doc ? "ready" : "failed";
-              state.visualMs = r.ms;
-            })
+          const before = board;
+          const drawn = before.then(async (prev) => {
+            const r: { doc?: AnimationDocument; board?: BoardElement[]; cleared?: boolean; ms?: number; edits?: BeatState["edits"] } = await fetch("/api/visual", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ question: q, beat: event.beat, board: prev }),
+              signal: abort.signal,
+            }).then((x) => x.json());
+            state.doc = r.doc ?? undefined;
+            state.visual = r.doc ? "ready" : "failed";
+            state.visualMs = r.ms;
+            state.cleared = r.cleared;
+            state.boardSize = r.board?.length;
+            state.edits = r.edits;
+            // A failed beat leaves the board as it was.
+            return r.doc && r.board ? r.board : prev;
+          });
+          board = drawn.catch(() => before);
+          state.ready = drawn
+            .then(() => {})
             .catch(() => {
               state.visual = "failed";
             })
@@ -294,6 +315,9 @@ export default function Lesson() {
                   <span className="beat-say">{b.beat.say}</span>
                   <span className="beat-meta">
                     planned at {(b.plannedAtMs / 1000).toFixed(1)} s · visual {b.visual === "drawing" ? "drawing…" : b.visual === "failed" ? "failed" : `${((b.visualMs ?? 0) / 1000).toFixed(1)} s`}
+                    {b.boardSize !== undefined && ` · ${b.cleared ? "new board, " : ""}+${b.edits?.added ?? 0} (${b.boardSize} on board)`}
+                    {!!b.edits?.highlights && ` · ${b.edits.highlights} highlight${b.edits.highlights > 1 ? "s" : ""}`}
+                    {!!b.edits?.dims && ` · ${b.edits.dims} dim${b.edits.dims > 1 ? "s" : ""}`}
                   </span>
                 </li>
               ))}

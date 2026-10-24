@@ -111,7 +111,7 @@ export class Scene {
         stroke: stroke(color(o.color), o.width ?? 8),
         ...(o.fillColor ? { fill: fill(color(o.fillColor), 0.18) } : {}),
       },
-      operators: [trim("t", { end: keyed("e", [[start, 0, IN_OUT], [end, 1]]) })],
+      operators: o.at < 0 ? [] : [trim("t", { end: keyed("e", [[start, 0, IN_OUT], [end, 1]]) })],
     });
   }
 
@@ -119,7 +119,7 @@ export class Scene {
   circle(cx: number, cy: number, r: number, o: { at: number; color?: string; filled?: boolean; width?: number }) {
     const t = tick(o.at);
     return this.add("circle", {
-      ...base("c", { inTick: t, outTick: END, x: cx, y: cy, scale: popScale(t) }),
+      ...base("c", { inTick: t, outTick: END, x: cx, y: cy, ...(o.at < 0 ? {} : { scale: popScale(t) }) }),
       type: "ellipse",
       size: constant({ width: r * 2, height: r * 2 }),
       style: o.filled === false ? { stroke: stroke(color(o.color), o.width ?? 6) } : { fill: fill(color(o.color)) },
@@ -130,7 +130,7 @@ export class Scene {
   box(x: number, y: number, w: number, h: number, o: { at: number; color?: string; filled?: boolean; radius?: number }) {
     const t = tick(o.at);
     return this.add("box", {
-      ...base("b", { inTick: t, outTick: END, x: x + w / 2, y: y + h / 2, scale: popScale(t) }),
+      ...base("b", { inTick: t, outTick: END, x: x + w / 2, y: y + h / 2, ...(o.at < 0 ? {} : { scale: popScale(t) }) }),
       type: "rect",
       size: constant({ width: w, height: h }),
       cornerRadius: constant(o.radius ?? 16),
@@ -149,10 +149,14 @@ export class Scene {
         x: x + w / 2,
         y,
         anchor: { x: 0, y: h / 2 },
-        scale: keyed<{ x: number; y: number; z: number }>("bs", [
-          [t0, { x: 1, y: 0.001, z: 1 }, OUT],
-          [t1, { x: 1, y: 1, z: 1 }],
-        ]),
+        ...(o.at < 0
+          ? {}
+          : {
+              scale: keyed<{ x: number; y: number; z: number }>("bs", [
+                [t0, { x: 1, y: 0.001, z: 1 }, OUT],
+                [t1, { x: 1, y: 1, z: 1 }],
+              ]),
+            }),
       }),
       type: "rect",
       size: constant({ width: w, height: h }),
@@ -166,14 +170,16 @@ export class Scene {
     const t0 = tick(o.at);
     const t1 = Math.max(t0 + FRAME, tick(o.at + o.dur));
     return this.add("dot", {
-      ...base("d", {
-        inTick: t0,
-        outTick: END,
-        position: keyed<{ x: number; y: number; z: number }>("p", [
-          [t0, { x: from[0], y: from[1], z: 0 }, IN_OUT],
-          [t1, { x: to[0], y: to[1], z: 0 }],
-        ]),
-      }),
+      ...(o.at < 0
+        ? base("d", { inTick: t0, outTick: END, x: to[0], y: to[1] })
+        : base("d", {
+            inTick: t0,
+            outTick: END,
+            position: keyed<{ x: number; y: number; z: number }>("p", [
+              [t0, { x: from[0], y: from[1], z: 0 }, IN_OUT],
+              [t1, { x: to[0], y: to[1], z: 0 }],
+            ]),
+          })),
       type: "ellipse",
       size: constant({ width: r * 2, height: r * 2 }),
       style: { fill: fill(color(o.color)) },
@@ -195,7 +201,7 @@ export class Scene {
         outTick: END,
         x: left,
         y: y - line / 2 - size * 0.1,
-        opacity: keyed("o", [[t, 0, OUT], [t + 4 * FRAME, 1]]),
+        ...(o.at < 0 ? {} : { opacity: keyed("o", [[t, 0, OUT], [t + 4 * FRAME, 1]]) }),
       }),
       type: "text",
       runs: constant([
@@ -215,7 +221,33 @@ export class Scene {
     const s = 22;
     const left: Pt = [to[0] - s * Math.cos(ang - 0.5), to[1] - s * Math.sin(ang - 0.5)];
     const right: Pt = [to[0] - s * Math.cos(ang + 0.5), to[1] - s * Math.sin(ang + 0.5)];
-    this.stroke([left, to, right], { at: o.at + o.dur, dur: 0.1, color: o.color, width: o.width });
+    this.stroke([left, to, right], { at: o.at < 0 ? o.at : o.at + o.dur, dur: 0.1, color: o.color, width: o.width });
+  }
+
+  /**
+   * A soft rectangle over a region that appears at `at` and, if `until` is
+   * set, fades out again: under the shapes (`behind`) it marks them, over them
+   * in the paper colour it dims them.
+   */
+  overlay(x: number, y: number, w: number, h: number, o: { at: number; color: string; opacity: number; behind: boolean; until?: number }) {
+    const t0 = tick(o.at);
+    const keys: [number, number, typeof OUT?][] = o.at < 0 ? [[0, o.opacity]] : [[t0, 0, OUT], [t0 + 4 * FRAME, o.opacity]];
+    if (o.until !== undefined && o.at >= 0) {
+      const t1 = Math.max(t0 + 6 * FRAME, tick(o.until));
+      keys.push([t1, o.opacity, OUT], [t1 + 6 * FRAME, 0]);
+    }
+    const id = this.add("mark", {
+      ...base("m", { inTick: o.at < 0 ? 0 : t0, outTick: END, x: x + w / 2, y: y + h / 2 }),
+      type: "rect",
+      size: constant({ width: w, height: h }),
+      cornerRadius: constant(14),
+      style: { fill: fill(color(o.color), keys.length === 1 ? o.opacity : keyed("mo", keys as never)) },
+    });
+    if (o.behind) {
+      this.order.pop();
+      this.order.unshift(id);
+    }
+    return id;
   }
 
   build(id: string, name: string): AnimationDocument {

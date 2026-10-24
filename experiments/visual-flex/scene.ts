@@ -43,8 +43,14 @@ export function compileLevel3(spec: Level3Spec, id: string) {
   const elements = (spec.elements ?? []).slice(0, 40);
   if (!elements.length) throw new Error("elements must not be empty");
   const s = new Scene();
-  for (const e of elements) {
-    const at = Math.max(0, Math.min(4.5, e.at ?? 0));
+  for (const e of elements) drawElement(s, e);
+  return s.build(id, "L3 scene");
+}
+
+/** Draws one element into `s`. `still` draws it already finished (an earlier beat's element). */
+export function drawElement(s: Scene, e: SceneElement, still = false) {
+  {
+    const at = still ? -1 : Math.max(0, Math.min(4.5, e.at ?? 0));
     const dur = Math.max(0.1, Math.min(3, e.dur ?? 0.6));
     switch (e.kind) {
       case "line":
@@ -88,7 +94,6 @@ export function compileLevel3(spec: Level3Spec, id: string) {
         throw new Error(`unknown element kind "${(e as { kind: string }).kind}"`);
     }
   }
-  return s.build(id, "L3 scene");
 }
 
 /** One element as the model sends it: every field present, numbers packed into `args`. */
