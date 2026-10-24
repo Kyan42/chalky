@@ -38,35 +38,18 @@ import {
   type Vec2,
   type Vec3,
 } from "@clayzo/animation/authoring";
+import { CHALK, WHITEBOARD, type Theme } from "./themes";
 import type { Block, Paint, Shape } from "./types";
 
 // ---- Look ----
 
-export const COLORS: Record<string, string> = {
-  board: "#FBFAF7",
-  ink: "#23262F",
-  grey: "#8A8F9C",
-  "grey-tint": "#ECEDF1",
-  blue: "#2F6FDB",
-  "blue-tint": "#DCE8FB",
-  green: "#2E9E57",
-  "green-tint": "#DDF2E3",
-  red: "#E0474C",
-  "red-tint": "#FBDCDD",
-  orange: "#EE8A22",
-  "orange-tint": "#FDE7CF",
-  yellow: "#F5C518",
-  "yellow-tint": "#FFF3BF",
-  purple: "#7B5BD6",
-  "purple-tint": "#E8E1FA",
-  brown: "#8B5A3C",
-  "brown-tint": "#EFE2D6",
-  highlighter: "#FFE45C",
-};
-const paint = (p: Paint): Color => hex(COLORS[p] ?? p);
+// The board's look. `build` sets it before compiling, so every colour and width below follows it.
+let theme: Theme = CHALK;
+const paint = (p: Paint): Color => hex(theme.colors[p] ?? p);
 
-/** Marker thickness in pixels on the board, whatever size a block is drawn at. */
-export const MARKER = 5;
+/** The whiteboard's colours and marker width, for code that draws blocks outside a board. */
+export const COLORS = WHITEBOARD.colors;
+export const MARKER = WHITEBOARD.marker;
 /** How fast the marker moves when drawing, in pixels per second. */
 const DRAW_SPEED = 1500;
 
@@ -257,16 +240,18 @@ export class Board {
   readonly width: number;
   readonly height: number;
   private font?: { uri: string; family: string };
+  private theme: Theme;
   private cursor = 0;
   private lastStart = 0;
   private count = 0;
   private instances: Instance[] = [];
   private marks: ((end: number, nodes: Record<string, SceneNode>, roots: string[]) => void)[] = [];
 
-  constructor(o: { width?: number; height?: number; font?: { uri: string; family: string } } = {}) {
+  constructor(o: { width?: number; height?: number; font?: { uri: string; family: string }; theme?: Theme } = {}) {
     this.width = o.width ?? 1920;
     this.height = o.height ?? 1080;
     this.font = o.font;
+    this.theme = o.theme ?? CHALK;
   }
 
   /** The time a step starts and reserves `seconds` from; moves the cursor past it. */
@@ -374,7 +359,7 @@ export class Board {
     const start = this.slot(o, seconds + 0.15);
     const id = this.nextId("arrow");
     this.marks.push((endTick, nodes, roots) => {
-      const color = paint(o.color ?? "ink"), width = o.width ?? MARKER;
+      const color = paint(o.color ?? "ink"), width = o.width ?? theme.marker;
       const opacity = o.until !== undefined ? fadeOut(`${id}.o`, o.until) : undefined;
       const shaft = { closed: false, vertices: pts.map((p) => vtx(p.x, p.y)) };
       const heads = { closed: false, vertices: [vtx(headPts[0].x, headPts[0].y), vtx(end.x, end.y), vtx(headPts[1].x, headPts[1].y)] };
@@ -417,7 +402,7 @@ export class Board {
         }
         contour = { closed: false, vertices: vs };
         color = paint(o.color ?? "red");
-        width = o.width ?? MARKER;
+        width = o.width ?? theme.marker;
       } else {
         // A highlighter stroke across the box, behind everything drawn so far.
         contour = { closed: false, vertices: [vtx(box.x - pad / 2, cy), vtx(box.x + box.width + pad / 2, cy)] };
@@ -428,7 +413,7 @@ export class Board {
         ...base(id, { outTick: endTick }),
         type: "path",
         path: constant({ contours: [contour] }),
-        style: { stroke: stroke(color, width, { cap: style === "circle" ? "round" : "butt", opacity: opacity ?? (style === "circle" ? 1 : 0.7) }) },
+        style: { stroke: stroke(color, width, { cap: style === "circle" ? "round" : "butt", opacity: opacity ?? (style === "circle" ? 1 : theme.highlighter) }) },
         operators: [trim(`${id}.trim`, { end: drawOn(`${id}.end`, start, start + seconds) })],
       };
       if (style === "circle") roots.push(id);
@@ -469,6 +454,7 @@ export class Board {
   }
 
   build(id: string, name: string, o: { hold?: number } = {}): AnimationDocument {
+    theme = this.theme;
     const end = tk(this.cursor + (o.hold ?? 1));
     const nodes: Record<string, SceneNode> = {
       board: {
@@ -486,6 +472,16 @@ export class Board {
     }
     for (const mark of this.marks) mark(end, nodes, roots);
     const size = { width: this.width, height: this.height };
+    if (theme.chalk) {
+      // Everything drawn goes through the chalk shader as one layer.
+      nodes.drawing = { ...base("drawing", { outTick: end }), type: "group", children: roots.splice(1) };
+      nodes.chalk = effect("chalk", "drawing", "custom-sksl", end, [["grain", theme.chalk.grain, 0, 1]], CHALK_SKSL);
+      roots.push("chalk");
+    }
+    if (theme.smudges) {
+      Object.assign(nodes, smudges(size, end));
+      roots.splice(1, 0, "smudge-blur");
+    }
     const doc = withComputedRevision({
       version: ANIMATION_DOCUMENT_VERSION,
       id,
@@ -546,8 +542,9 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
   const opacity = new Keys(1);
   const { enter } = inst;
   if (enter.kind === "pop") {
-    scale.list.splice(0, 1, [0, v3(0)]);
-    scale.add(tk(enter.start), v3(0), EASE.pop);
+    // Almost nothing rather than 0: a clip path inside a block cannot be drawn at scale 0.
+    scale.list.splice(0, 1, [0, v3(0.0001)]);
+    scale.add(tk(enter.start), v3(0.0001), EASE.pop);
     scale.add(tk(enter.start + 0.5), v3(s0));
   }
   let s = s0;
@@ -577,7 +574,7 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
     return [from, t] as const;
   });
 
-  const markerWidth = (shape: Shape) => ((shape.width ?? 1) * MARKER) / s0;
+  const markerWidth = (shape: Shape) => ((shape.width ?? 1) * theme.marker) / s0;
   const partChildren: Record<string, string[]> = {};
   shapes.forEach(({ part, shape }, i) => {
     const sid = `${inst.id}-${part}-${i}`;
@@ -587,16 +584,33 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
     const contours = outline(shape);
     if (shape.fill) {
       const fid = `${sid}-fill`;
-      // The tint arrives once its outline is drawn (or with the previous outline when it has none).
+      // The fill arrives once its outline is drawn (or with the previous outline when it has none).
       const at = shape.stroke ? to : from;
-      const fillOpacity = drawing ? new Keys(0) : new Keys(1);
-      if (drawing) fillOpacity.to(tk(at), 1, 0.3, EASE.out);
-      nodes[fid] = {
-        ...base(fid, { outTick: end }),
-        type: "path",
-        path: constant({ contours }),
-        style: { fill: fill(paint(shape.fill), fillOpacity.track(`${fid}.o`)) },
-      };
+      if (theme.fill === "hatch" && theme.hatch && shape.fill.endsWith("-tint")) {
+        // Shaded in with the side of the chalk: a zigzag scribble clipped to the shape.
+        const { spacing, width, opacity, angle, seconds } = theme.hatch;
+        const clip = `${fid}-clip`, scribble = `${fid}-hatch`;
+        nodes[clip] = { ...base(clip, { outTick: end }), type: "path", path: constant({ contours }), style: {} };
+        nodes[scribble] = {
+          ...base(scribble, { outTick: end }),
+          type: "path",
+          path: constant({ contours: [hatch(shapeBox(shape), spacing / s0, angle, i)] }),
+          style: { stroke: stroke(paint(shape.fill), width / s0, { opacity }) },
+          ...(drawing ? { operators: [trim(`${scribble}.trim`, { end: drawOn(`${scribble}.end`, at, at + seconds) })] } : {}),
+        };
+        nodes[fid] = { ...base(fid, { outTick: end }), type: "group", children: [scribble], clipPathId: clip };
+      } else {
+        // With no fills, a tint becomes the board colour, arriving as its outline starts.
+        const blank = theme.fill === "none" && shape.fill.endsWith("-tint");
+        const fillOpacity = drawing ? new Keys(0) : new Keys(1);
+        if (drawing) fillOpacity.to(tk(blank ? from : at), 1, blank ? 0.1 : 0.3, EASE.out);
+        nodes[fid] = {
+          ...base(fid, { outTick: end }),
+          type: "path",
+          path: constant({ contours }),
+          style: { fill: fill(paint(blank ? "board" : shape.fill), fillOpacity.track(`${fid}.o`)) },
+        };
+      }
       partChildren[part].push(fid);
     }
     if (shape.stroke) {
@@ -628,5 +642,88 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
     type: "group",
     children: block.parts.map((p) => `${inst.id}-${p.id}`),
     ...(fading ? { isolation: true } : {}),
+  };
+}
+
+// ---- Chalk ----
+
+/**
+ * Back-and-forth strokes across a box at `angle` degrees, `spacing` apart, each a little uneven,
+ * running past the box so the clip cuts their turns off.
+ */
+function hatch([x0, y0, x1, y1]: [number, number, number, number], spacing: number, angle: number, seed: number): PathContour {
+  const a = (angle * Math.PI) / 180;
+  const u = { x: Math.cos(a), y: Math.sin(a) }, n = { x: -Math.sin(a), y: Math.cos(a) };
+  const corners = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+  const along = corners.map(([x, y]) => x * u.x + y * u.y), across = corners.map(([x, y]) => x * n.x + y * n.y);
+  const [u0, u1] = [Math.min(...along) - spacing * 2, Math.max(...along) + spacing * 2];
+  const [n0, n1] = [Math.min(...across), Math.max(...across)];
+  const rand = (k: number) => {
+    const v = Math.sin((seed + 1) * 12.9898 + k * 78.233) * 43758.5453;
+    return v - Math.floor(v) - 0.5;
+  };
+  const vs: PathVertex[] = [];
+  for (let k = 0, c = n0 + spacing * 0.3; c <= n1 + spacing * 0.5; k++, c += spacing) {
+    const ends = [u0 + rand(k) * spacing * 1.5, u1 + rand(k + 50) * spacing * 1.5];
+    if (k % 2) ends.reverse();
+    for (const [j, e] of ends.entries()) {
+      const cc = c + rand(k * 3 + j) * spacing * 0.35;
+      vs.push(vtx(u.x * e + n.x * cc, u.y * e + n.y * cc));
+    }
+  }
+  return { closed: false, vertices: vs };
+}
+
+/** Grain and slightly broken edges, like chalk dragged over slate. Works in board pixels at any render size. */
+const CHALK_SKSL = `
+uniform shader inputImage;
+uniform float grain;
+uniform float2 renderScale;
+float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float vnoise(float2 p) {
+  float2 i = floor(p); float2 f = fract(p);
+  float a = hash(i), b = hash(i + float2(1, 0)), c = hash(i + float2(0, 1)), d = hash(i + float2(1, 1));
+  float2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+half4 main(float2 p) {
+  float2 q = p / renderScale.x;
+  float2 wobble = (float2(vnoise(q * 0.3), vnoise(q * 0.3 + 17.0)) - 0.5) * 2.5;
+  half4 src = inputImage.eval((q + wobble) * renderScale.x);
+  if (src.a < 0.002) { return half4(0.0); }
+  half4 c = unpremul(src);
+  float fine = hash(floor(q * 1.3));
+  float mid = vnoise(q * 0.55);
+  float streak = vnoise(float2(q.x * 0.12 + q.y * 0.04, q.y * 1.1));
+  float keep = smoothstep(0.22, 0.6, fine * 0.5 + mid * 0.3 + streak * 0.2);
+  float a = float(c.a) * mix(1.0, keep, grain);
+  return half4(c.rgb * half(a), half(a));
+}`;
+
+function effect(id: string, inputId: string, kind: "custom-sksl" | "blur", end: number, params: [string, number, number, number][], sksl?: string): SceneNode {
+  return {
+    ...base(id, { outTick: end }),
+    type: "effect",
+    inputId,
+    effect: kind,
+    ...(sksl ? { implementation: sksl } : {}),
+    parameters: params.map(([name, value, minimum, maximum]) => ({ id: `${id}-${name}`, name, valueType: "number" as const, value: constant(value), minimum, maximum })),
+    capability: { requires: [kind === "blur" ? "image-filter" : "runtime-effect"], fallback: "passthrough", maxTemporarySurfaces: 1 },
+  } as SceneNode;
+}
+
+/** A few broad, faint, blurred strokes: a board that has been wiped before. */
+function smudges(size: { width: number; height: number }, end: number): Record<string, SceneNode> {
+  const { width: W, height: H } = size;
+  const swipes = [
+    [[0.08, 0.3], [0.3, 0.22], [0.52, 0.3]],
+    [[0.55, 0.72], [0.75, 0.62], [0.95, 0.7]],
+    [[0.2, 0.85], [0.4, 0.78], [0.6, 0.86]],
+    [[0.62, 0.15], [0.8, 0.1], [0.92, 0.2]],
+  ];
+  const contours = swipes.map((pts) => ({ closed: false, vertices: pts.map(([x, y]) => vtx(x * W, y * H)) }));
+  return {
+    smudges: { ...base("smudges", { outTick: end }), type: "path", path: constant({ contours }), style: { stroke: stroke(paint("ink"), 150, { opacity: 0.045 }) } },
+    "smudge-blur": effect("smudge-blur", "smudges", "blur", end, [["radius", 60, 0, 200]]),
   };
 }

@@ -1,36 +1,41 @@
-// Writes preview documents: every biology block drawn on one board, and a photosynthesis lesson
-// chained from blocks.
-//   npx tsx presets/preview.ts      → presets/out/gallery.json, presets/out/photosynthesis.json
+// Writes preview documents for a theme: every biology block on one board, and two lessons chained
+// from blocks.
+//   npx tsx presets/preview.ts [chalk|whiteboard|chalkboard]
+//   → presets/out/<theme>-gallery.json, -photosynthesis.json, -respiration.json
 // Labels need presets/out/fonts/Manrope.ttf (the font the app ships in public/fonts).
 import { mkdirSync, writeFileSync } from "node:fs";
-import { BIOLOGY, co2, drop, glucose, o2, plant, sun } from "./biology";
+import { BIOLOGY, cell, co2, drop, energy, glucose, h2o, mitochondrion, o2, plant, sun } from "./biology";
 import { Board } from "./board";
+import { CHALK, CHALKBOARD, WHITEBOARD } from "./themes";
 
+const theme = [CHALK, WHITEBOARD, CHALKBOARD].find((t) => t.id === process.argv[2]) ?? CHALK;
 const out = new URL("./out/", import.meta.url);
 mkdirSync(out, { recursive: true });
 const font = { uri: "fonts/Manrope.ttf", family: "Manrope" };
+const write = (name: string, b: Board, title: string) =>
+  writeFileSync(new URL(`${theme.id}-${name}.json`, out), JSON.stringify(b.build(`${theme.id}-${name}`, title, { hold: 1.5 })));
 
 // Every block, five across, each drawn a beat after the last.
 {
-  const b = new Board({ font });
+  const b = new Board({ font, theme });
   BIOLOGY.forEach((block, i) => {
     const x = 192 + (i % 5) * 384, y = 170 + Math.floor(i / 5) * 350;
     b.place(block, { x, y, size: 190, ...(i ? { with: true, delay: 0.25 } : {}) });
     b.label(block.title, { x, y: y + 140, size: 30, color: "grey", with: true, delay: 0.4 });
   });
-  writeFileSync(new URL("gallery.json", out), JSON.stringify(b.build("blocks-gallery", "Biology blocks", { hold: 1.5 })));
+  write("gallery", b, "Biology blocks");
 }
 
-// Photosynthesis, chained from blocks: light, water and carbon dioxide go in; sugar and oxygen come out.
+// Photosynthesis: light, water and carbon dioxide go in; sugar and oxygen come out.
 {
-  const b = new Board({ font });
+  const b = new Board({ font, theme });
   const p = b.place(plant, { x: 960, y: 610, size: 600 });
   const s = b.place(sun, { x: 320, y: 230, size: 230 });
   b.label("light", { ...s.at("bottom", 0, 40), with: true, delay: 0.3 });
   b.arrow(s.at("bottom-right"), p.at("leaf", -40, -10), { color: "orange", bend: 0.15 });
 
   b.travel(drop, { from: p.at("roots"), to: p.at("leaves", 0, 30), size: 60, count: 3, bend: 0.05 });
-  b.label("water", { ...p.at("roots", 120, 0), with: true });
+  b.label("water", { ...p.at("roots", 150, 0), with: true });
 
   b.travel(co2, { from: { x: 1720, y: 520 }, to: p.at("leaf"), size: 120, count: 3, bend: -0.12 });
   b.label("carbon dioxide", { x: 1720, y: 440, with: true });
@@ -44,6 +49,31 @@ const font = { uri: "fonts/Manrope.ttf", family: "Manrope" };
 
   b.travel(o2, { from: p.at("leaf"), to: { x: 1560, y: 170 }, size: 90, count: 3, stay: true, bend: 0.12 });
   b.label("oxygen", { x: 1560, y: 290, with: true, delay: 1.2 });
-  writeFileSync(new URL("photosynthesis.json", out), JSON.stringify(b.build("photosynthesis", "Photosynthesis", { hold: 1.5 })));
+  write("photosynthesis", b, "Photosynthesis");
 }
-console.log("wrote", out.pathname);
+
+// Respiration: a cell takes in glucose and oxygen; its mitochondria release energy, carbon dioxide and water.
+{
+  const b = new Board({ font, theme });
+  const c = b.place(cell, { x: 760, y: 540, size: 600 });
+  b.label("a cell", { ...c.at("bottom", 0, 56), with: true, delay: 0.6 });
+  const m = b.place(mitochondrion, { x: 900, y: 610, size: 190 });
+  b.highlight(m, { pad: 16 });
+  b.label("mitochondrion", { ...m.at("right", 200, 70), with: true, delay: 0.3 });
+
+  b.travel(glucose, { from: { x: 220, y: 300 }, to: m.at("left"), size: 90, count: 2, bend: 0.1 });
+  b.label("glucose", { x: 220, y: 210, with: true });
+  b.travel(o2, { from: { x: 220, y: 820 }, to: m.at("left"), size: 80, count: 3, bend: -0.1, with: true, delay: 0.5 });
+  b.label("oxygen", { x: 220, y: 910, with: true });
+
+  b.pulse(m);
+  const e = b.place(energy, { x: 1560, y: 330, size: 190, enter: "pop" });
+  b.arrow(m.at("right"), e.at("left"), { color: "orange", bend: -0.2, with: true });
+  b.label("energy", { ...e.at("bottom", 0, 50) });
+
+  b.travel(co2, { from: m.at("right"), to: { x: 1640, y: 720 }, size: 110, count: 2, stay: true, bend: 0.1 });
+  b.travel(h2o, { from: m.at("right"), to: { x: 1640, y: 900 }, size: 90, count: 2, stay: true, bend: 0.15, with: true, delay: 0.4 });
+  b.label("carbon dioxide + water", { x: 1640, y: 1010, with: true, delay: 1.2 });
+  write("respiration", b, "Respiration");
+}
+console.log("wrote", theme.id, "previews to", out.pathname);

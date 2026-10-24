@@ -14,12 +14,15 @@ explain a concept, so the model names `leaf` instead of drawing one stroke by st
   - `pulse(ref)`, `move(ref, { x, y, size })`, `remove(ref)`, `label(text, { x, y })`, `wait(s)`
   - `ref.at("anchor")` and `ref.center("part")` give board points to aim at
   - `build(id, name)` returns the Clayzo document
+- `themes.ts` — how the board looks. `CHALK` (the default): chalk-textured outlines on white, no
+  fills. `CHALKBOARD`: pastel chalk on green slate. `WHITEBOARD`: clean marker lines with pale fills.
+  Pick one with `new Board({ theme })`. The chalk grain is a GPU shader, so render on a machine with a GPU.
 - `biology/` — sun, cloud, water drop, energy, leaf, plant, tree, cell, mitochondrion, DNA, neuron,
   CO2, O2, H2O, glucose.
 
 Preview (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
 
 ```bash
-npx tsx presets/preview.ts      # presets/out/gallery.json and photosynthesis.json
-npx clayzo export presets/out/photosynthesis.json presets/out/photosynthesis.mp4 --format mp4
+npx tsx presets/preview.ts [chalk|whiteboard|chalkboard]   # presets/out/<theme>-gallery.json, -photosynthesis.json, -respiration.json
+npx clayzo export presets/out/chalk-photosynthesis.json presets/out/chalk-photosynthesis.mp4 --format mp4
 ```

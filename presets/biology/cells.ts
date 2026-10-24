@@ -9,7 +9,7 @@ export const cell: Block = {
   size: [100, 100],
   parts: [
     { id: "membrane", label: "cell membrane", shapes: [{ type: "path", d: blob(50, 50, 44, 40, [0.03, -0.02, 0.04, 0, -0.03, 0.02, -0.02, 0.04, 0.01, -0.03, 0.02, 0]), stroke: "purple", fill: "purple-tint" }] },
-    { id: "nucleus", label: "nucleus", shapes: [{ type: "ellipse", cx: 46, cy: 48, rx: 14, ry: 13, stroke: "purple", fill: "#D6CAF6" }, { type: "ellipse", cx: 49, cy: 51, rx: 4, ry: 4, stroke: "purple", width: 0.7 }] },
+    { id: "nucleus", label: "nucleus", shapes: [{ type: "ellipse", cx: 46, cy: 48, rx: 14, ry: 13, stroke: "purple", fill: "nucleus-tint" }, { type: "ellipse", cx: 49, cy: 51, rx: 4, ry: 4, stroke: "purple", width: 0.7 }] },
     {
       id: "organelles",
       label: "organelles",
