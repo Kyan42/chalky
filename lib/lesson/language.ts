@@ -82,7 +82,9 @@ const span = (r: PlannedBeat["region"]) => `x ${r.x}..${r.x + r.w}, y ${r.y}..${
 export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[]): string {
   const pointOnly = beat.mode === "point";
   const before = earlier.flatMap((b) => b.adds.map((e) => `- ${e.id}: ${e.what} (somewhere in ${span(b.region)})`));
-  const must = beat.adds.length ? `Create these elements with exactly these ids: ${beat.adds.map((e) => `${e.id} (${e.what})`).join("; ")}. You may add a couple more inside your region.` : "";
+  const must = beat.adds.length
+    ? `You MUST create a shape (circle, box, flow, cycle, plot, bar or text) for each of these, with exactly these ids: ${beat.adds.map((e) => `${e.id} (${e.what})`).join("; ")}. Later beats refer to them by id, so a missing one breaks their drawings. You may add a few more elements inside your region. Make the shapes large: fill most of your region, leaving room for labels.`
+    : "";
   return [
     `Question the learner asked: ${question}`,
     `What the teacher is saying now: "${beat.say}"`,
@@ -95,6 +97,7 @@ export function drawPrompt(question: string, beat: PlannedBeat, earlier: Planned
     before.length
       ? `Already on the board from earlier beats (you can connect to, label, highlight or dim them by id; don't redraw them):\n${before.join("\n")}`
       : "The board is empty before this beat.",
+    "refs may only name ids from the lists above or ids of elements earlier in your own answer; any other ref is dropped.",
     "",
     PRESET_LANGUAGE,
     "",

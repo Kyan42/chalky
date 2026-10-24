@@ -58,7 +58,6 @@ const type = async (text) => {
 };
 
 const shot = new Set();
-const stalls = new Map();
 let checkins = 0;
 let interrupted = false;
 let last = "";
@@ -95,8 +94,6 @@ for (;;) {
   });
   const t = ((Date.now() - t0) / 1000).toFixed(1);
   const line = `${s.status} | beat ${s.current + 1}/${s.beats} | word "${s.word}" | board ink ${s.inked}px`;
-  // "Drawing" after the first beat started speaking means playback is waiting on a visual.
-  if (s.status === "Drawing…" && s.current > 0) stalls.set(s.current, (stalls.get(s.current) ?? 0) + 0.5);
   if (line !== last) console.log(`${t.padStart(5)} s  ${line}`);
   // Show what Chalky says outside the lesson's beats (greeting, replies).
   if (lastStatus === "Thinking…" && s.status === "Speaking") {
@@ -138,7 +135,11 @@ for (;;) {
   if (/^(Done|Error|Stopped)/.test(s.status) || Date.now() - t0 > 480_000) {
     console.log(`\ntitle: ${s.title}\n${s.firstSound}\n${s.replyMs ?? ""}\nerror: ${s.error}\nTTS responses: ${tts.join(",")}`);
     console.log(`check-ins: ${checkins}`);
-    console.log(`waits for a visual mid-lesson: ${[...stalls].map(([b, sec]) => `before beat ${b + 1} about ${sec} s`).join(", ") || "none"}`);
+    // Speech never waits for a drawing; instead a drawing can land after its anchor word.
+    const late = s.meta.map((m, i) => [i + 1, m?.match(/landed ([\d.]+) s after/)?.[1]]).filter(([, l]) => l);
+    const failed = s.meta.map((m, i) => [i + 1, m]).filter(([, m]) => /drawing failed/.test(m ?? ""));
+    console.log(`drawings that landed late: ${late.map(([b, l]) => `beat ${b} by ${l} s`).join(", ") || "none"}`);
+    console.log(`drawings that failed: ${failed.map(([b]) => `beat ${b}`).join(", ") || "none"}`);
     s.meta.forEach((m, i) => console.log(`beat ${i + 1}: ${m}`));
     break;
   }
