@@ -1,0 +1,25 @@
+# Presets
+
+Small whiteboard drawings ("blocks") that a lesson places on the board and chains together to
+explain a concept, so the model names `leaf` instead of drawing one stroke by stroke.
+
+- `types.ts` — a block: line art in its own box, grouped into named parts (`nucleus`, `roots`), with
+  named anchor points (`surface`, `roots`, `right`) for later steps to aim at.
+- `board.ts` — the board you chain steps on. Steps run one after another unless given `at`
+  (seconds) or `with: true` (alongside the previous one), plus an optional `delay`.
+  - `place(block, { x, y, size })` draws a block stroke by stroke (`enter: "pop"` pops it in)
+  - `arrow(from, to, { bend })` draws a marker arrow
+  - `travel(block, { from, to, size, count, stay })` sends copies (molecules, drops) between points
+  - `highlight(ref, { part, style: "circle" | "highlighter" })` circles a block or one of its parts
+  - `pulse(ref)`, `move(ref, { x, y, size })`, `remove(ref)`, `label(text, { x, y })`, `wait(s)`
+  - `ref.at("anchor")` and `ref.center("part")` give board points to aim at
+  - `build(id, name)` returns the Clayzo document
+- `biology/` — sun, cloud, water drop, energy, leaf, plant, tree, cell, mitochondrion, DNA, neuron,
+  CO2, O2, H2O, glucose.
+
+Preview (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
+
+```bash
+npx tsx presets/preview.ts      # presets/out/gallery.json and photosynthesis.json
+npx clayzo export presets/out/photosynthesis.json presets/out/photosynthesis.mp4 --format mp4
+```
