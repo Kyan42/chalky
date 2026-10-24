@@ -187,3 +187,121 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   if (!beats) throw new Error("the planner returned no beats");
   yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
 }
+
+/**
+ * Plan operations for the conversation layer: change the lesson while it is
+ * being taught.
+ *
+ * - insert_after k: a short detour (2 to 4 beats, ending in a check-in) spoken
+ *   right after beat k, on a clean part of the board (a new scene).
+ * - replace_from k: beats k onward are dropped and replaced by a new ending
+ *   that takes a different angle, starting in a new scene.
+ *
+ * Both are guided by the conversation layer's planner_note (what didn't land,
+ * what to try) and stream beats in the main plan's shape, validated the same
+ * way. Ids get `prefix` so they never collide with the plan's own b1, b2…
+ */
+export type AmendOp = "insert_after" | "replace_from";
+
+/** Sonnet by default: a detour or a new ending is a few beats, and the learner is waiting (Opus took about 30 s for four beats). */
+const AMEND_MODEL = process.env.AMEND_MODEL || "claude-sonnet-5-5";
+
+export interface AmendRequest {
+  question: string;
+  /** The whole plan so far, in lesson order. */
+  beats: PlannedBeat[];
+  op: AmendOp;
+  /** For insert_after: the beat the detour follows (-1: before the first). For replace_from: the first beat replaced. */
+  index: number;
+  note: string;
+  /** What the learner said that led here. */
+  heard?: string;
+  /** Unique id prefix for the new beats, e.g. "d1" → d1-1, d1-2… */
+  prefix: string;
+}
+
+function amendPrompt(r: AmendRequest, newScene: number): string {
+  const lines = r.beats.map((b, i) => {
+    const visual = b.mode === "draw" ? ` adds ${b.adds.map((a) => a.id).join(", ") || "-"}` : b.mode === "point" ? ` points at ${b.points.map((p) => p.id).join(", ") || "-"}` : "";
+    return `${i + 1}. [${b.id}, scene ${b.scene}, ${b.mode}${visual}] ${b.say}`;
+  });
+  const task =
+    r.op === "insert_after"
+      ? `Write a short DETOUR of 2 to 4 beats that will be spoken right after beat ${r.index + 1}, before the lesson goes on. It explains the same idea from a fresh angle (a concrete case, an analogy, real numbers), following the note above, and does not move the lesson forward. It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}. Its last beat ends with a short check-in question and has "check": true.`
+      : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. Start on a clean board: the first beat is a draw beat in scene ${newScene}; later scenes count up from there. Add a check-in after roughly every fourth beat.`;
+  return [
+    `The lesson answers: ${r.question}`,
+    `The lesson planned so far:\n${lines.join("\n")}`,
+    r.heard ? `The learner just said: "${r.heard}"` : "",
+    `What didn't land and what to try next: ${r.note || "(no note)"}`,
+    task,
+    `Same beat format and rules as a full lesson, except: ignore the beat count and do not write a title line. Output only the beat lines.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncGenerator<PlanEvent> {
+  const t0 = performance.now();
+  const ms = () => Math.round(performance.now() - t0);
+  const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
+  const newScene = maxScene + 1;
+  const stream = anthropic().messages.stream(
+    {
+      model: AMEND_MODEL,
+      max_tokens: 8000,
+      system: SYSTEM,
+      thinking: { type: "adaptive" },
+      output_config: { effort: EFFORT },
+      messages: [{ role: "user", content: amendPrompt(r, newScene) }],
+    },
+    { signal },
+  );
+  let pending = "";
+  const lines: string[] = [];
+  stream.on("text", (delta) => {
+    pending += delta;
+    let nl: number;
+    while ((nl = pending.indexOf("\n")) >= 0) {
+      lines.push(pending.slice(0, nl));
+      pending = pending.slice(nl + 1);
+    }
+  });
+  // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
+  const st: PlanState = { scene: maxScene, known: new Map() };
+  let n = 0;
+  const parse = function* (line: string): Generator<PlanEvent> {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) return;
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(trimmed);
+    } catch {
+      console.warn(`[amend] skipped a line that isn't JSON: ${trimmed.slice(0, 120)}`);
+      return;
+    }
+    if (typeof obj.title === "string" || typeof obj.say !== "string") return;
+    if (n === 0 && obj.mode !== "talk") obj.scene = Math.max(newScene, Number(obj.scene) || 0);
+    if (r.op === "insert_after" && obj.mode !== "talk") obj.scene = newScene;
+    // index n + 1 (never 0): checkBeat treats beat 0 as the lesson's very first beat.
+    const beat = checkBeat(obj, n + 1, st);
+    n++;
+    yield { type: "beat", beat: { ...beat, id: `${r.prefix}-${n}` }, tMs: ms() };
+  };
+  const done = stream.finalMessage();
+  let finished = false;
+  done.finally(() => (finished = true)).catch(() => {});
+  while (!finished || lines.length) {
+    const line = lines.shift();
+    if (line !== undefined) {
+      yield* parse(line);
+      continue;
+    }
+    await new Promise((res) => setTimeout(res, 15));
+  }
+  const message = await done;
+  if (pending.trim()) yield* parse(pending);
+  if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
+  if (!n) throw new Error("the planner returned no beats");
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+}

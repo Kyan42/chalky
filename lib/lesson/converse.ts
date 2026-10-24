@@ -149,10 +149,59 @@ function parseAt(at: unknown): { word: string; occurrence: number } | null {
   return { word, occurrence: Math.max(1, Number(m?.[2] ?? 1) || 1) };
 }
 
-/** Checks the model's trailer and fixes what it can; cursor targets must be on the board and anchored to a spoken word. */
 /** The learner asked for a picture: that needs a detour, whatever the model said. */
 const WANTS_DRAWING = /\b(draw|drawing|sketch|diagram|picture|show me|on the board)\b/i;
 
+const MAX_CUES = 4;
+const STOP = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "at", "it", "its", "is", "arrow", "label", "box", "circle", "line", "shape", "part"]);
+
+/**
+ * Ties cursor cues to the moment the reply names the element. The model often
+ * anchors on a word that occurs several times ("wave" in "each color is a
+ * wave ... the long red wave"), so a cue moves to the occurrence next to the
+ * element's distinctive name ("red" for red-wave). Elements the reply names
+ * that got no cue get one, so the hand follows the talk even when the model
+ * left the list empty.
+ */
+export function groundCues(cues: CursorCue[], spoken: string, board: BoardElementRef[]): CursorCue[] {
+  const tokens = spoken.split(/\s+/).map(normWord);
+  // Distinctive words per element: the parts of its id that no other element's id shares.
+  const parts = new Map(board.map((e) => [e.id, e.id.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w))]));
+  const count = new Map<string, number>();
+  for (const ws of parts.values()) for (const w of new Set(ws)) count.set(w, (count.get(w) ?? 0) + 1);
+  const names = (id: string) => (parts.get(id) ?? []).filter((w) => count.get(w) === 1);
+  const said = (token: string, ns: string[]) => ns.some((n) => token === n || token === `${n}s`);
+  const near = (pos: number, id: string) => {
+    const ns = names(id);
+    for (let k = Math.max(0, pos - 3); k <= Math.min(tokens.length - 1, pos + 3); k++) if (said(tokens[k], ns)) return true;
+    return false;
+  };
+  const occurrenceAt = (pos: number) => tokens.slice(0, pos + 1).filter((w) => w === tokens[pos]).length;
+  const out: { cue: CursorCue; pos: number }[] = [];
+  for (const c of cues) {
+    const w = normWord(c.word);
+    const positions = tokens.flatMap((t, k) => (t === w ? [k] : []));
+    if (!positions.length) continue;
+    const pos = positions.find((k) => near(k, c.target)) ?? positions[Math.min(c.occurrence, positions.length) - 1];
+    out.push({ cue: { ...c, word: tokens[pos], occurrence: occurrenceAt(pos) }, pos });
+  }
+  // Elements named in the reply without a cue: point at them when their name is said.
+  const cued = new Set(out.map((x) => x.cue.target));
+  for (const e of board) {
+    if (out.length >= MAX_CUES) break;
+    if (cued.has(e.id) || e.id.includes(".")) continue;
+    const ns = names(e.id);
+    const pos = tokens.findIndex((t) => said(t, ns));
+    if (pos < 0) continue;
+    out.push({ cue: { word: tokens[pos], occurrence: occurrenceAt(pos), target: e.id, gesture: "point" }, pos });
+    cued.add(e.id);
+  }
+  // In spoken order; two cues on the same word would fight, so keep the first.
+  out.sort((a, b) => a.pos - b.pos);
+  return out.filter((x, k) => k === 0 || x.pos !== out[k - 1].pos).slice(0, MAX_CUES).map((x) => x.cue);
+}
+
+/** Checks the model's trailer and fixes what it can; cursor targets must be on the board and anchored to a spoken word. */
 export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalation" | "board" | "utterance">, spoken: string): ConverseTrailer {
   const t = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const ids = new Set(input.board.map((e) => e.id));
@@ -176,7 +225,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       cursor.push({ ...at, target, gesture, ...(to ? { to } : {}) });
     }
   }
-  return { level, resume, cursor, check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "" };
+  return { level, resume, cursor: groundCues(cursor, spoken, input.board), check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "" };
 }
 
 /** The trailer used when the model gave none (or unparsable JSON). */
@@ -278,7 +327,11 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       let trailer: ConverseTrailer;
       try {
         const json = trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
-        trailer = cleanTrailer(JSON.parse(json), input, spoken);
+        const raw = JSON.parse(json);
+        trailer = cleanTrailer(raw, input, spoken);
+        const asked = Array.isArray(raw?.cursor) ? raw.cursor.length : 0;
+        if (asked !== trailer.cursor.length) console.info(`[converse] kept ${trailer.cursor.length} of ${asked} cursor cues: ${JSON.stringify(raw.cursor)}`);
+        else if (!asked) console.info(`[converse] no cursor cues (board: ${input.board.map((e) => e.id).join(", ") || "empty"})`);
       } catch {
         trailer = fallbackTrailer(input, spoken);
       }

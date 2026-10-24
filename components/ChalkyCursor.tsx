@@ -217,6 +217,7 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
       g.setAttribute("opacity", pose.opacity.toFixed(3));
       g.dataset.phase = pose.phase;
       g.dataset.step = String(pose.step);
+      g.dataset.target = pose.step >= 0 ? sorted[pose.step].target : "";
       g.dataset.board = `${Math.round(px.w)}x${Math.round(px.h)}`;
       // A short fading trail while the hand moves; it collapses while resting.
       const h = history.current;
