@@ -22,15 +22,22 @@ async function speech(text, cacheDir) {
   const res = await fetch(`${BASE_URL}/api/tts`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
   if (!res.ok) throw new Error(`tts failed (${res.status})`);
   let rate = 44100;
+  let encoding = "pcm_f32le";
   const chunks = [];
   for (const line of (await res.text()).split("\n")) {
     if (!line.trim()) continue;
     const ev = JSON.parse(line);
-    if (ev.type === "start") rate = ev.sampleRate;
+    if (ev.type === "start") ({ sampleRate: rate, encoding } = ev);
     else if (ev.type === "audio") chunks.push(Buffer.from(ev.data, "base64"));
     else if (ev.type === "error") throw new Error(ev.message);
   }
-  const raw = Buffer.concat(chunks);
+  let raw = Buffer.concat(chunks);
+  // The cache always holds float32; 16-bit speech is widened once here.
+  if (encoding === "pcm_s16le") {
+    const f = Buffer.alloc((raw.length >> 1) * 4);
+    for (let i = 0; i < raw.length >> 1; i++) f.writeFloatLE(raw.readInt16LE(i * 2) / 32768, i * 4);
+    raw = f;
+  }
   const head = Buffer.alloc(4);
   head.writeUInt32LE(rate, 0);
   writeFileSync(file, Buffer.concat([head, raw.subarray(0, raw.length - (raw.length % 4))]));
@@ -47,7 +54,9 @@ export async function speechWav(path, parts) {
   let t = 0;
   for (const p of parts) {
     if (p.say) {
-      const { samples } = await speech(p.say, cacheDir);
+      const clip = await speech(p.say, cacheDir);
+      // Older cached clips may be 44.1 kHz and newer ones 24 kHz: resample to the WAV's rate (linear is fine for a test mic).
+      const samples = clip.rate === rate ? clip.samples : Float32Array.from({ length: Math.round((clip.samples.length * rate) / clip.rate) }, (_, i) => clip.samples[Math.min(clip.samples.length - 1, Math.floor((i * clip.rate) / rate))]);
       pieces.push(samples);
       timeline.push({ at: +t.toFixed(2), say: p.say, seconds: +(samples.length / rate).toFixed(2) });
       t += samples.length / rate;

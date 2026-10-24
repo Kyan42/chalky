@@ -8,7 +8,14 @@
  */
 import "server-only";
 
-export const SONIC_SAMPLE_RATE = 44100;
+/**
+ * 16-bit PCM at 24 kHz: 48 KB/s of audio, against 176 KB/s for the float32
+ * 44.1 kHz we started with. On a busy venue network the heavier stream couldn't
+ * keep up with real time and every beat stuttered. Speech loses nothing audible.
+ */
+export const SONIC_SAMPLE_RATE = 24000;
+export const SONIC_ENCODING = "pcm_s16le" as const;
+const BYTES_PER_SAMPLE = 2;
 const CARTESIA_URL = "https://api.cartesia.ai/tts/sse";
 const CARTESIA_VERSION = "2026-08-14";
 const DEFAULT_VOICE = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"; // the SDK README's example voice
@@ -16,7 +23,7 @@ const DEFAULT_MODEL = "sonic-3";
 
 /** What the route streams to the browser, one JSON object per line. */
 export type BeatAudioEvent =
-  | { type: "start"; source: "sonic"; sampleRate: number; encoding: "pcm_f32le" }
+  | { type: "start"; source: "sonic"; sampleRate: number; encoding: "pcm_f32le" | "pcm_s16le" }
   | { type: "audio"; seq: number; data: string; bytes: number; tMs: number }
   | { type: "timestamps"; words: string[]; start: number[]; end: number[]; tMs: number }
   | { type: "done"; tMs: number; stats: SonicStats }
@@ -83,7 +90,7 @@ export async function* sonicStream(text: string, signal: AbortSignal): AsyncGene
       model_id: process.env.CARTESIA_MODEL_ID || DEFAULT_MODEL,
       transcript: text,
       voice: { id: process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE },
-      output_format: { container: "raw", encoding: "pcm_f32le", sample_rate: SONIC_SAMPLE_RATE },
+      output_format: { container: "raw", encoding: SONIC_ENCODING, sample_rate: SONIC_SAMPLE_RATE },
       language: "en",
       add_timestamps: true,
       // A touch slower than normal for teaching (Sonic 3 models: 0.6 to 1.5). SONIC_SPEED overrides; 1 turns it off.
@@ -95,7 +102,7 @@ export async function* sonicStream(text: string, signal: AbortSignal): AsyncGene
     throw new Error(`Cartesia responded ${response.status}: ${detail.slice(0, 500)}`);
   }
 
-  yield { type: "start", source: "sonic", sampleRate: SONIC_SAMPLE_RATE, encoding: "pcm_f32le" };
+  yield { type: "start", source: "sonic", sampleRate: SONIC_SAMPLE_RATE, encoding: SONIC_ENCODING };
   for await (const raw of sseData(response.body)) {
     let event: Record<string, unknown>;
     try {
@@ -110,7 +117,7 @@ export async function* sonicStream(text: string, signal: AbortSignal): AsyncGene
         stats.order.push("audio");
       }
       stats.bytes += bytes;
-      stats.audioSeconds = stats.bytes / 4 / SONIC_SAMPLE_RATE;
+      stats.audioSeconds = stats.bytes / BYTES_PER_SAMPLE / SONIC_SAMPLE_RATE;
       yield { type: "audio", seq: stats.chunks++, data: event.data, bytes, tMs: ms() };
     } else if (event.type === "timestamps" && event.word_timestamps) {
       const wt = event.word_timestamps as { words: string[]; start: number[]; end: number[] };

@@ -27,20 +27,22 @@ async function makeWav() {
   if (!res.ok) throw new Error(`tts failed (${res.status})`);
   const text = await res.text();
   let rate = 44100;
+  let encoding = "pcm_f32le";
   const chunks = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const ev = JSON.parse(line);
-    if (ev.type === "start") rate = ev.sampleRate;
+    if (ev.type === "start") ({ sampleRate: rate, encoding } = ev);
     else if (ev.type === "audio") chunks.push(Buffer.from(ev.data, "base64"));
     else if (ev.type === "error") throw new Error(ev.message);
   }
   const f32 = Buffer.concat(chunks);
-  const samples = Math.floor(f32.length / 4);
+  const width = encoding === "pcm_s16le" ? 2 : 4;
+  const samples = Math.floor(f32.length / width);
   const lead = Math.floor(rate * 0.6), tailSilence = rate * 2;
   const pcm = Buffer.alloc((lead + samples + tailSilence) * 2);
   for (let i = 0; i < samples; i++) {
-    const v = Math.max(-1, Math.min(1, f32.readFloatLE(i * 4)));
+    const v = Math.max(-1, Math.min(1, width === 2 ? f32.readInt16LE(i * 2) / 32768 : f32.readFloatLE(i * 4)));
     pcm.writeInt16LE(Math.round(v * 32767), (lead + i) * 2);
   }
   const header = Buffer.alloc(44);

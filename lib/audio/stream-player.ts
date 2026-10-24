@@ -36,7 +36,13 @@ export class StreamPlayer {
   private meter: AnalyserNode;
   private meterBuffer: Float32Array<ArrayBuffer>;
 
-  constructor(ctx: AudioContext, private sampleRate: number) {
+  /** Raw PCM as Sonic sends it; read from the stream's start event. */
+  private encoding: "pcm_f32le" | "pcm_s16le";
+  /** A trailing odd byte of a 16-bit sample split across chunks. */
+  private carry: Uint8Array | null = null;
+
+  constructor(ctx: AudioContext, private sampleRate: number, encoding: "pcm_f32le" | "pcm_s16le" = "pcm_f32le") {
+    this.encoding = encoding;
     this.ctx = ctx;
     this.meter = ctx.createAnalyser();
     this.meter.fftSize = 2048;
@@ -52,11 +58,30 @@ export class StreamPlayer {
     return Math.sqrt(sum / this.meterBuffer.length);
   }
 
+  /** Decodes one chunk to float samples (once, on append); the AudioContext resamples 24 kHz to its own rate. */
+  private toFloat(chunk: Uint8Array): Float32Array<ArrayBuffer> {
+    let bytes = chunk;
+    if (this.carry) {
+      bytes = new Uint8Array(this.carry.length + chunk.length);
+      bytes.set(this.carry);
+      bytes.set(chunk, this.carry.length);
+      this.carry = null;
+    }
+    const width = this.encoding === "pcm_s16le" ? 2 : 4;
+    const whole = bytes.length - (bytes.length % width);
+    if (whole < bytes.length) this.carry = bytes.slice(whole);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, whole);
+    const out = new Float32Array(whole / width);
+    if (width === 2) for (let i = 0; i < out.length; i++) out[i] = view.getInt16(i * 2, true) / 32768;
+    else for (let i = 0; i < out.length; i++) out[i] = view.getFloat32(i * 4, true);
+    return out;
+  }
+
   append(base64: string) {
     if (this.stopped) return;
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
     this.bytesReceived += bytes.byteLength;
-    const samples = new Float32Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 4));
+    const samples = this.toFloat(bytes);
     if (samples.length === 0) return;
     const buffer = this.ctx.createBuffer(1, samples.length, this.sampleRate);
     buffer.copyToChannel(samples, 0);

@@ -409,7 +409,7 @@ export default function Lesson() {
       for await (const event of ndjson<BeatAudioEvent>(response)) {
         if (signal.aborted) break;
         if (event.type === "start") {
-          audio = new StreamPlayer(ctx, event.sampleRate);
+          audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
           audioRef.current = audio;
         } else if (event.type === "audio" && audio) {
           audio.append(event.data);
@@ -835,7 +835,7 @@ export default function Lesson() {
           for await (const ev of ndjson<BeatAudioEvent>(r)) {
             if (signal.aborted) break;
             if (ev.type === "start" && !audio) {
-              audio = new StreamPlayer(ctx, ev.sampleRate);
+              audio = new StreamPlayer(ctx, ev.sampleRate, ev.encoding);
               audioRef.current = audio;
               offset = 0;
             } else if (ev.type === "audio" && audio) {

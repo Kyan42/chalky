@@ -96,7 +96,7 @@ export default function CursorPage() {
       if (!res.ok) throw new Error(`tts ${res.status}`);
       for await (const ev of ndjson<BeatAudioEvent>(res)) {
         if (ev.type === "start") {
-          player = new StreamPlayer(ctx, ev.sampleRate);
+          player = new StreamPlayer(ctx, ev.sampleRate, ev.encoding);
           audio.current = player;
         } else if (ev.type === "audio" && player) {
           player.append(ev.data);

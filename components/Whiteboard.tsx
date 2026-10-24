@@ -182,7 +182,7 @@ export function Whiteboard() {
         const t = telemetry.current;
         if (event.type === "start") {
           t.source = event.source;
-          run.audio = new StreamPlayer(ctx, event.sampleRate);
+          run.audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
           lastAudioRef.current = run.audio;
         } else if (event.type === "audio" && run.audio) {
           if (t.firstAudioMs === null) {
