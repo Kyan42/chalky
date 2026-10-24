@@ -23,3 +23,4 @@ npm-debug.log*
 /experiments/visual-flex/.tmp/
 /experiments/visual-flex/out/
 /experiments/lesson-e2e/
+/public/experiments/board-compare/

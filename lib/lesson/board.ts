@@ -94,6 +94,21 @@ function occupancy(board: BoardElement[]): string {
   return `Occupied areas (# = something there, . = free), columns are x 0-10, 10-20, ... 90-100:\n${rows.join("\n")}`;
 }
 
+/** Where each element sits on the stage, for scoring layouts (see presets.ts scoreLayout). */
+export function boardBoxes(board: BoardElement[]) {
+  const toBox = (e: FlatElement) => {
+    const r = toStage(bounds(e));
+    return { x1: r.x, y1: r.y, x2: r.x + r.w, y2: r.y + r.h };
+  };
+  const drawn = board.filter((e) => !EDIT_KINDS.has(e.kind));
+  return {
+    texts: drawn.filter((e) => e.kind === "text").map((e) => ({ id: e.id, box: toBox(e) })),
+    shapes: drawn.filter((e) => e.kind !== "text").map((e) => ({ id: e.id, box: toBox(e) })),
+    dangling: [] as string[],
+    nudged: 0,
+  };
+}
+
 /** Description of the board for the model. */
 export function describeBoard(board: BoardElement[]): string {
   if (!board.length) return "The board is empty.";

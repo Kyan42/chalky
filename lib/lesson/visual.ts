@@ -66,7 +66,7 @@ export interface VisualResult {
   attempts: { ms: number; outputTokens: number; stopReason: string | null; error: string | null }[];
 }
 
-export async function generateVisual(question: string, beat: PlannedBeat, board: BoardElement[], signal?: AbortSignal): Promise<VisualResult> {
+export async function generateVisual(question: string, beat: PlannedBeat, board: BoardElement[], signal?: AbortSignal, model = MODEL): Promise<VisualResult> {
   const client = anthropic();
   const t0 = performance.now();
   const pointOnly = beat.mode === "point";
@@ -91,7 +91,7 @@ export async function generateVisual(question: string, beat: PlannedBeat, board:
     const message = await client.messages
       .stream(
         {
-          model: MODEL,
+          model,
           max_tokens: 6000,
           system: SYSTEM,
           messages,

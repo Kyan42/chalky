@@ -18,8 +18,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "beat {id, say, at, visual} is required" }, { status: 400 });
   }
   const board = Array.isArray(body.board) ? (body.board as BoardElement[]) : [];
+  // Development only: compare drawing models without restarting the server.
+  const model = process.env.NODE_ENV !== "production" && typeof (body as { model?: unknown }).model === "string" ? (body as { model: string }).model : undefined;
   try {
-    const result = await generateVisual(question, beat as PlannedBeat, board, request.signal);
+    const result = await generateVisual(question, beat as PlannedBeat, board, request.signal, model);
     return Response.json(result, { status: result.doc ? 200 : 502 });
   } catch (error) {
     return Response.json({ error: String((error as Error)?.message ?? error) }, { status: 500 });
