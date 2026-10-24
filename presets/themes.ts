@@ -14,8 +14,6 @@ export type Theme = {
    */
   fill: "wash" | "hatch" | "none";
   hatch?: { spacing: number; width: number; opacity: number; angle: number; seconds: number };
-  /** Opacity of a highlighter swipe. */
-  highlighter: number;
   /** Chalk dust over everything drawn: grain and slightly broken edges (a shader on the GPU). */
   chalk?: { grain: number };
   /** Faint eraser smears on the board behind everything. */
@@ -44,11 +42,9 @@ export const WHITEBOARD: Theme = {
     "nucleus-tint": "#D6CAF6",
     brown: "#8B5A3C",
     "brown-tint": "#EFE2D6",
-    highlighter: "#FFE45C",
   },
   marker: 5,
   fill: "wash",
-  highlighter: 0.7,
 };
 
 // The chalk look: chalk-textured outlines on a white board, in the whiteboard's colours. Outlines
@@ -58,7 +54,6 @@ export const CHALK: Theme = {
   colors: { ...WHITEBOARD.colors },
   marker: 6,
   fill: "none",
-  highlighter: WHITEBOARD.highlighter,
   chalk: { grain: 0.85 },
 };
 
@@ -87,8 +82,6 @@ export const CHALKBOARD: Theme = {
     "nucleus-tint": "#DCCBFA",
     brown: "#D6AA80",
     "brown-tint": "#D6AA80",
-    highlighter: "#F7DC6F",
   },
-  highlighter: 0.3,
   smudges: true,
 };

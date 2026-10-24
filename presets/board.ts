@@ -176,7 +176,7 @@ function shapeBox(shape: Shape): [number, number, number, number] {
 
 export type When = { at?: number; with?: boolean; delay?: number };
 export type Placement = { x: number; y: number; /** Length of the block's longer side, in pixels. */ size: number };
-type Box = { x: number; y: number; width: number; height: number };
+export type Box = { x: number; y: number; width: number; height: number };
 
 type Instance = {
   id: string;
@@ -378,51 +378,43 @@ export class Board {
   }
 
   /**
-   * Circles a block, one of its parts, or any box with a marker loop (`style: "circle"`), or swipes
-   * a highlighter behind it (`style: "highlighter"`). `until` (seconds) takes it away again.
+   * Circles a block, one of its parts, a label, or any box with one hand-drawn loop. It is drawn
+   * once, when the step starts (`at` puts it on its cue), and stays. To take it away, give `hold`
+   * (seconds it stays once drawn) or `until` (seconds from the start of the lesson), and it fades.
    */
-  highlight(target: BlockRef | Box, o: When & Partial<Draw> & { part?: string; style?: "circle" | "highlighter"; pad?: number; until?: number } = {}) {
+  highlight(target: BlockRef | (Box & { text?: boolean }), o: When & Partial<Draw> & { part?: string; pad?: number; until?: number; hold?: number } = {}) {
     const box = target instanceof BlockRef ? target.bounds(o.part) : target;
-    const style = o.style ?? "circle";
     const seconds = o.seconds ?? 0.6;
     const start = this.slot(o, seconds);
     const id = this.nextId("highlight");
     const pad = o.pad ?? 18;
+    const until = o.until ?? (o.hold !== undefined ? start + seconds + o.hold : undefined);
     this.marks.push((endTick, nodes, roots) => {
       const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-      const opacity = o.until !== undefined ? fadeOut(`${id}.o`, o.until) : undefined;
-      let contour: PathContour, color: Color, width: number;
-      if (style === "circle") {
-        // A hand-drawn loop: a little more than one turn, its radius drifting so the ends don't meet.
-        const rx = box.width / 2 + pad, ry = box.height / 2 + pad;
-        const vs: PathVertex[] = [];
-        for (let i = 0; i <= 56; i++) {
-          const t = i / 56, a = (-110 + t * 385) * (Math.PI / 180), k = 1.04 - t * 0.1;
-          vs.push(vtx(cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k));
-        }
-        contour = { closed: false, vertices: vs };
-        color = paint(o.color ?? "red");
-        width = o.width ?? theme.marker;
-      } else {
-        // A highlighter stroke across the box, behind everything drawn so far.
-        contour = { closed: false, vertices: [vtx(box.x - pad / 2, cy), vtx(box.x + box.width + pad / 2, cy)] };
-        color = paint(o.color ?? "highlighter");
-        width = o.width ?? box.height + pad;
+      const opacity = until !== undefined ? fadeOut(`${id}.o`, until) : undefined;
+      // A little more than one turn, its radius drifting so the ends don't meet. Around a word the
+      // loop must clear the corners of its box, so it is wider and taller than the box; around a
+      // drawing the box's corners are mostly empty, so it hugs the box.
+      const word = "text" in box && box.text === true;
+      const rx = box.width / 2 + pad + (word ? box.height * 0.3 : 0), ry = (box.height / 2) * (word ? Math.SQRT2 : 1) + pad;
+      const vs: PathVertex[] = [];
+      for (let i = 0; i <= 56; i++) {
+        const t = i / 56, a = (-110 + t * 385) * (Math.PI / 180), k = 1.04 - t * 0.1;
+        vs.push(vtx(cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k));
       }
       nodes[id] = {
         ...base(id, { outTick: endTick }),
         type: "path",
-        path: constant({ contours: [contour] }),
-        style: { stroke: stroke(color, width, { cap: style === "circle" ? "round" : "butt", opacity: opacity ?? (style === "circle" ? 1 : theme.highlighter) }) },
+        path: constant({ contours: [{ closed: false, vertices: vs }] }),
+        style: { stroke: stroke(paint(o.color ?? "red"), o.width ?? theme.marker, opacity ? { opacity } : {}) },
         operators: [trim(`${id}.trim`, { end: drawOn(`${id}.end`, start, start + seconds) })],
       };
-      if (style === "circle") roots.push(id);
-      else roots.splice(1, 0, id); // right above the board
+      roots.push(id);
     });
     return id;
   }
 
-  /** Handwritten-size text, fading in. Needs a font on the board. */
+  /** Handwritten-size text, fading in. Needs a font on the board. Returns the text's box, to circle with `highlight`. */
   label(text: string, o: Pt & When & { size?: number; color?: Paint; align?: "left" | "center" | "right"; width?: number; until?: number }) {
     if (!this.font) throw new Error("label needs a font: new Board({ font: { uri, family } })");
     const seconds = 0.35;
@@ -445,7 +437,13 @@ export class Board {
       };
       roots.push(id);
     });
-    return id;
+    // Where the letters sit, so a highlight can circle the word: Manrope 700 runs about 0.56em a
+    // letter; the first baseline is a line height below the box's top.
+    const textWidth = text.length * size * 0.56;
+    const baseline = o.y - size * 0.75 + size * 1.2;
+    const descends = /[gjpqy]/.test(text);
+    const x0 = align === "center" ? o.x - textWidth / 2 : align === "right" ? o.x - textWidth : o.x;
+    return { id, text: true, x: x0, y: baseline - size * 0.74, width: textWidth, height: size * (descends ? 0.96 : 0.74) };
   }
 
   /** Leaves a pause before the next step. */

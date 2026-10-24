@@ -10,7 +10,8 @@ explain a concept, so the model names `leaf` instead of drawing one stroke by st
   - `place(block, { x, y, size })` draws a block stroke by stroke (`enter: "pop"` pops it in)
   - `arrow(from, to, { bend })` draws a marker arrow
   - `travel(block, { from, to, size, count, stay })` sends copies (molecules, drops) between points
-  - `highlight(ref, { part, style: "circle" | "highlighter" })` circles a block or one of its parts
+  - `highlight(target, { part, at, hold })` draws one chalk loop around a block, one of its parts, or a
+    label (`label` returns its box), on cue; `hold` fades it after that many seconds
   - `pulse(ref)`, `move(ref, { x, y, size })`, `remove(ref)`, `label(text, { x, y })`, `wait(s)`
   - `ref.at("anchor")` and `ref.center("part")` give board points to aim at
   - `build(id, name)` returns the Clayzo document
