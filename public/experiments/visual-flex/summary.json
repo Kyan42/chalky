@@ -1,0 +1,3 @@
+{
+  "recommendation": "Recommendation: generate L3 scene-language visuals with Haiku 5.5 one beat ahead (median 2.9 s, p95 4.0 s; a beat of speech is 4–6 s). The first beat's budget is only 0.7–3 s, so open with a pre-built visual or L2. L4 raw Clayzo (15–60 s) is for authoring new primitives offline, not live."
+}

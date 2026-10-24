@@ -18,3 +18,7 @@ npm-debug.log*
 # installed agent skills (restore with: npx skills experimental_install)
 .claude/skills/
 .agents/
+
+# visual-flex experiment: model-written level 4 code and render output
+/experiments/visual-flex/.tmp/
+/experiments/visual-flex/out/

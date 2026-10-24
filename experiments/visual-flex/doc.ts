@@ -91,7 +91,7 @@ export class Scene {
   readonly order: string[] = [];
   private count = 0;
 
-  private add(prefix: string, node: Omit<SceneNode, "id" | "name"> & { id?: string }): string {
+  private add(prefix: string, node: Record<string, unknown>): string {
     const id = safeId(`${prefix}-${this.count++}`);
     this.nodes[id] = { ...node, id, name: id } as SceneNode;
     this.order.push(id);

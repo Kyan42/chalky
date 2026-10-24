@@ -1,0 +1,4963 @@
+{
+  "started": "2026-10-24T15:54:42.775Z",
+  "finished": "2026-10-24T15:57:16.222Z",
+  "models": [
+    "claude-opus-5-5",
+    "claude-haiku-5-5"
+  ],
+  "effort": "low",
+  "concurrency": 4,
+  "schemaWarmupMs": {
+    "claude-haiku-5-5 L2": 1860,
+    "claude-opus-5-5 L1": 2261,
+    "claude-haiku-5-5 L3": 2430,
+    "claude-opus-5-5 L2": 2682,
+    "claude-haiku-5-5 L1": 3427,
+    "claude-opus-5-5 L3": 4702
+  },
+  "beats": [
+    {
+      "id": "headphones",
+      "question": "How do noise-cancelling headphones work?",
+      "say": "The headphones play an inverted copy of the noise, so the two waves cancel out.",
+      "at": "inverted"
+    },
+    {
+      "id": "photosynthesis",
+      "question": "What is photosynthesis?",
+      "say": "Leaves take in sunlight, water, and carbon dioxide, and turn them into sugar and oxygen.",
+      "at": "sunlight"
+    },
+    {
+      "id": "compound-interest",
+      "question": "Why does compound interest matter?",
+      "say": "With compound interest, your balance grows faster every year, because interest earns interest.",
+      "at": "grows"
+    },
+    {
+      "id": "binary-search",
+      "question": "How does binary search work?",
+      "say": "Binary search halves the list at every step, so a million items take only twenty guesses.",
+      "at": "halves"
+    },
+    {
+      "id": "heart",
+      "question": "How does blood circulate?",
+      "say": "The heart pumps blood out to the body, and veins carry it back in a loop.",
+      "at": "pumps"
+    },
+    {
+      "id": "demand",
+      "question": "What is a demand curve?",
+      "say": "When prices rise, buyers want less, so the demand curve slopes down.",
+      "at": "prices"
+    },
+    {
+      "id": "seasons",
+      "question": "Why do we have seasons?",
+      "say": "Earth is tilted, so for half the year one hemisphere leans toward the sun and gets summer.",
+      "at": "tilted"
+    },
+    {
+      "id": "neural-network",
+      "question": "What is a neural network?",
+      "say": "A neural network passes numbers through layers, and each layer weighs its inputs.",
+      "at": "layers"
+    }
+  ],
+  "generations": [
+    {
+      "beat": "headphones",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 2405,
+          "apiMs": 2483,
+          "inputTokens": 755,
+          "outputTokens": 17,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2491,
+      "totalMs": 2491,
+      "output": {
+        "primitive": "waves_cancel"
+      },
+      "docFile": "docs/headphones-L1-opus-5-5.json",
+      "nodes": 4,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1169,
+          "apiMs": 1188,
+          "inputTokens": 755,
+          "outputTokens": 17,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1247,
+      "totalMs": 1247,
+      "output": {
+        "primitive": "waves_cancel"
+      },
+      "docFile": "docs/headphones-L1-haiku-5-5.json",
+      "nodes": 4,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1178,
+          "apiMs": 1681,
+          "inputTokens": 1562,
+          "outputTokens": 83,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1700,
+      "totalMs": 1700,
+      "output": {
+        "layout": "single",
+        "caption": "Opposite waves cancel",
+        "items": [
+          {
+            "primitive": "waves_cancel",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "labels",
+                "value": "Noise|Inverted copy|Silence"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/headphones-L2-opus-5-5.json",
+      "nodes": 8,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 688,
+          "apiMs": 1308,
+          "inputTokens": 1562,
+          "outputTokens": 233,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1343,
+      "totalMs": 1343,
+      "output": {
+        "layout": "row",
+        "caption": "Inverted wave cancels noise",
+        "items": [
+          {
+            "primitive": "wave",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "cycles",
+                "value": "3"
+              },
+              {
+                "name": "amplitude",
+                "value": "0.6"
+              },
+              {
+                "name": "phase",
+                "value": "0"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              },
+              {
+                "name": "label",
+                "value": "Noise"
+              }
+            ]
+          },
+          {
+            "primitive": "wave",
+            "startsAt": 0.8,
+            "params": [
+              {
+                "name": "cycles",
+                "value": "3"
+              },
+              {
+                "name": "amplitude",
+                "value": "0.6"
+              },
+              {
+                "name": "phase",
+                "value": "180"
+              },
+              {
+                "name": "color",
+                "value": "red"
+              },
+              {
+                "name": "label",
+                "value": "Inverted copy"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/headphones-L2-haiku-5-5.json",
+      "nodes": 8,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1718,
+          "apiMs": 4111,
+          "inputTokens": 1332,
+          "outputTokens": 257,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 4115,
+      "totalMs": 4115,
+      "output": {
+        "elements": [
+          {
+            "kind": "text",
+            "at": 0,
+            "dur": 0.3,
+            "color": "red",
+            "args": [
+              14,
+              15,
+              30
+            ],
+            "text": "noise"
+          },
+          {
+            "kind": "plot",
+            "at": 0,
+            "dur": 1,
+            "color": "red",
+            "args": [
+              28,
+              6,
+              62,
+              18,
+              0,
+              12.566
+            ],
+            "text": "sin(x)"
+          },
+          {
+            "kind": "text",
+            "at": 0.8,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              14,
+              42,
+              30
+            ],
+            "text": "inverted"
+          },
+          {
+            "kind": "plot",
+            "at": 0.8,
+            "dur": 1,
+            "color": "blue",
+            "args": [
+              28,
+              33,
+              62,
+              18,
+              0,
+              12.566
+            ],
+            "text": "-sin(x)"
+          },
+          {
+            "kind": "line",
+            "at": 1.8,
+            "dur": 0.5,
+            "color": "grey",
+            "args": [
+              45,
+              55,
+              55,
+              55
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/headphones-L3-opus-5-5.json",
+      "nodes": 6,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 770,
+          "apiMs": 1864,
+          "inputTokens": 1332,
+          "outputTokens": 327,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1873,
+      "totalMs": 1873,
+      "output": {
+        "elements": [
+          {
+            "kind": "plot",
+            "at": 0,
+            "dur": 2,
+            "color": "blue",
+            "args": [
+              8,
+              25,
+              40,
+              50,
+              0,
+              6.28
+            ],
+            "text": "sin(x)"
+          },
+          {
+            "kind": "plot",
+            "at": 0.2,
+            "dur": 2,
+            "color": "red",
+            "args": [
+              8,
+              25,
+              40,
+              50,
+              0,
+              6.28
+            ],
+            "text": "-sin(x)"
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              28,
+              15,
+              30
+            ],
+            "text": "Noise"
+          },
+          {
+            "kind": "plot",
+            "at": 2,
+            "dur": 1.2,
+            "color": "grey",
+            "args": [
+              54,
+              25,
+              40,
+              50,
+              0,
+              6.28
+            ],
+            "text": "sin(x)+(-sin(x))"
+          },
+          {
+            "kind": "line",
+            "at": 2.2,
+            "dur": 1,
+            "color": "green",
+            "args": [
+              54,
+              50,
+              94,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.2,
+            "dur": 0.4,
+            "color": "green",
+            "args": [
+              74,
+              85,
+              30
+            ],
+            "text": "Silence"
+          }
+        ]
+      },
+      "docFile": "docs/headphones-L3-haiku-5-5.json",
+      "nodes": 7,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1234,
+          "apiMs": 15520,
+          "inputTokens": 2029,
+          "outputTokens": 2111,
+          "stopReason": "end_turn",
+          "error": "Error: keyed(\"noise-end\"): key 1 is at tick 0, not after the key before it (0)\n    at <anonymous> (<repo>\\node_modules\\@clayzo\\animation\\dist\\authoring.js:1:66721)\n    at Array.map (<anonymous>)\n    at jr (<repo>\\node_modules\\@clayzo\\animation\\dist\\authoring.js:1:66558)\n    at wavePath (<repo>\\experiments\\visual-flex\\.tmp\\headphones-L4-opus-5-5.ts:27:43)\n    at <anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\headphones-L4-opus-5-5.ts:42:15)\n    at Object.<anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\headphones-L4-opus-5-5.ts:76:16)\n    at Object.transformer (<repo>\\node_modules\\tsx\\dist\\register-B1c7OH6V.cjs:22:2188)"
+        },
+        {
+          "ttftMs": 4603,
+          "apiMs": 17462,
+          "inputTokens": 4567,
+          "outputTokens": 2323,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": false,
+      "finalValid": true,
+      "msToValid": 34103,
+      "totalMs": 34103,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst RED = hex(\"#E4572E\"), BLUE = hex(\"#2E86E4\"), GREEN = hex(\"#2E9E5B\"), GREY = hex(\"#9A958A\");\n\nfunction pv(x: number, y: number): PathVertex {\n  return { point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } };\n}\n\nfunction wave(cy: number, amp: number, sign: number): PathVertex[] {\n  const v: PathVertex[] = [];\n  const x0 = 180, x1 = 1020, n = 120;\n  for (let i = 0; i <= n; i++) {\n    const x = x0 + ((x1 - x0) * i) / n;\n    const y = cy + sign * amp * Math.sin(((x - x0) / 140) * Math.PI);\n    v.push(pv(x, y));\n  }\n  return v;\n}\n\nfunction wavePath(id: string, cy: number, amp: number, sign: number, color: any, t0: number, t1: number): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x: 0, y: 0 }),\n    type: \"path\",\n    path: constant({ contours: [{ closed: false, vertices: wave(cy, amp, sign) }] }),\n    style: { stroke: stroke(color, 8) },\n    operators: [trim(id + \"-trim\", { end: keyed(id + \"-end\", [[t0, 0, OUT], [t1, 1]]) })],\n  } as SceneNode;\n}\n\nfunction label(id: string, text: string, y: number, color: any, inT: number): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x: 20, y, opacity: keyed(id + \"-op\", [[inT, 0, OUT], [inT + 160, 1]]) }),\n    type: \"text\",\n    runs: constant([{ text, fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color }]),\n    box: { width: 150, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\",\n  } as SceneNode;\n}\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst noise = wavePath(\"noise\", 150, 70, 1, RED, 0, 240);\nconst anti = wavePath(\"anti\", 400, 70, -1, BLUE, 160, 560);\nconst plus: SceneNode = {\n  ...base(\"plus\", { outTick: 1440, x: 0, y: 0, opacity: keyed(\"plus-op\", [[520, 0, OUT], [640, 1]]) }),\n  type: \"path\",\n  path: constant({ contours: [\n    { closed: false, vertices: [pv(600, 505), pv(600, 555)] },\n    { closed: false, vertices: [pv(575, 530), pv(625, 530)] },\n  ] }),\n  style: { stroke: stroke(GREY, 6) },\n} as SceneNode;\nconst sum = wavePath(\"sum\", 650, 0, 1, GREEN, 640, 840);\nconst silence: SceneNode = {\n  ...base(\"silence\", { outTick: 1440, x: 450, y: 690, opacity: keyed(\"silence-op\", [[800, 0, OUT], [960, 1]]) }),\n  type: \"text\",\n  runs: constant([{ text: \"silence\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: GREEN }]),\n  box: { width: 300, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\",\n} as SceneNode;\n\nconst others: Record<string, SceneNode> = {\n  noise, anti, plus, sum, silence,\n  lNoise: label(\"lNoise\", \"noise\", 130, RED, 0),\n  lAnti: label(\"lAnti\", \"flipped\", 380, BLUE, 160),\n  lSum: label(\"lSum\", \"sum\", 630, GREEN, 640),\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes: { paper, ...others }, rootNodeIds: [\"paper\", \"noise\", \"lNoise\", \"anti\", \"lAnti\", \"plus\", \"sum\", \"lSum\", \"silence\"] } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/headphones-L4-opus-5-5.json",
+      "nodes": 9,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "headphones",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 662,
+          "apiMs": 6632,
+          "inputTokens": 2029,
+          "outputTokens": 2016,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 7389,
+      "totalMs": 7389,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n  type AnimationDocument,\n  type SceneNode,\n  type PathVertex,\n} from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst IN_OUT = { x1: 0.4, y1: 0, x2: 0.2, y2: 1 };\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\n// Wave helper: sine samples across x range at given amplitude/phase.\nfunction wavePoints(\n  x0: number,\n  x1: number,\n  cy: number,\n  amp: number,\n  cycles: number,\n  phase: number,\n  flip: boolean,\n): PathVertex[] {\n  const n = 96;\n  const pts: PathVertex[] = [];\n  for (let i = 0; i <= n; i++) {\n    const t = i / n;\n    const x = x0 + (x1 - x0) * t;\n    const s = Math.sin(t * cycles * 2 * Math.PI + phase) * amp * (flip ? -1 : 1);\n    pts.push({\n      point: { x: x - x0, y: cy + s - cy },\n      inTangent: { x: 0, y: 0 },\n      outTangent: { x: 0, y: 0 },\n    });\n  }\n  return pts;\n}\n\nconst CY_A = 300;\nconst CY_B = 500;\nconst X0 = 150;\nconst X1 = 1050;\n\n// Original noise wave (red), drawn from left to right.\nconst noise: SceneNode = {\n  ...base(\"noise\", { outTick: 1440, x: X0, y: CY_A }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: wavePoints(X0, X1, 0, 60, 4, 0, false) }],\n  }),\n  style: { stroke: stroke(hex(\"#E4572E\"), 8) },\n  operators: [\n    trim(\"noise-trim\", {\n      end: keyed(\"noise-trim-end\", [\n        [0, 0, OUT],\n        [480, 1],\n      ]),\n    }),\n  ],\n} as SceneNode;\n\n// Inverted copy (blue), drawn in sync; sign is flipped by using flip=true.\nconst inverted: SceneNode = {\n  ...base(\"inverted\", { outTick: 1440, x: X0, y: CY_B }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: wavePoints(X0, X1, 0, 60, 4, 0, true) }],\n  }),\n  style: { stroke: stroke(hex(\"#2E86E4\"), 8) },\n  operators: [\n    trim(\"inverted-trim\", {\n      end: keyed(\"inverted-trim-end\", [\n        [0, 0, OUT],\n        [480, 1],\n      ]),\n    }),\n  ],\n} as SceneNode;\n\n// Summed result: flat line (cancellation), fades in after both waves land.\nconst sum: SceneNode = {\n  ...base(\"sum\", { outTick: 1440, x: X0, y: 400, opacity: keyed(\"sum-opacity\", [\n    [0, 0, IN_OUT],\n    [720, 0],\n    [1000, 1],\n  ]) }),\n  type: \"path\",\n  path: constant({\n    contours: [\n      {\n        closed: false,\n        vertices: [\n          { point: { x: 0, y: 0 }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n          { point: { x: X1 - X0, y: 0 }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n        ],\n      },\n    ],\n  }),\n  style: { stroke: stroke(hex(\"#2E9E5B\"), 10) },\n  operators: [\n    trim(\"sum-trim\", {\n      end: keyed(\"sum-trim-end\", [\n        [480, 0, OUT],\n        [960, 1],\n      ]),\n    }),\n  ],\n} as SceneNode;\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  noise,\n  inverted,\n  sum,\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\"paper\", \"noise\", \"inverted\", \"sum\"],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/headphones-L4-haiku-5-5.json",
+      "nodes": 4,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 3128,
+          "apiMs": 3162,
+          "inputTokens": 761,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3166,
+      "totalMs": 3166,
+      "output": {
+        "primitive": "flow"
+      },
+      "docFile": "docs/photosynthesis-L1-opus-5-5.json",
+      "nodes": 11,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1233,
+          "apiMs": 1425,
+          "inputTokens": 761,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1429,
+      "totalMs": 1429,
+      "output": {
+        "primitive": "flow"
+      },
+      "docFile": "docs/photosynthesis-L1-haiku-5-5.json",
+      "nodes": 11,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1160,
+          "apiMs": 2613,
+          "inputTokens": 1568,
+          "outputTokens": 177,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2622,
+      "totalMs": 2622,
+      "output": {
+        "layout": "column",
+        "caption": "Photosynthesis in a leaf",
+        "items": [
+          {
+            "primitive": "flow",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Sunlight + Water + CO2|Leaf|Sugar + Oxygen"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          },
+          {
+            "primitive": "dots",
+            "startsAt": 1.5,
+            "params": [
+              {
+                "name": "mode",
+                "value": "gather"
+              },
+              {
+                "name": "count",
+                "value": "20"
+              },
+              {
+                "name": "color",
+                "value": "yellow"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/photosynthesis-L2-opus-5-5.json",
+      "nodes": 32,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1235,
+          "apiMs": 1721,
+          "inputTokens": 1568,
+          "outputTokens": 158,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1725,
+      "totalMs": 1725,
+      "output": {
+        "layout": "row",
+        "caption": "Photosynthesis turns light into food",
+        "items": [
+          {
+            "primitive": "label",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "text",
+                "value": "Sunlight"
+              },
+              {
+                "name": "color",
+                "value": "yellow"
+              }
+            ]
+          },
+          {
+            "primitive": "flow",
+            "startsAt": 1.2,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Sunlight|Leaf|Sugar + Oxygen"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/photosynthesis-L2-haiku-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1926,
+          "apiMs": 6969,
+          "inputTokens": 1338,
+          "outputTokens": 667,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 6980,
+      "totalMs": 6980,
+      "output": {
+        "elements": [
+          {
+            "kind": "line",
+            "at": 0,
+            "dur": 1.2,
+            "color": "green",
+            "args": [
+              35,
+              50,
+              50,
+              30,
+              65,
+              50,
+              50,
+              72,
+              35,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 0.6,
+            "dur": 0.8,
+            "color": "green",
+            "args": [
+              50,
+              32,
+              50,
+              85
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.3,
+            "color": "yellow",
+            "args": [
+              12,
+              14,
+              6,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 0.3,
+            "dur": 0.8,
+            "color": "yellow",
+            "args": [
+              19,
+              20,
+              38,
+              38
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.3,
+            "color": "yellow",
+            "args": [
+              12,
+              27,
+              26
+            ],
+            "text": "sunlight"
+          },
+          {
+            "kind": "arrow",
+            "at": 0.9,
+            "dur": 0.8,
+            "color": "blue",
+            "args": [
+              12,
+              60,
+              36,
+              56
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.9,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              12,
+              66,
+              26
+            ],
+            "text": "water"
+          },
+          {
+            "kind": "arrow",
+            "at": 1.5,
+            "dur": 0.8,
+            "color": "grey",
+            "args": [
+              12,
+              85,
+              40,
+              64
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.5,
+            "dur": 0.3,
+            "color": "grey",
+            "args": [
+              14,
+              91,
+              26
+            ],
+            "text": "CO2"
+          },
+          {
+            "kind": "move",
+            "at": 2.4,
+            "dur": 1,
+            "color": "green",
+            "args": [
+              40,
+              50,
+              58,
+              50,
+              1.5
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 3,
+            "dur": 0.8,
+            "color": "purple",
+            "args": [
+              64,
+              40,
+              84,
+              26
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.2,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              88,
+              20,
+              28
+            ],
+            "text": "sugar"
+          },
+          {
+            "kind": "arrow",
+            "at": 3.5,
+            "dur": 0.8,
+            "color": "red",
+            "args": [
+              64,
+              60,
+              84,
+              72
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.7,
+            "dur": 0.3,
+            "color": "red",
+            "args": [
+              88,
+              79,
+              28
+            ],
+            "text": "oxygen"
+          }
+        ]
+      },
+      "docFile": "docs/photosynthesis-L3-opus-5-5.json",
+      "nodes": 20,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1742,
+          "apiMs": 4030,
+          "inputTokens": 1338,
+          "outputTokens": 628,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 4037,
+      "totalMs": 4037,
+      "output": {
+        "elements": [
+          {
+            "kind": "rect",
+            "at": 0,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              8,
+              30,
+              30,
+              40,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.2,
+            "dur": 0.5,
+            "color": "ink",
+            "args": [
+              23,
+              80,
+              34
+            ],
+            "text": "Leaf"
+          },
+          {
+            "kind": "circle",
+            "at": 0.3,
+            "dur": 0.6,
+            "color": "yellow",
+            "args": [
+              78,
+              18,
+              7,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 0.8,
+            "dur": 0.6,
+            "color": "yellow",
+            "args": [
+              66,
+              22,
+              44,
+              36
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 1.2,
+            "dur": 1.4,
+            "color": "blue",
+            "args": [
+              30,
+              70,
+              30,
+              40,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 1,
+            "dur": 0.6,
+            "color": "blue",
+            "args": [
+              14,
+              76,
+              14,
+              88
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.6,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              24,
+              94,
+              26
+            ],
+            "text": "Water"
+          },
+          {
+            "kind": "move",
+            "at": 1.6,
+            "dur": 1.2,
+            "color": "grey",
+            "args": [
+              50,
+              85,
+              44,
+              40,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              60,
+              50,
+              26
+            ],
+            "text": "CO2"
+          },
+          {
+            "kind": "bar",
+            "at": 2.8,
+            "dur": 0.8,
+            "color": "yellow",
+            "args": [
+              62,
+              88,
+              8,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 3,
+            "dur": 0.8,
+            "color": "green",
+            "args": [
+              74,
+              88,
+              8,
+              -14
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 3.2,
+            "dur": 0.8,
+            "color": "ink",
+            "args": [
+              86,
+              88,
+              8,
+              -24
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.8,
+            "dur": 0.5,
+            "color": "ink",
+            "args": [
+              80,
+              62,
+              28
+            ],
+            "text": "Sugar + O2"
+          }
+        ]
+      },
+      "docFile": "docs/photosynthesis-L3-haiku-5-5.json",
+      "nodes": 16,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 1069,
+          "apiMs": 18817,
+          "inputTokens": 2035,
+          "outputTokens": 2449,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 19380,
+      "totalMs": 19380,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst INK = hex(\"#1F2A44\");\nconst RED = hex(\"#E4572E\");\nconst BLUE = hex(\"#2E86E4\");\nconst GREEN = hex(\"#2E9E5B\");\nconst YELLOW = hex(\"#E0A100\");\nconst GREY = hex(\"#9A958A\");\n\nconst nodes: Record<string, SceneNode> = {};\nconst order: string[] = [];\nfunction add(n: SceneNode) { nodes[(n as any).id] = n; order.push((n as any).id); }\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } } as SceneNode;\nadd(paper);\n\nfunction v(x: number, y: number): PathVertex { return { point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } }; }\n\nfunction fadeIn(id: string, t: number) { return keyed(id + \"-op\", [[t, 0, OUT], [t + 40, 1]]); }\n\nfunction pathNode(id: string, pts: PathVertex[], color: any, w: number, t0: number, t1: number, closed = false): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x: 0, y: 0 }),\n    type: \"path\",\n    path: constant({ contours: [{ closed, vertices: pts }] }),\n    style: { stroke: stroke(color, w) },\n    operators: [trim(id + \"-trim\", { end: keyed(id + \"-end\", [[t0, 0, OUT], [t1, 1]]) })],\n  } as SceneNode;\n}\n\nfunction label(id: string, text: string, x: number, y: number, color: any, t: number, w = 220): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x: x - w / 2, y, opacity: fadeIn(id, t) }),\n    type: \"text\",\n    runs: constant([{ text, fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color }]),\n    box: { width: w, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\",\n  } as SceneNode;\n}\n\nfunction circle(id: string, x: number, y: number, d: number, color: any, t: number): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x, y, scale: keyed(id + \"-sc\", [[t, { x: 0, y: 0, z: 1 }, OUT], [t + 60, { x: 1, y: 1, z: 1 }]]) }),\n    type: \"ellipse\", size: constant({ width: d, height: d }), style: { fill: fill(color) },\n  } as SceneNode;\n}\n\n// Leaf in center\nconst leafPts: PathVertex[] = [];\nconst cx = 600, cy = 420;\nfor (let i = 0; i <= 24; i++) { const a = Math.PI * i / 24; leafPts.push(v(cx - 150 + 300 * i / 24, cy - Math.sin(a) * 110)); }\nfor (let i = 1; i <= 24; i++) { const a = Math.PI * i / 24; leafPts.push(v(cx + 150 - 300 * i / 24, cy + Math.sin(a) * 110)); }\nadd(pathNode(\"leaf\", leafPts, GREEN, 10, 0, 160, true));\nadd(pathNode(\"vein\", [v(cx - 190, cy + 20), v(cx + 140, cy)], GREEN, 6, 80, 200));\n\n// Sun (top-left)\nadd(circle(\"sun\", 150, 150, 110, YELLOW, 0));\nfor (let i = 0; i < 8; i++) {\n  const a = i * Math.PI / 4;\n  add(pathNode(\"ray\" + i, [v(150 + Math.cos(a) * 70, 150 + Math.sin(a) * 70), v(150 + Math.cos(a) * 100, 150 + Math.sin(a) * 100)], YELLOW, 6, 40, 120));\n}\nadd(pathNode(\"arSun\", [v(230, 220), v(440, 340)], YELLOW, 8, 100, 220));\nadd(label(\"lSun\", \"light\", 150, 230, INK, 60));\n\n// Water (left)\nadd(circle(\"water\", 140, 430, 70, BLUE, 260));\nadd(pathNode(\"arWater\", [v(200, 430), v(420, 425)], BLUE, 8, 300, 420));\nadd(label(\"lWater\", \"H2O\", 140, 480, INK, 300));\n\n// CO2 (bottom-left)\nadd(circle(\"co2\", 150, 680, 70, GREY, 460));\nadd(pathNode(\"arCo2\", [v(210, 650), v(440, 510)], GREY, 8, 500, 620));\nadd(label(\"lCo2\", \"CO2\", 150, 725, INK, 500));\n\n// Outputs\nadd(pathNode(\"arSugar\", [v(780, 380), v(960, 260)], GREEN, 8, 720, 840));\nadd(circle(\"sugar\", 1040, 220, 90, RED, 800));\nadd(label(\"lSugar\", \"sugar\", 1040, 280, INK, 840));\n\nadd(pathNode(\"arO2\", [v(780, 460), v(960, 580)], BLUE, 8, 880, 1000));\nadd(circle(\"o2\", 1040, 620, 70, BLUE, 960));\nadd(label(\"lO2\", \"O2\", 1040, 670, INK, 1000));\n\nconst doc = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes, rootNodeIds: order } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as AnimationDocument);\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/photosynthesis-L4-opus-5-5.json",
+      "nodes": 26,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "photosynthesis",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.6,
+      "attempts": [
+        {
+          "ttftMs": 12597,
+          "apiMs": 19583,
+          "inputTokens": 2035,
+          "outputTokens": 4596,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 20140,
+      "totalMs": 20140,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst INK = hex(\"#1F2A44\");\nconst RED = hex(\"#E4572E\");\nconst BLUE = hex(\"#2E86E4\");\nconst GREEN = hex(\"#2E9E5B\");\nconst YELLOW = hex(\"#E0A100\");\nconst GREY = hex(\"#9A958A\");\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\nconst nodes: Record<string, SceneNode> = { paper };\nconst order: string[] = [\"paper\"];\nfunction add(n: SceneNode) {\n  nodes[n.id as string] = n;\n  order.push(n.id as string);\n}\n\n// Ellipse that pops in from scale 0 starting at t0.\nfunction blob(id: string, cx: number, cy: number, w: number, h: number, color: string, t0: number): SceneNode {\n  return {\n    ...base(id, {\n      outTick: 1440,\n      x: cx,\n      y: cy,\n      scale: keyed(`${id}-s`, [\n        [t0, { x: 0, y: 0, z: 1 }],\n        [t0 + 240, { x: 1, y: 1, z: 1 }, OUT],\n      ]),\n    }),\n    type: \"ellipse\",\n    size: constant({ width: w, height: h }),\n    style: { fill: fill(color) },\n  } as SceneNode;\n}\n\n// Open polyline path with arrowhead, drawn on from t0 to t0+400.\nfunction arrow(id: string, ax: number, ay: number, bx: number, by: number, color: string, t0: number): SceneNode {\n  const ang = Math.atan2(by - ay, bx - ax);\n  const L = 22;\n  const w1 = { x: bx + L * Math.cos(ang + Math.PI - 0.45), y: by + L * Math.sin(ang + Math.PI - 0.45) };\n  const w2 = { x: bx + L * Math.cos(ang + Math.PI + 0.45), y: by + L * Math.sin(ang + Math.PI + 0.45) };\n  const pts = [{ x: ax, y: ay }, { x: bx, y: by }, w1, { x: bx, y: by }, w2];\n  const vertices: PathVertex[] = pts.map((p) => ({\n    point: p,\n    inTangent: { x: 0, y: 0 },\n    outTangent: { x: 0, y: 0 },\n  }));\n  return {\n    ...base(id, { outTick: 1440, x: 0, y: 0 }),\n    type: \"path\",\n    path: constant({ contours: [{ closed: false, vertices }] }),\n    style: { stroke: stroke(color, 8) },\n    operators: [trim(`${id}-trim`, { end: keyed(`${id}-end`, [[t0, 0, OUT], [t0 + 400, 1]]) })],\n  } as SceneNode;\n}\n\n// Short label centred on cx, top edge at top.\nfunction label(id: string, cx: number, top: number, text: string, color: string, t0: number): SceneNode {\n  const width = 220;\n  return {\n    ...base(id, {\n      outTick: 1440,\n      x: cx - width / 2,\n      y: top,\n      scale: keyed(`${id}-s`, [\n        [t0, { x: 0.8, y: 0.8, z: 1 }],\n        [t0 + 240, { x: 1, y: 1, z: 1 }, OUT],\n      ]),\n    }),\n    type: \"text\",\n    runs: constant([\n      { text, fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color },\n    ]),\n    box: { width, height: 41 },\n    wrap: \"none\",\n    align: \"center\",\n    verticalAlign: \"top\",\n  } as SceneNode;\n}\n\n// Inputs (anchor at tick 0)\nadd(blob(\"sun\", 150, 130, 120, 120, YELLOW, 0));\nadd(label(\"sun-label\", 150, 200, \"Sunlight\", INK, 0));\nadd(arrow(\"sun-arrow\", 210, 185, 470, 330, YELLOW, 240));\n\nadd(blob(\"co2\", 150, 400, 100, 100, GREY, 240));\nadd(label(\"co2-label\", 150, 455, \"CO2\", INK, 240));\nadd(arrow(\"co2-arrow\", 210, 400, 430, 400, GREY, 480));\n\nadd(label(\"water-label\", 150, 640, \"Water\", INK, 480));\nadd(arrow(\"water-arrow\", 150, 600, 460, 470, BLUE, 480));\n\n// Leaf (centre)\nadd(blob(\"leaf\", 600, 400, 360, 220, GREEN, 0));\nadd(label(\"leaf-label\", 600, 380, \"Leaf\", hex(\"#F7F5EF\"), 240));\n\n// Outputs\nadd(arrow(\"sugar-arrow\", 770, 340, 1000, 240, RED, 720));\nadd(label(\"sugar-label\", 1080, 220, \"Sugar\", INK, 800));\nadd(arrow(\"oxygen-arrow\", 770, 460, 1000, 560, BLUE, 880));\nadd(label(\"oxygen-label\", 1080, 540, \"Oxygen\", INK, 960));\n\nconst doc = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: order,\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as unknown as AnimationDocument);\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/photosynthesis-L4-haiku-5-5.json",
+      "nodes": 15,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 1337,
+          "apiMs": 1371,
+          "inputTokens": 748,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1375,
+      "totalMs": 1375,
+      "output": {
+        "primitive": "bars"
+      },
+      "docFile": "docs/compound-interest-L1-opus-5-5.json",
+      "nodes": 5,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 820,
+          "apiMs": 851,
+          "inputTokens": 748,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 856,
+      "totalMs": 856,
+      "output": {
+        "primitive": "graph"
+      },
+      "docFile": "docs/compound-interest-L1-haiku-5-5.json",
+      "nodes": 3,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 1044,
+          "apiMs": 2287,
+          "inputTokens": 1555,
+          "outputTokens": 189,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2295,
+      "totalMs": 2295,
+      "output": {
+        "layout": "row",
+        "caption": "Interest earns interest",
+        "items": [
+          {
+            "primitive": "bars",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "values",
+                "value": "100|110|121|133|146|161"
+              },
+              {
+                "name": "labels",
+                "value": "Y0|Y1|Y2|Y3|Y4|Y5"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          },
+          {
+            "primitive": "cycle",
+            "startsAt": 1.2,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Balance|Interest|Bigger balance"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/compound-interest-L2-opus-5-5.json",
+      "nodes": 27,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 665,
+          "apiMs": 1176,
+          "inputTokens": 1555,
+          "outputTokens": 200,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1180,
+      "totalMs": 1180,
+      "output": {
+        "layout": "row",
+        "caption": "Interest earns interest",
+        "items": [
+          {
+            "primitive": "graph",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "shape",
+                "value": "exponential"
+              },
+              {
+                "name": "xLabel",
+                "value": "Years"
+              },
+              {
+                "name": "yLabel",
+                "value": "Balance"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          },
+          {
+            "primitive": "bars",
+            "startsAt": 1.5,
+            "params": [
+              {
+                "name": "values",
+                "value": "1|2|4"
+              },
+              {
+                "name": "labels",
+                "value": "Yr 1|Yr 2|Yr 3"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/compound-interest-L2-haiku-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 4598,
+          "apiMs": 10636,
+          "inputTokens": 1325,
+          "outputTokens": 838,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 10643,
+      "totalMs": 10643,
+      "output": {
+        "elements": [
+          {
+            "kind": "line",
+            "at": 0,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              10,
+              85,
+              92,
+              85
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 0,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              10,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              14,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.7,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              30,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.7,
+            "dur": 0.4,
+            "color": "green",
+            "args": [
+              30,
+              73,
+              10,
+              3
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.1,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              46,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.1,
+            "dur": 0.4,
+            "color": "green",
+            "args": [
+              46,
+              73,
+              10,
+              10
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.5,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              62,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.5,
+            "dur": 0.4,
+            "color": "green",
+            "args": [
+              62,
+              73,
+              10,
+              22
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.9,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              78,
+              85,
+              10,
+              12
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.9,
+            "dur": 0.4,
+            "color": "green",
+            "args": [
+              78,
+              73,
+              10,
+              45
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.3,
+            "color": "grey",
+            "args": [
+              19,
+              92,
+              26
+            ],
+            "text": "Yr 1"
+          },
+          {
+            "kind": "text",
+            "at": 1.9,
+            "dur": 0.3,
+            "color": "grey",
+            "args": [
+              83,
+              92,
+              26
+            ],
+            "text": "Yr 5"
+          },
+          {
+            "kind": "rect",
+            "at": 2.3,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              14,
+              10,
+              4,
+              4,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.3,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              30,
+              12,
+              26
+            ],
+            "text": "principal"
+          },
+          {
+            "kind": "rect",
+            "at": 2.6,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              14,
+              18,
+              4,
+              4,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.6,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              34,
+              20,
+              26
+            ],
+            "text": "interest earned"
+          },
+          {
+            "kind": "arrow",
+            "at": 2.4,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              50,
+              50,
+              76,
+              24
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/compound-interest-L3-opus-5-5.json",
+      "nodes": 20,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 2301,
+          "apiMs": 3446,
+          "inputTokens": 1325,
+          "outputTokens": 343,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3449,
+      "totalMs": 3449,
+      "output": {
+        "elements": [
+          {
+            "kind": "bar",
+            "at": 0,
+            "dur": 0.6,
+            "color": "grey",
+            "args": [
+              12,
+              88,
+              14,
+              30
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.5,
+            "dur": 0.6,
+            "color": "blue",
+            "args": [
+              32,
+              88,
+              14,
+              38
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1,
+            "dur": 0.6,
+            "color": "blue",
+            "args": [
+              52,
+              88,
+              14,
+              48
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.5,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              72,
+              88,
+              14,
+              60
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 0.2,
+            "dur": 0.8,
+            "color": "ink",
+            "args": [
+              10,
+              92,
+              90,
+              92
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              50,
+              8,
+              0,
+              0
+            ],
+            "text": "Interest earns interest"
+          },
+          {
+            "kind": "text",
+            "at": 2.2,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              50,
+              96,
+              0,
+              0
+            ],
+            "text": "Balance grows faster"
+          }
+        ]
+      },
+      "docFile": "docs/compound-interest-L3-haiku-5-5.json",
+      "nodes": 9,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 924,
+          "apiMs": 18071,
+          "inputTokens": 2022,
+          "outputTokens": 2421,
+          "stopReason": "end_turn",
+          "error": "DocumentValidationError: Animation document validation failed with 30 error(s)\n    at pt (<repo>\\node_modules\\@clayzo\\animation\\dist\\authoring.js:1:62560)\n    at <anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\compound-interest-L4-opus-5-5.ts:81:1)\n    at Object.<anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\compound-interest-L4-opus-5-5.ts:82:16)\n    at Object.transformer (<repo>\\node_modules\\tsx\\dist\\register-B1c7OH6V.cjs:22:2188)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)"
+        },
+        {
+          "ttftMs": 4784,
+          "apiMs": 20196,
+          "inputTokens": 4765,
+          "outputTokens": 2783,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": false,
+      "finalValid": true,
+      "msToValid": 39716,
+      "totalMs": 39716,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst INK = hex(\"#1F2A44\");\nconst GREEN = hex(\"#2E9E5B\");\nconst GREY = hex(\"#9A958A\");\nconst YELLOW = hex(\"#E0A100\");\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst nodes: Record<string, SceneNode> = {};\nconst order: string[] = [\"paper\"];\nconst add = (n: SceneNode, id: string) => { nodes[id] = n; order.push(id); };\n\nconst baseY = 680;\nconst left = 200;\nconst right = 1040;\nconst N = 8;\nconst r = 0.3;\n\nconst axisV: PathVertex[] = [\n  { point: { x: left, y: 120 }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n  { point: { x: left, y: baseY }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n  { point: { x: right, y: baseY }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n];\nadd({ ...base(\"axis\", { outTick: 1440 }), type: \"path\", path: constant({ contours: [{ closed: false, vertices: axisV }] }), style: { stroke: stroke(INK, 5) }, operators: [trim(\"axisTrim\", { end: keyed(\"axisEnd\", [[0, 0, OUT], [240, 1]]) })] } as SceneNode, \"axis\");\n\nconst step = (right - left) / N;\nconst barW = step * 0.6;\nconst maxV = Math.pow(1 + r, N - 1);\nconst scaleY = 480 / maxV;\nfor (let i = 0; i < N; i++) {\n  const v = Math.pow(1 + r, i);\n  const cx = left + step * (i + 0.5);\n  const t0 = 160 + i * 64;\n  const t1 = t0 + 136;\n  const hP = scaleY;\n  const hI = (v - 1) * scaleY;\n  const rid = `p${i}`;\n  add({ ...base(rid, { outTick: 1440, position: keyed(`${rid}pos`, [[t0, { x: cx, y: baseY, z: 0 }, OUT], [t1, { x: cx, y: baseY - hP / 2, z: 0 }]]), scale: keyed(`${rid}sc`, [[t0, { x: 1, y: 0.001, z: 1 }, OUT], [t1, { x: 1, y: 1, z: 1 }]]) }), type: \"rect\", size: constant({ width: barW, height: hP }), cornerRadius: constant(6), style: { fill: fill(GREY) } } as SceneNode, rid);\n  if (hI > 1) {\n    const iid = `i${i}`;\n    const top = baseY - hP;\n    add({ ...base(iid, { outTick: 1440, position: keyed(`${iid}pos`, [[t0, { x: cx, y: top, z: 0 }, OUT], [t1, { x: cx, y: top - hI / 2, z: 0 }]]), scale: keyed(`${iid}sc`, [[t0, { x: 1, y: 0.001, z: 1 }, OUT], [t1, { x: 1, y: 1, z: 1 }]]) }), type: \"rect\", size: constant({ width: barW, height: hI }), cornerRadius: constant(6), style: { fill: fill(GREEN) } } as SceneNode, iid);\n  }\n}\n\nconst curve: PathVertex[] = [];\nfor (let k = 0; k <= 40; k++) {\n  const f = (k / 40) * (N - 1);\n  const x = left + step * (f + 0.5);\n  const y = baseY - Math.pow(1 + r, f) * scaleY - 18;\n  curve.push({ point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } });\n}\nadd({ ...base(\"curve\", { outTick: 1440 }), type: \"path\", path: constant({ contours: [{ closed: false, vertices: curve }] }), style: { stroke: stroke(YELLOW, 7) }, operators: [trim(\"curveTrim\", { end: keyed(\"curveEnd\", [[200, 0, OUT], [740, 1]]) })] } as SceneNode, \"curve\");\n\nconst label = (id: string, text: string, color: ReturnType<typeof hex>, x: number, y: number, t: number, w = 260) =>\n  add({ ...base(id, { outTick: 1440, x, y, opacity: keyed(`${id}op`, [[t, 0, OUT], [t + 120, 1]]) }), type: \"text\", runs: constant([{ text, fontAssetId: \"inter\", fontSize: 30, fontWeight: 600, letterSpacing: 0, lineHeight: 38, color }]), box: { width: w, height: 38 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\" } as SceneNode, id);\n\nlabel(\"lblP\", \"Principal\", GREY, 230, 720, 400);\nlabel(\"lblI\", \"Interest on interest\", GREEN, 260, 140, 600, 340);\nlabel(\"lblT\", \"Years\", INK, 880, 720, 300, 160);\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes: { paper, ...nodes }, rootNodeIds: order } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/compound-interest-L4-opus-5-5.json",
+      "nodes": 21,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "compound-interest",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 3.1,
+      "attempts": [
+        {
+          "ttftMs": 6797,
+          "apiMs": 13970,
+          "inputTokens": 2022,
+          "outputTokens": 3705,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 14509,
+      "totalMs": 14509,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n  type AnimationDocument,\n  type SceneNode,\n  type PathVertex,\n} from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\nconst X0 = 150;\nconst Y0 = 650;\nconst XSTEP = 90; // one unit of time (year) horizontally\nconst YSCALE = 1.6; // pixels per unit of balance above 100\n\nfunction vertex(x: number, y: number): PathVertex {\n  return {\n    point: { x, y },\n    inTangent: { x: 0, y: 0 },\n    outTangent: { x: 0, y: 0 },\n  };\n}\n\n// Sample a balance function over years 0..10 into a polyline.\nfunction sample(f: (t: number) => number): PathVertex[] {\n  const verts: PathVertex[] = [];\n  const steps = 40;\n  for (let i = 0; i <= steps; i++) {\n    const t = (i / steps) * 10;\n    const x = X0 + t * XSTEP;\n    const y = Y0 - (f(t) - 100) * YSCALE;\n    verts.push(vertex(x, y));\n  }\n  return verts;\n}\n\nconst simpleVerts = sample((t) => 100 + 10 * t);\nconst compoundVerts = sample((t) => 100 * Math.pow(1.1, t));\n\nconst axisVerts: PathVertex[] = [\n  vertex(X0, 130),\n  vertex(X0, Y0),\n  vertex(1050, Y0),\n];\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n};\n\nconst axis: SceneNode = {\n  ...base(\"axis\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: axisVerts }] }),\n  style: { stroke: stroke(hex(\"#1F2A44\"), 6) },\n  operators: [\n    trim(\"axis-trim\", {\n      end: keyed(\"axis-trim-end\", [\n        [0, 0, OUT],\n        [320, 1],\n      ]),\n    }),\n  ],\n};\n\nconst simpleLine: SceneNode = {\n  ...base(\"simple-line\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: simpleVerts }] }),\n  style: { stroke: stroke(hex(\"#9A958A\"), 8) },\n  operators: [\n    trim(\"simple-trim\", {\n      end: keyed(\"simple-trim-end\", [\n        [0, 0, OUT],\n        [720, 1],\n      ]),\n    }),\n  ],\n};\n\nconst compoundLine: SceneNode = {\n  ...base(\"compound-line\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: compoundVerts }] }),\n  style: { stroke: stroke(hex(\"#2E9E5B\"), 10) },\n  operators: [\n    trim(\"compound-trim\", {\n      end: keyed(\"compound-trim-end\", [\n        [0, 0, OUT],\n        [720, 1],\n      ]),\n    }),\n  ],\n};\n\nconst yearLabel: SceneNode = {\n  ...base(\"year-label\", {\n    outTick: 1440,\n    x: 560,\n    y: 670,\n    opacity: keyed(\"year-label-opacity\", [\n      [600, 0, OUT],\n      [720, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"Years\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#1F2A44\"),\n    },\n  ]),\n  box: { width: 120, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n};\n\nconst compoundLabel: SceneNode = {\n  ...base(\"compound-label\", {\n    outTick: 1440,\n    x: 900,\n    y: 350,\n    opacity: keyed(\"compound-label-opacity\", [\n      [600, 0, OUT],\n      [720, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"Compound\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#2E9E5B\"),\n    },\n  ]),\n  box: { width: 220, height: 41 },\n  wrap: \"none\",\n  align: \"left\",\n  verticalAlign: \"top\",\n};\n\nconst simpleLabel: SceneNode = {\n  ...base(\"simple-label\", {\n    outTick: 1440,\n    x: 900,\n    y: 470,\n    opacity: keyed(\"simple-label-opacity\", [\n      [600, 0, OUT],\n      [720, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"Simple\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#9A958A\"),\n    },\n  ]),\n  box: { width: 160, height: 41 },\n  wrap: \"none\",\n  align: \"left\",\n  verticalAlign: \"top\",\n};\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  axis,\n  \"simple-line\": simpleLine,\n  \"compound-line\": compoundLine,\n  \"year-label\": yearLabel,\n  \"compound-label\": compoundLabel,\n  \"simple-label\": simpleLabel,\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: {\n    width: 1200,\n    height: 800,\n    pixelAspectRatio: 1,\n    backgroundColor: hex(\"#F7F5EF\"),\n  },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: {\n      id: \"inter\",\n      type: \"font\",\n      uri: \"/fonts/Inter-SemiBold.otf\",\n      family: \"Inter\",\n      style: \"normal\",\n      weight: 600,\n    },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\n        \"paper\",\n        \"axis\",\n        \"simple-line\",\n        \"compound-line\",\n        \"year-label\",\n        \"compound-label\",\n        \"simple-label\",\n      ],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/compound-interest-L4-haiku-5-5.json",
+      "nodes": 7,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1228,
+          "apiMs": 1275,
+          "inputTokens": 746,
+          "outputTokens": 12,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1280,
+      "totalMs": 1280,
+      "output": {
+        "primitive": "split"
+      },
+      "docFile": "docs/binary-search-L1-opus-5-5.json",
+      "nodes": 9,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 963,
+          "apiMs": 975,
+          "inputTokens": 746,
+          "outputTokens": 12,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 979,
+      "totalMs": 979,
+      "output": {
+        "primitive": "split"
+      },
+      "docFile": "docs/binary-search-L1-haiku-5-5.json",
+      "nodes": 9,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 4891,
+          "apiMs": 6121,
+          "inputTokens": 1553,
+          "outputTokens": 176,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 6126,
+      "totalMs": 6126,
+      "output": {
+        "layout": "row",
+        "caption": "Halve the list each step",
+        "items": [
+          {
+            "primitive": "bars",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "values",
+                "value": "1000000|500000|250000|125000|62500|1"
+              },
+              {
+                "name": "labels",
+                "value": "Start|1|2|3|4|20"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "label",
+            "startsAt": 2.5,
+            "params": [
+              {
+                "name": "text",
+                "value": "1M → 20 guesses"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/binary-search-L2-opus-5-5.json",
+      "nodes": 16,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1296,
+          "apiMs": 1873,
+          "inputTokens": 1553,
+          "outputTokens": 180,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1876,
+      "totalMs": 1876,
+      "output": {
+        "layout": "row",
+        "caption": "Halving the list each step",
+        "items": [
+          {
+            "primitive": "bars",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "values",
+                "value": "1000000|500000|250000|125000|62500"
+              },
+              {
+                "name": "labels",
+                "value": "Start|Step 1|Step 2|Step 3|Step 4"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "label",
+            "startsAt": 2.5,
+            "params": [
+              {
+                "name": "text",
+                "value": "20 guesses"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/binary-search-L2-haiku-5-5.json",
+      "nodes": 14,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1497,
+          "apiMs": 7446,
+          "inputTokens": 1323,
+          "outputTokens": 825,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 7451,
+      "totalMs": 7451,
+      "output": {
+        "elements": [
+          {
+            "kind": "rect",
+            "at": 0,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              5,
+              10,
+              90,
+              8,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.1,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              50,
+              6,
+              28
+            ],
+            "text": "1,000,000"
+          },
+          {
+            "kind": "line",
+            "at": 0.6,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              50,
+              8,
+              50,
+              20
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 1,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              5,
+              26,
+              45,
+              8,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              50,
+              26,
+              45,
+              8,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.1,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              27,
+              38,
+              26
+            ],
+            "text": "500,000"
+          },
+          {
+            "kind": "line",
+            "at": 1.5,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              27.5,
+              24,
+              27.5,
+              36
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 1.9,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              27.5,
+              44,
+              22.5,
+              8,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 1.9,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              5,
+              44,
+              22.5,
+              8,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              39,
+              56,
+              26
+            ],
+            "text": "250,000"
+          },
+          {
+            "kind": "rect",
+            "at": 2.6,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              27.5,
+              62,
+              11,
+              8,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.7,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              33,
+              74,
+              26
+            ],
+            "text": "125,000"
+          },
+          {
+            "kind": "text",
+            "at": 3.2,
+            "dur": 0.3,
+            "color": "grey",
+            "args": [
+              33,
+              80,
+              30
+            ],
+            "text": "..."
+          },
+          {
+            "kind": "circle",
+            "at": 3.6,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              33,
+              88,
+              2,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.7,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              45,
+              88,
+              26
+            ],
+            "text": "found!"
+          },
+          {
+            "kind": "text",
+            "at": 4,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              78,
+              70,
+              40
+            ],
+            "text": "20 steps"
+          },
+          {
+            "kind": "text",
+            "at": 4.3,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              78,
+              80,
+              26
+            ],
+            "text": "2^20 ≈ 1 million"
+          }
+        ]
+      },
+      "docFile": "docs/binary-search-L3-opus-5-5.json",
+      "nodes": 18,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1266,
+          "apiMs": 3017,
+          "inputTokens": 1323,
+          "outputTokens": 485,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3022,
+      "totalMs": 3022,
+      "output": {
+        "elements": [
+          {
+            "kind": "text",
+            "at": 0,
+            "dur": 0.6,
+            "color": "ink",
+            "args": [
+              50,
+              8,
+              40
+            ],
+            "text": "Halve the list"
+          },
+          {
+            "kind": "rect",
+            "at": 0.2,
+            "dur": 0.8,
+            "color": "blue",
+            "args": [
+              8,
+              30,
+              84,
+              12,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.4,
+            "dur": 0.8,
+            "color": "blue",
+            "args": [
+              10,
+              72,
+              38,
+              20
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 0.4,
+            "dur": 0.8,
+            "color": "grey",
+            "args": [
+              52,
+              72,
+              38,
+              10
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 1.3,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              50,
+              52,
+              50,
+              44
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.9,
+            "dur": 0.7,
+            "color": "blue",
+            "args": [
+              10,
+              72,
+              18,
+              20
+            ],
+            "text": ""
+          },
+          {
+            "kind": "bar",
+            "at": 1.9,
+            "dur": 0.7,
+            "color": "grey",
+            "args": [
+              30,
+              72,
+              18,
+              20
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.6,
+            "dur": 0.5,
+            "color": "red",
+            "args": [
+              50,
+              86,
+              30
+            ],
+            "text": "Half each step"
+          },
+          {
+            "kind": "move",
+            "at": 3,
+            "dur": 1.4,
+            "color": "green",
+            "args": [
+              50,
+              40,
+              20,
+              40,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 4.4,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              50,
+              20,
+              34
+            ],
+            "text": "1,000,000 → 20 steps"
+          }
+        ]
+      },
+      "docFile": "docs/binary-search-L3-haiku-5-5.json",
+      "nodes": 12,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1245,
+          "apiMs": 25872,
+          "inputTokens": 2020,
+          "outputTokens": 3329,
+          "stopReason": "end_turn",
+          "error": "DocumentValidationError: Animation document validation failed with 5 error(s)\n    at pt (<repo>\\node_modules\\@clayzo\\animation\\dist\\authoring.js:1:62560)\n    at <anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\binary-search-L4-opus-5-5.ts:76:1)\n    at Object.<anonymous> (<repo>\\experiments\\visual-flex\\.tmp\\binary-search-L4-opus-5-5.ts:77:16)\n    at Object.transformer (<repo>\\node_modules\\tsx\\dist\\register-B1c7OH6V.cjs:22:2188)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)"
+        },
+        {
+          "ttftMs": 15463,
+          "apiMs": 34350,
+          "inputTokens": 5669,
+          "outputTokens": 4151,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": false,
+      "finalValid": true,
+      "msToValid": 61613,
+      "totalMs": 61613,
+      "output": "import { ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision, base, constant, keyed, fill, stroke, trim, hex } from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst ink = hex(\"#1F2A44\"), blue = hex(\"#2E86E4\"), green = hex(\"#2E9E5B\"), red = hex(\"#E4572E\");\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst nodes: Record<string, SceneNode> = { paper };\nconst order: string[] = [\"paper\"];\nconst add = (id: string, n: SceneNode) => { nodes[id] = n; order.push(id); };\n\nconst N = 16, W = 60, G = 8, Y = 360;\nconst X0 = 600 - (N * W + (N - 1) * G) / 2 + W / 2;\nconst cx = (i: number) => X0 + i * (W + G);\nconst steps = [120, 420, 720, 1020];\nconst ranges: [number, number][] = [[0, 15], [8, 15], [8, 11], [10, 11], [11, 11]];\nconst target = 11;\n\nconst discardStep = (i: number): number => {\n  for (let s = 1; s < ranges.length; s++) {\n    const [a, b] = ranges[s];\n    if (i < a || i > b) return s - 1;\n  }\n  return -1;\n};\n\n// one highlight band per range; each fades in/out at its step\nranges.forEach(([a, b], s) => {\n  const x = (cx(a) + cx(b)) / 2;\n  const w = cx(b) - cx(a) + W + 16;\n  const tin = s === 0 ? 0 : steps[s - 1] + 120;\n  const tout = s < 4 ? steps[s] + 120 : -1;\n  const keys: [number, number, any?][] = [];\n  if (s === 0) keys.push([0, 1]);\n  else { keys.push([0, 0], [tin, 0, OUT], [tin + 120, 1]); }\n  if (tout > 0) keys.push([tout, 1, OUT], [tout + 120, 0]);\n  add(`band${s}`, { ...base(`band${s}`, { outTick: 1440, x, y: Y, opacity: keyed(`bando${s}`, keys as any) }), type: \"rect\", size: constant({ width: w, height: W + 28 }), cornerRadius: constant(16), style: { fill: fill(blue, 0.2) } } as SceneNode);\n});\n\nfor (let i = 0; i < N; i++) {\n  add(`b${i}`, { ...base(`b${i}`, { outTick: 1440, x: cx(i), y: Y }), type: \"rect\", size: constant({ width: W, height: W }), cornerRadius: constant(10), style: { fill: fill(ink) } } as SceneNode);\n  const d = discardStep(i);\n  if (d >= 0) {\n    const t = steps[d];\n    add(`g${i}`, { ...base(`g${i}`, { outTick: 1440, x: cx(i), y: Y, opacity: keyed(`go${i}`, [[0, 0], [t, 0, OUT], [t + 160, 1]]) }), type: \"rect\", size: constant({ width: W, height: W }), cornerRadius: constant(10), style: { fill: fill(hex(\"#D9D5CC\")) } } as SceneNode);\n  }\n}\n\nadd(\"tg\", { ...base(\"tg\", { outTick: 1440, x: cx(target), y: Y,\n  opacity: keyed(\"tgo\", [[0, 0], [1020, 0, OUT], [1200, 1]]),\n  scale: keyed(\"tgs\", [[0, { x: 1, y: 1, z: 1 }], [1020, { x: 1, y: 1, z: 1 }, OUT], [1140, { x: 1.25, y: 1.25, z: 1 }, OUT], [1260, { x: 1.1, y: 1.1, z: 1 }]]) }),\n  type: \"rect\", size: constant({ width: W, height: W }), cornerRadius: constant(10), style: { fill: fill(green) } } as SceneNode);\n\n// cut lines\nsteps.forEach((t, s) => {\n  const [a, b] = ranges[s];\n  const m = Math.floor((a + b) / 2);\n  const mid = (cx(m) + cx(m + 1)) / 2;\n  const v: PathVertex[] = [\n    { point: { x: mid, y: Y - 70 }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n    { point: { x: mid, y: Y + 70 }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } },\n  ];\n  add(`cut${s}`, { ...base(`cut${s}`, { outTick: 1440, x: 0, y: 0, opacity: keyed(`cuto${s}`, [[0, 1], [t + 200, 1, OUT], [t + 280, 0]]) }), type: \"path\",\n    path: constant({ contours: [{ closed: false, vertices: v }] }), style: { stroke: stroke(red, 6) },\n    operators: [trim(`cutt${s}`, { end: keyed(`cute${s}`, [[0, 0], [t, 0, OUT], [t + 100, 1]]) })] } as SceneNode);\n});\n\n// count labels\n[\"16\", \"8\", \"4\", \"2\", \"1\"].forEach((c, s) => {\n  const keys: [number, number, any?][] = [];\n  if (s === 0) keys.push([0, 1]);\n  else { const tin = steps[s - 1] + 80; keys.push([0, 0], [tin, 0, OUT], [tin + 120, 1]); }\n  if (s < 4) { const tout = steps[s] + 40; keys.push([tout, 1, OUT], [tout + 40, 0]); }\n  add(`c${s}`, { ...base(`c${s}`, { outTick: 1440, x: 400, y: 200, opacity: keyed(`co${s}`, keys as any) }), type: \"text\",\n    runs: constant([{ text: `${c} left`, fontAssetId: \"inter\", fontSize: 56, fontWeight: 600, letterSpacing: 0, lineHeight: 68, color: blue }]),\n    box: { width: 400, height: 68 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\" } as SceneNode);\n});\n\nadd(\"big\", { ...base(\"big\", { outTick: 1440, x: 200, y: 560, opacity: keyed(\"bigo\", [[0, 0], [1080, 0, OUT], [1260, 1]]) }), type: \"text\",\n  runs: constant([{ text: \"1,000,000 -> 20 guesses\", fontAssetId: \"inter\", fontSize: 48, fontWeight: 600, letterSpacing: 0, lineHeight: 58, color: ink }]),\n  box: { width: 800, height: 58 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\" } as SceneNode);\n\nconst doc = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes, rootNodeIds: order } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as AnimationDocument);\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/binary-search-L4-opus-5-5.json",
+      "nodes": 48,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "binary-search",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 8200,
+          "apiMs": 12674,
+          "inputTokens": 2020,
+          "outputTokens": 3114,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 13237,
+      "totalMs": 13237,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n};\n\nconst outline: SceneNode = {\n  ...base(\"list_outline\", { outTick: 1440, x: 600, y: 380 }),\n  type: \"rect\",\n  size: constant({ width: 960, height: 90 }),\n  cornerRadius: constant(16),\n  style: { stroke: stroke(hex(\"#9A958A\"), 6) },\n};\n\nconst kept: SceneNode = {\n  ...base(\"kept_region\", {\n    outTick: 1440,\n    x: 600,\n    y: 380,\n    scale: keyed(\"kept_scale\", [\n      [0, { x: 1, y: 1, z: 1 }],\n      [240, { x: 0.5, y: 1, z: 1 }, OUT],\n      [480, { x: 0.25, y: 1, z: 1 }, OUT],\n      [720, { x: 0.125, y: 1, z: 1 }, OUT],\n      [960, { x: 0.0625, y: 1, z: 1 }, OUT],\n    ]),\n  }),\n  type: \"rect\",\n  size: constant({ width: 960, height: 90 }),\n  cornerRadius: constant(16),\n  style: { fill: fill(hex(\"#2E86E4\")) },\n};\n\nconst labelTop: SceneNode = {\n  ...base(\"label_items\", { outTick: 1440, x: 300, y: 220 }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"1,000,000 items\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#1F2A44\"),\n    },\n  ]),\n  box: { width: 600, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n};\n\nconst labelBottom: SceneNode = {\n  ...base(\"label_guesses\", {\n    outTick: 1440,\n    x: 300,\n    y: 520,\n    opacity: keyed(\"label_guesses_op\", [\n      [0, 0],\n      [960, 0, OUT],\n      [1080, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"20 guesses\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#E4572E\"),\n    },\n  ]),\n  box: { width: 600, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n};\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  list_outline: outline,\n  kept_region: kept,\n  label_items: labelTop,\n  label_guesses: labelBottom,\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\"paper\", \"list_outline\", \"kept_region\", \"label_items\", \"label_guesses\"],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/binary-search-L4-haiku-5-5.json",
+      "nodes": 5,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1783,
+          "apiMs": 1870,
+          "inputTokens": 748,
+          "outputTokens": 14,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1875,
+      "totalMs": 1875,
+      "output": {
+        "primitive": "cycle"
+      },
+      "docFile": "docs/heart-L1-opus-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1001,
+          "apiMs": 1167,
+          "inputTokens": 748,
+          "outputTokens": 14,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1173,
+      "totalMs": 1173,
+      "output": {
+        "primitive": "cycle"
+      },
+      "docFile": "docs/heart-L1-haiku-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 3241,
+          "apiMs": 3821,
+          "inputTokens": 1555,
+          "outputTokens": 94,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3827,
+      "totalMs": 3827,
+      "output": {
+        "layout": "single",
+        "caption": "Blood travels in a loop",
+        "items": [
+          {
+            "primitive": "cycle",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Heart|Arteries|Body|Veins"
+              },
+              {
+                "name": "color",
+                "value": "red"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/heart-L2-opus-5-5.json",
+      "nodes": 18,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1277,
+          "apiMs": 1682,
+          "inputTokens": 1555,
+          "outputTokens": 147,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1692,
+      "totalMs": 1692,
+      "output": {
+        "layout": "column",
+        "caption": "Blood flows in a loop",
+        "items": [
+          {
+            "primitive": "cycle",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Heart|Body|Veins|Heart"
+              },
+              {
+                "name": "color",
+                "value": "red"
+              }
+            ]
+          },
+          {
+            "primitive": "label",
+            "startsAt": 2.5,
+            "params": [
+              {
+                "name": "text",
+                "value": "Out and back"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/heart-L2-haiku-5-5.json",
+      "nodes": 19,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1754,
+          "apiMs": 6633,
+          "inputTokens": 1325,
+          "outputTokens": 630,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 6642,
+      "totalMs": 6642,
+      "output": {
+        "elements": [
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              30,
+              50,
+              8,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              30,
+              66,
+              30
+            ],
+            "text": "Heart"
+          },
+          {
+            "kind": "rect",
+            "at": 0.6,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              68,
+              35,
+              22,
+              30,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.8,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              79,
+              50,
+              30
+            ],
+            "text": "Body"
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 1.2,
+            "color": "red",
+            "args": [
+              34,
+              43,
+              40,
+              20,
+              79,
+              20,
+              79,
+              35
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 1.8,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              60,
+              20,
+              66,
+              20
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.5,
+            "dur": 0.3,
+            "color": "red",
+            "args": [
+              55,
+              12,
+              28
+            ],
+            "text": "Arteries: out"
+          },
+          {
+            "kind": "move",
+            "at": 1.4,
+            "dur": 1.4,
+            "color": "red",
+            "args": [
+              40,
+              20,
+              79,
+              20,
+              1.5
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 2.6,
+            "dur": 1.2,
+            "color": "blue",
+            "args": [
+              79,
+              65,
+              79,
+              80,
+              40,
+              80,
+              34,
+              57
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 3.3,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              62,
+              80,
+              55,
+              80
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              58,
+              89,
+              28
+            ],
+            "text": "Veins: back"
+          },
+          {
+            "kind": "move",
+            "at": 3.2,
+            "dur": 1.4,
+            "color": "blue",
+            "args": [
+              79,
+              80,
+              40,
+              80,
+              1.5
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 4.3,
+            "dur": 0.4,
+            "color": "purple",
+            "args": [
+              12,
+              30,
+              28
+            ],
+            "text": "A loop"
+          }
+        ]
+      },
+      "docFile": "docs/heart-L3-opus-5-5.json",
+      "nodes": 16,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1069,
+          "apiMs": 2870,
+          "inputTokens": 1325,
+          "outputTokens": 501,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2880,
+      "totalMs": 2880,
+      "output": {
+        "elements": [
+          {
+            "kind": "rect",
+            "at": 0,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              38,
+              38,
+              24,
+              22,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.2,
+            "dur": 0.5,
+            "color": "red",
+            "args": [
+              50,
+              30,
+              34
+            ],
+            "text": "Heart"
+          },
+          {
+            "kind": "arrow",
+            "at": 0.8,
+            "dur": 0.8,
+            "color": "red",
+            "args": [
+              62,
+              49,
+              88,
+              49
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1,
+            "dur": 0.5,
+            "color": "red",
+            "args": [
+              76,
+              43,
+              30
+            ],
+            "text": "Out"
+          },
+          {
+            "kind": "circle",
+            "at": 1.6,
+            "dur": 0.6,
+            "color": "blue",
+            "args": [
+              90,
+              62,
+              4,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.8,
+            "dur": 0.5,
+            "color": "blue",
+            "args": [
+              90,
+              72,
+              28
+            ],
+            "text": "Body"
+          },
+          {
+            "kind": "line",
+            "at": 2.4,
+            "dur": 1.6,
+            "color": "blue",
+            "args": [
+              88,
+              70,
+              88,
+              86,
+              12,
+              86,
+              12,
+              70,
+              4,
+              62,
+              4,
+              30,
+              12,
+              14,
+              88,
+              14,
+              88,
+              28
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 2.6,
+            "dur": 2.2,
+            "color": "purple",
+            "args": [
+              88,
+              36,
+              50,
+              40,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 4.2,
+            "dur": 0.6,
+            "color": "purple",
+            "args": [
+              30,
+              8,
+              30
+            ],
+            "text": "Veins return"
+          },
+          {
+            "kind": "arrow",
+            "at": 4.4,
+            "dur": 0.8,
+            "color": "purple",
+            "args": [
+              20,
+              14,
+              38,
+              36
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/heart-L3-haiku-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 1206,
+          "apiMs": 18820,
+          "inputTokens": 2022,
+          "outputTokens": 2581,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 19386,
+      "totalMs": 19386,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst ink = hex(\"#1F2A44\"), red = hex(\"#E4572E\"), blue = hex(\"#2E86E4\"), grey = hex(\"#9A958A\");\n\nconst v = (x: number, y: number): PathVertex => ({ point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } });\n\n// Loop geometry: heart at left (300,400), body at right (900,400).\n// Top arc (arteries) from heart to body, bottom arc (veins) from body back to heart.\nfunction arc(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number): PathVertex[] {\n  const out: PathVertex[] = [];\n  for (let i = 0; i <= n; i++) {\n    const a = a0 + (a1 - a0) * (i / n);\n    out.push(v(cx + rx * Math.cos(a), cy + ry * Math.sin(a)));\n  }\n  return out;\n}\n// ellipse centre (600,400), rx 300, ry 200. Top: angle PI -> 2PI (going through -y). Bottom: 0 -> PI.\nconst topVerts = arc(600, 400, 300, 220, Math.PI, 2 * Math.PI, 40);\nconst botVerts = arc(600, 400, 300, 220, 0, Math.PI, 40);\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst heart: SceneNode = {\n  ...base(\"heart\", {\n    outTick: 1440, x: 300, y: 400,\n    scale: keyed(\"heartScale\", [[0, { x: 0, y: 0, z: 1 }, OUT], [160, { x: 1, y: 1, z: 1 }, OUT], [240, { x: 1.18, y: 1.18, z: 1 }, OUT], [320, { x: 1, y: 1, z: 1 }, OUT], [400, { x: 1.18, y: 1.18, z: 1 }, OUT], [480, { x: 1, y: 1, z: 1 }]]),\n  }),\n  type: \"ellipse\", size: constant({ width: 150, height: 150 }), style: { fill: fill(red) },\n};\n\nconst body: SceneNode = {\n  ...base(\"body\", { outTick: 1440, x: 900, y: 400, scale: keyed(\"bodyScale\", [[560, { x: 0, y: 0, z: 1 }, OUT], [760, { x: 1, y: 1, z: 1 }]]) }),\n  type: \"rect\", size: constant({ width: 170, height: 150 }), cornerRadius: constant(24), style: { fill: fill(grey) },\n};\n\nconst artery: SceneNode = {\n  ...base(\"artery\", { outTick: 1440 }),\n  type: \"path\", path: constant({ contours: [{ closed: false, vertices: topVerts }] }),\n  style: { stroke: stroke(red, 12) },\n  operators: [trim(\"arteryTrim\", { end: keyed(\"arteryEnd\", [[160, 0, OUT], [720, 1]]) })],\n};\n\nconst vein: SceneNode = {\n  ...base(\"vein\", { outTick: 1440 }),\n  type: \"path\", path: constant({ contours: [{ closed: false, vertices: botVerts }] }),\n  style: { stroke: stroke(blue, 12) },\n  operators: [trim(\"veinTrim\", { end: keyed(\"veinEnd\", [[840, 0, OUT], [1400, 1]]) })],\n};\n\n// arrowheads\nconst arrowOut: SceneNode = {\n  ...base(\"arrowOut\", { outTick: 1440, opacity: keyed(\"arrowOutOp\", [[480, 0], [560, 1]]) }),\n  type: \"path\", path: constant({ contours: [{ closed: false, vertices: [v(580, 160), v(610, 180), v(580, 200)] }] }),\n  style: { stroke: stroke(red, 10) },\n};\nconst arrowBack: SceneNode = {\n  ...base(\"arrowBack\", { outTick: 1440, opacity: keyed(\"arrowBackOp\", [[1160, 0], [1240, 1]]) }),\n  type: \"path\", path: constant({ contours: [{ closed: false, vertices: [v(620, 600), v(590, 620), v(620, 640)] }] }),\n  style: { stroke: stroke(blue, 10) },\n};\n\nconst label = (id: string, text: string, x: number, y: number, c: ReturnType<typeof hex>, t: number): SceneNode => ({\n  ...base(id, { outTick: 1440, x, y, opacity: keyed(id + \"Op\", [[t, 0], [t + 120, 1]]) }),\n  type: \"text\",\n  runs: constant([{ text, fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: c }]),\n  box: { width: 240, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\",\n});\n\nconst heartLbl = label(\"heartLbl\", \"Heart\", 180, 490, ink, 120);\nconst bodyLbl = label(\"bodyLbl\", \"Body\", 780, 490, ink, 640);\nconst arteryLbl = label(\"arteryLbl\", \"out\", 480, 110, red, 480);\nconst veinLbl = label(\"veinLbl\", \"veins back\", 480, 650, blue, 1160);\n\nconst others = { heart, body, artery, vein, arrowOut, arrowBack, heartLbl, bodyLbl, arteryLbl, veinLbl };\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes: { paper, ...others },\n    rootNodeIds: [\"paper\", \"artery\", \"vein\", \"arrowOut\", \"arrowBack\", \"heart\", \"body\", \"heartLbl\", \"bodyLbl\", \"arteryLbl\", \"veinLbl\"] } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/heart-L4-opus-5-5.json",
+      "nodes": 11,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "heart",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.4,
+      "attempts": [
+        {
+          "ttftMs": 7543,
+          "apiMs": 15729,
+          "inputTokens": 2022,
+          "outputTokens": 3982,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 16289,
+      "totalMs": 16289,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\nconst INK = hex(\"#1F2A44\");\nconst RED = hex(\"#E4572E\");\nconst BLUE = hex(\"#2E86E4\");\nconst GREY = hex(\"#9A958A\");\n\n// Quadratic bezier sampled into straight segments.\nfunction quad(\n  p0: { x: number; y: number },\n  p1: { x: number; y: number },\n  p2: { x: number; y: number },\n  n: number,\n): PathVertex[] {\n  const out: PathVertex[] = [];\n  for (let i = 0; i <= n; i++) {\n    const t = i / n;\n    const u = 1 - t;\n    const x = u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x;\n    const y = u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y;\n    out.push({\n      point: { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 },\n      inTangent: { x: 0, y: 0 },\n      outTangent: { x: 0, y: 0 },\n    });\n  }\n  return out;\n}\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\n// Heart (source)\nconst heart: SceneNode = {\n  ...base(\"heart\", {\n    outTick: 1440,\n    x: 330,\n    y: 400,\n    opacity: keyed(\"heart.op\", [[0, 0, OUT], [240, 1]]),\n  }),\n  type: \"ellipse\",\n  size: constant({ width: 180, height: 160 }),\n  style: { fill: fill(RED) },\n} as SceneNode;\n\nconst heartLabel: SceneNode = {\n  ...base(\"heart_label\", {\n    outTick: 1440,\n    x: 230,\n    y: 500,\n    opacity: keyed(\"heart_label.op\", [[240, 0, OUT], [480, 1]]),\n  }),\n  type: \"text\",\n  runs: constant([\n    { text: \"Heart\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: INK },\n  ]),\n  box: { width: 200, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\n// Body (destination)\nconst body: SceneNode = {\n  ...base(\"body\", {\n    outTick: 1440,\n    x: 850,\n    y: 400,\n    opacity: keyed(\"body.op\", [[0, 0, OUT], [240, 1]]),\n  }),\n  type: \"rect\",\n  size: constant({ width: 220, height: 300 }),\n  cornerRadius: constant(60),\n  style: { fill: fill(BLUE, 0.15) },\n} as SceneNode;\n\nconst bodyLabel: SceneNode = {\n  ...base(\"body_label\", {\n    outTick: 1440,\n    x: 750,\n    y: 580,\n    opacity: keyed(\"body_label.op\", [[240, 0, OUT], [480, 1]]),\n  }),\n  type: \"text\",\n  runs: constant([\n    { text: \"Body\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: INK },\n  ]),\n  box: { width: 200, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\n// Outgoing arc: heart -> body (red), drawn 240..960\nconst outgoing: SceneNode = {\n  ...base(\"out_path\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: quad({ x: 420, y: 350 }, { x: 590, y: 130 }, { x: 740, y: 350 }, 40) }],\n  }),\n  style: { stroke: stroke(RED, 8) },\n  operators: [trim(\"out_trim\", { end: keyed(\"out_trim.end\", [[240, 0, OUT], [960, 1]]) })],\n} as SceneNode;\n\n// Return arc: body -> heart (blue), drawn 960..1296\nconst returnPath: SceneNode = {\n  ...base(\"ret_path\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: quad({ x: 740, y: 450 }, { x: 590, y: 670 }, { x: 420, y: 450 }, 40) }],\n  }),\n  style: { stroke: stroke(BLUE, 8) },\n  operators: [trim(\"ret_trim\", { end: keyed(\"ret_trim.end\", [[960, 0, OUT], [1296, 1]]) })],\n} as SceneNode;\n\n// Small caption for the loop direction\nconst outCaption: SceneNode = {\n  ...base(\"out_caption\", {\n    outTick: 1440,\n    x: 530,\n    y: 170,\n    opacity: keyed(\"out_caption.op\", [[480, 0, OUT], [720, 1]]),\n  }),\n  type: \"text\",\n  runs: constant([\n    { text: \"Out\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: RED },\n  ]),\n  box: { width: 120, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\nconst retCaption: SceneNode = {\n  ...base(\"ret_caption\", {\n    outTick: 1440,\n    x: 530,\n    y: 620,\n    opacity: keyed(\"ret_caption.op\", [[1080, 0, OUT], [1296, 1]]),\n  }),\n  type: \"text\",\n  runs: constant([\n    { text: \"Veins\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: BLUE }\n  ]),\n  box: { width: 160, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  heart,\n  heart_label: heartLabel,\n  body,\n  body_label: bodyLabel,\n  out_path: outgoing,\n  ret_path: returnPath,\n  out_caption: outCaption,\n  ret_caption: retCaption,\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\n        \"paper\",\n        \"heart\",\n        \"heart_label\",\n        \"body\",\n        \"body_label\",\n        \"out_path\",\n        \"out_caption\",\n        \"ret_path\",\n        \"ret_caption\",\n      ],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as unknown as AnimationDocument);\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/heart-L4-haiku-5-5.json",
+      "nodes": 9,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 3377,
+          "apiMs": 3411,
+          "inputTokens": 745,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3418,
+      "totalMs": 3418,
+      "output": {
+        "primitive": "graph"
+      },
+      "docFile": "docs/demand-L1-opus-5-5.json",
+      "nodes": 3,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 968,
+          "apiMs": 1171,
+          "inputTokens": 745,
+          "outputTokens": 13,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1177,
+      "totalMs": 1177,
+      "output": {
+        "primitive": "graph"
+      },
+      "docFile": "docs/demand-L1-haiku-5-5.json",
+      "nodes": 3,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1133,
+          "apiMs": 2378,
+          "inputTokens": 1552,
+          "outputTokens": 115,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2383,
+      "totalMs": 2383,
+      "output": {
+        "layout": "single",
+        "caption": "The demand curve",
+        "items": [
+          {
+            "primitive": "graph",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "shape",
+                "value": "down"
+              },
+              {
+                "name": "xLabel",
+                "value": "Quantity demanded"
+              },
+              {
+                "name": "yLabel",
+                "value": "Price"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/demand-L2-opus-5-5.json",
+      "nodes": 6,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1230,
+          "apiMs": 1775,
+          "inputTokens": 1552,
+          "outputTokens": 172,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1782,
+      "totalMs": 1782,
+      "output": {
+        "layout": "single",
+        "caption": "Higher price, lower demand",
+        "items": [
+          {
+            "primitive": "graph",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "shape",
+                "value": "down"
+              },
+              {
+                "name": "xLabel",
+                "value": "Quantity"
+              },
+              {
+                "name": "yLabel",
+                "value": "Price"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "label",
+            "startsAt": 2.4,
+            "params": [
+              {
+                "name": "text",
+                "value": "Price up, demand down"
+              },
+              {
+                "name": "color",
+                "value": "red"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/demand-L2-haiku-5-5.json",
+      "nodes": 7,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1237,
+          "apiMs": 41793,
+          "inputTokens": 1322,
+          "outputTokens": 6000,
+          "stopReason": "max_tokens",
+          "error": "output was cut off at max_tokens"
+        },
+        {
+          "ttftMs": 1584,
+          "apiMs": 4889,
+          "inputTokens": 7360,
+          "outputTokens": 534,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": false,
+      "finalValid": true,
+      "msToValid": 46690,
+      "totalMs": 46690,
+      "output": {
+        "elements": [
+          {
+            "kind": "line",
+            "at": 0,
+            "dur": 0.6,
+            "color": "ink",
+            "args": [
+              15,
+              10,
+              15,
+              85,
+              90,
+              85
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.2,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              9,
+              6,
+              26
+            ],
+            "text": "Price"
+          },
+          {
+            "kind": "text",
+            "at": 0.2,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              82,
+              94,
+              26
+            ],
+            "text": "Quantity"
+          },
+          {
+            "kind": "line",
+            "at": 0.6,
+            "dur": 1.4,
+            "color": "blue",
+            "args": [
+              22,
+              18,
+              40,
+              40,
+              60,
+              60,
+              85,
+              78
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 1.9,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              88,
+              70,
+              28
+            ],
+            "text": "Demand"
+          },
+          {
+            "kind": "circle",
+            "at": 1.5,
+            "dur": 0.2,
+            "color": "red",
+            "args": [
+              60,
+              60,
+              1.5,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.6,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              15,
+              60,
+              60,
+              60,
+              60,
+              85
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 2.2,
+            "dur": 1.2,
+            "color": "red",
+            "args": [
+              60,
+              60,
+              40,
+              40,
+              1.5
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 3.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              15,
+              40,
+              40,
+              40,
+              40,
+              85
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 2.4,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              9,
+              58,
+              9,
+              42
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 3,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              57,
+              90,
+              43,
+              90
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/demand-L3-opus-5-5.json",
+      "nodes": 14,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 997,
+          "apiMs": 2541,
+          "inputTokens": 1322,
+          "outputTokens": 441,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2549,
+      "totalMs": 2549,
+      "output": {
+        "elements": [
+          {
+            "kind": "arrow",
+            "at": 0,
+            "dur": 0.8,
+            "color": "grey",
+            "args": [
+              12,
+              88,
+              90,
+              88
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 0.2,
+            "dur": 0.8,
+            "color": "grey",
+            "args": [
+              12,
+              88,
+              12,
+              10
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              92,
+              93,
+              26
+            ],
+            "text": "Quantity"
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              8,
+              6,
+              26
+            ],
+            "text": "Price"
+          },
+          {
+            "kind": "plot",
+            "at": 0.8,
+            "dur": 2.2,
+            "color": "blue",
+            "args": [
+              14,
+              12,
+              80,
+              72,
+              0,
+              10
+            ],
+            "text": "10-x"
+          },
+          {
+            "kind": "circle",
+            "at": 1.6,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              30,
+              58,
+              1.3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.2,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              40,
+              52,
+              28
+            ],
+            "text": "Higher price"
+          },
+          {
+            "kind": "text",
+            "at": 2.4,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              70,
+              40,
+              28
+            ],
+            "text": "Demand falls"
+          },
+          {
+            "kind": "move",
+            "at": 2.6,
+            "dur": 1.2,
+            "color": "red",
+            "args": [
+              30,
+              58,
+              70,
+              28,
+              1.2
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/demand-L3-haiku-5-5.json",
+      "nodes": 12,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 1871,
+          "apiMs": 28215,
+          "inputTokens": 2019,
+          "outputTokens": 3490,
+          "stopReason": "end_turn",
+          "error": "Error: Transform failed with 1 error:\n<repo>\\experiments\\visual-flex\\.tmp\\demand-L4-opus-5-5.ts:77:857: ERROR: Expected \")\" but found \":\"\n    at failureErrorWithLog (<repo>\\node_modules\\esbuild\\lib\\main.js:1752:15)\n    at <repo>\\node_modules\\esbuild\\lib\\main.js:1019:50\n    at responseCallbacks.<computed> (<repo>\\node_modules\\esbuild\\lib\\main.js:886:9)\n    at handleIncomingPacket (<repo>\\node_modules\\esbuild\\lib\\main.js:941:12)\n    at Socket.readFromStdout (<repo>\\node_modules\\esbuild\\lib\\main.js:864:7)\n    at Socket.emit (node:events:518:28)"
+        },
+        {
+          "ttftMs": 1242,
+          "apiMs": 18665,
+          "inputTokens": 5884,
+          "outputTokens": 2734,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": false,
+      "finalValid": true,
+      "msToValid": 47884,
+      "totalMs": 47884,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst INK = hex(\"#1F2A44\");\nconst RED = hex(\"#E4572E\");\nconst BLUE = hex(\"#2E86E4\");\nconst GREY = hex(\"#9A958A\");\n\nconst v = (x: number, y: number): PathVertex => ({ point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } });\n\nconst OX = 250, OY = 650;\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst axes: SceneNode = {\n  ...base(\"axes\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: [v(OX, 150), v(OX, OY), v(1000, OY)] }] }),\n  style: { stroke: stroke(INK, 6) },\n  operators: [trim(\"axesTrim\", { end: keyed(\"axesEnd\", [[0, 0, OUT], [240, 1]]) })],\n} as SceneNode;\n\nfunction label(id: string, text: string, x: number, y: number, w: number, color: any, inTick: number, align: \"left\" | \"center\" | \"right\" = \"center\"): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, inTick, x, y, opacity: keyed(id + \"Op\", [[inTick, 0, OUT], [inTick + 160, 1]]) }),\n    type: \"text\",\n    runs: constant([{ text, fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color }]),\n    box: { width: w, height: 41 }, wrap: \"none\", align, verticalAlign: \"top\",\n  } as SceneNode;\n}\n\nconst priceLbl = label(\"priceLbl\", \"Price\", OX - 60, 100, 120, INK, 120);\nconst qtyLbl = label(\"qtyLbl\", \"Quantity\", 800, OY + 110, 200, INK, 120);\n\nconst curveY = (x: number) => { const t = (x - 320) / 600; return 210 + 400 * (1 - Math.pow(1 - t, 1.6)); };\nconst curvePts: PathVertex[] = [];\nconst N = 40;\nfor (let i = 0; i <= N; i++) {\n  const x = 320 + (i / N) * 600;\n  curvePts.push(v(x, curveY(x)));\n}\n\nconst curve: SceneNode = {\n  ...base(\"curve\", { outTick: 1440, inTick: 240, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: curvePts }] }),\n  style: { stroke: stroke(BLUE, 8) },\n  operators: [trim(\"curveTrim\", { end: keyed(\"curveEnd\", [[240, 0, OUT], [720, 1]]) })],\n} as SceneNode;\n\nconst xA = 800, xB = 420;\nconst yA = curveY(xA), yB = curveY(xB);\n\nconst dot: SceneNode = {\n  ...base(\"dot\", {\n    outTick: 1440, inTick: 720,\n    position: keyed(\"dotPos\", [[720, { x: xA, y: yA, z: 0 }], [800, { x: xA, y: yA, z: 0 }, OUT], [1040, { x: xB, y: yB, z: 0 }]]),\n    opacity: keyed(\"dotOp\", [[720, 0], [800, 1]]),\n  }),\n  type: \"ellipse\", size: constant({ width: 30, height: 30 }), style: { fill: fill(RED) },\n} as SceneNode;\n\nconst guides: SceneNode = {\n  ...base(\"guides\", { outTick: 1440, inTick: 800, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [\n    { closed: false, vertices: [v(OX, yA), v(xA, yA), v(xA, OY)] },\n    { closed: false, vertices: [v(OX, yB), v(xB, yB), v(xB, OY)] },\n  ] }),\n  style: { stroke: stroke(GREY, 4) },\n  operators: [trim(\"guidesTrim\", { end: keyed(\"guidesEnd\", [[800, 0, OUT], [1000, 1]]) })],\n} as SceneNode;\n\nconst upArrow: SceneNode = {\n  ...base(\"upArrow\", { outTick: 1440, inTick: 800, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [\n    { closed: false, vertices: [v(OX - 40, yA), v(OX - 40, yB)] },\n    { closed: false, vertices: [v(OX - 55, yB + 20), v(OX - 40, yB), v(OX - 25, yB + 20)] },\n  ] }),\n  style: { stroke: stroke(RED, 6) },\n  operators: [trim(\"upTrim\", { end: keyed(\"upEnd\", [[800, 0, OUT], [1000, 1]]) })],\n} as SceneNode;\n\nconst leftArrow: SceneNode = {\n  ...base(\"leftArrow\", { outTick: 1440, inTick: 800, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [\n    { closed: false, vertices: [v(xA, OY + 50), v(xB, OY + 50)] },\n    { closed: false, vertices: [v(xB + 20, OY + 35), v(xB, OY + 50), v(xB + 20, OY + 65)] },\n  ] }),\n  style: { stroke: stroke(RED, 6) },\n  operators: [trim(\"leftTrim\", { end: keyed(\"leftEnd\", [[800, 0, OUT], [1000, 1]]) })],\n} as SceneNode;\n\nconst demandLbl = label(\"demandLbl\", \"Demand\", 860, 560, 200, BLUE, 720, \"left\");\n\nconst others = { axes, priceLbl, qtyLbl, curve, guides, upArrow, leftArrow, dot, demandLbl };\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes: { paper, ...others }, rootNodeIds: [\"paper\", \"axes\", \"priceLbl\", \"qtyLbl\", \"curve\", \"guides\", \"upArrow\", \"leftArrow\", \"dot\", \"demandLbl\"] } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as any);\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/demand-L4-opus-5-5.json",
+      "nodes": 10,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "demand",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 4.2,
+      "attempts": [
+        {
+          "ttftMs": 6486,
+          "apiMs": 12978,
+          "inputTokens": 2019,
+          "outputTokens": 3474,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 13527,
+      "totalMs": 13527,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n  type AnimationDocument,\n  type SceneNode,\n  type PathVertex,\n} from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\nconst pv = (x: number, y: number): PathVertex => ({\n  point: { x, y },\n  inTangent: { x: 0, y: 0 },\n  outTangent: { x: 0, y: 0 },\n});\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\nconst INK = hex(\"#1F2A44\");\nconst RED = hex(\"#E4572E\");\nconst BLUE = hex(\"#2E86E4\");\n\n// Axes: origin at (250, 620)\nconst xAxis: SceneNode = {\n  ...base(\"xAxis\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: [pv(250, 620), pv(1000, 620)] }],\n  }),\n  style: { stroke: stroke(INK, 8) },\n  operators: [\n    trim(\"xAxisTrim\", {\n      end: keyed(\"xAxisTrimEnd\", [[0, 0, OUT], [400, 1]]),\n    }),\n  ],\n} as SceneNode;\n\nconst yAxis: SceneNode = {\n  ...base(\"yAxis\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({\n    contours: [{ closed: false, vertices: [pv(250, 620), pv(250, 150)] }],\n  }),\n  style: { stroke: stroke(INK, 8) },\n  operators: [\n    trim(\"yAxisTrim\", {\n      end: keyed(\"yAxisTrimEnd\", [[0, 0, OUT], [400, 1]]),\n    }),\n  ],\n} as SceneNode;\n\n// Price arrow on the price axis, pointing up: \"prices rise\"\nconst priceArrow: SceneNode = {\n  ...base(\"priceArrow\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({\n    contours: [\n      {\n        closed: false,\n        vertices: [pv(215, 450), pv(215, 260), pv(205, 280), pv(215, 260), pv(225, 280)],\n      },\n    ],\n  }),\n  style: { stroke: stroke(RED, 8) },\n  operators: [\n    trim(\"priceArrowTrim\", {\n      end: keyed(\"priceArrowTrimEnd\", [[400, 0, OUT], [640, 1]]),\n    }),\n  ],\n} as SceneNode;\n\n// Demand curve: slopes down from upper left to lower right\nconst curvePts: PathVertex[] = [];\nfor (let i = 0; i <= 24; i++) {\n  const t = i / 24;\n  curvePts.push(pv(330 + 600 * t, 190 + 370 * Math.pow(t, 1.5)));\n}\n\nconst demandCurve: SceneNode = {\n  ...base(\"demandCurve\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: curvePts }] }),\n  style: { stroke: stroke(BLUE, 10) },\n  operators: [\n    trim(\"demandCurveTrim\", {\n      end: keyed(\"demandCurveTrimEnd\", [[640, 0, OUT], [1000, 1]]),\n    }),\n  ],\n} as SceneNode;\n\nconst label = (\n  id: string,\n  text: string,\n  x: number,\n  y: number,\n  color: ReturnType<typeof hex>,\n  start: number,\n): SceneNode =>\n  ({\n    ...base(id, {\n      outTick: 1440,\n      x,\n      y,\n      opacity: keyed(`${id}Opacity`, [[start, 0], [start + 120, 1]]),\n    }),\n    type: \"text\",\n    runs: constant([\n      {\n        text,\n        fontAssetId: \"inter\",\n        fontSize: 34,\n        fontWeight: 600,\n        letterSpacing: 0,\n        lineHeight: 41,\n        color,\n      },\n    ]),\n    box: { width: 240, height: 41 },\n    wrap: \"none\",\n    align: \"center\",\n    verticalAlign: \"top\",\n  }) as SceneNode;\n\nconst priceLabel = label(\"priceLabel\", \"Price\", 120, 150, RED, 600);\nconst quantityLabel = label(\"quantityLabel\", \"Quantity\", 880, 640, INK, 600);\nconst demandLabel = label(\"demandLabel\", \"Demand\", 820, 480, BLUE, 880);\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  xAxis,\n  yAxis,\n  priceArrow,\n  demandCurve,\n  priceLabel,\n  quantityLabel,\n  demandLabel,\n};\n\nconst doc = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: {\n      id: \"inter\",\n      type: \"font\",\n      uri: \"/fonts/Inter-SemiBold.otf\",\n      family: \"Inter\",\n      style: \"normal\",\n      weight: 600,\n    },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\n        \"paper\",\n        \"xAxis\",\n        \"yAxis\",\n        \"priceArrow\",\n        \"demandCurve\",\n        \"priceLabel\",\n        \"quantityLabel\",\n        \"demandLabel\",\n      ],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as unknown as AnimationDocument);\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/demand-L4-haiku-5-5.json",
+      "nodes": 8,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 1425,
+          "apiMs": 1477,
+          "inputTokens": 756,
+          "outputTokens": 14,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1488,
+      "totalMs": 1488,
+      "output": {
+        "primitive": "cycle"
+      },
+      "docFile": "docs/seasons-L1-opus-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 1209,
+          "apiMs": 1418,
+          "inputTokens": 756,
+          "outputTokens": 12,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1419,
+      "totalMs": 1419,
+      "output": {
+        "primitive": "label"
+      },
+      "docFile": "docs/seasons-L1-haiku-5-5.json",
+      "nodes": 2,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 2400,
+          "apiMs": 3479,
+          "inputTokens": 1563,
+          "outputTokens": 155,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 3487,
+      "totalMs": 3487,
+      "output": {
+        "layout": "column",
+        "caption": "Tilt causes seasons",
+        "items": [
+          {
+            "primitive": "label",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "text",
+                "value": "23.5° tilt"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "cycle",
+            "startsAt": 1.2,
+            "params": [
+              {
+                "name": "steps",
+                "value": "North leans in|North summer|South leans in|South summer"
+              },
+              {
+                "name": "color",
+                "value": "yellow"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/seasons-L2-opus-5-5.json",
+      "nodes": 19,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 811,
+          "apiMs": 1591,
+          "inputTokens": 1563,
+          "outputTokens": 256,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1598,
+      "totalMs": 1598,
+      "output": {
+        "layout": "row",
+        "caption": "Tilt changes sunlight on each hemisphere",
+        "items": [
+          {
+            "primitive": "label",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "text",
+                "value": "Tilted 23.5°"
+              },
+              {
+                "name": "color",
+                "value": "ink"
+              }
+            ]
+          },
+          {
+            "primitive": "graph",
+            "startsAt": 1,
+            "params": [
+              {
+                "name": "shape",
+                "value": "sigmoid"
+              },
+              {
+                "name": "xLabel",
+                "value": "Month"
+              },
+              {
+                "name": "yLabel",
+                "value": "Sunlight"
+              },
+              {
+                "name": "color",
+                "value": "red"
+              }
+            ]
+          },
+          {
+            "primitive": "cycle",
+            "startsAt": 2,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Winter|Spring|Summer|Autumn"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/seasons-L2-haiku-5-5.json",
+      "nodes": 23,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 1604,
+          "apiMs": 5888,
+          "inputTokens": 1333,
+          "outputTokens": 538,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 5892,
+      "totalMs": 5892,
+      "output": {
+        "elements": [
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.5,
+            "color": "yellow",
+            "args": [
+              18,
+              50,
+              9,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              18,
+              68,
+              30
+            ],
+            "text": "Sun"
+          },
+          {
+            "kind": "arrow",
+            "at": 0.6,
+            "dur": 0.8,
+            "color": "yellow",
+            "args": [
+              30,
+              50,
+              50,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.8,
+            "dur": 0.5,
+            "color": "blue",
+            "args": [
+              68,
+              50,
+              10,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.3,
+            "dur": 0.8,
+            "color": "ink",
+            "args": [
+              61,
+              26,
+              75,
+              74
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.5,
+            "dur": 0.6,
+            "color": "grey",
+            "args": [
+              68,
+              22,
+              68,
+              78
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2,
+            "dur": 0.4,
+            "color": "ink",
+            "args": [
+              82,
+              24,
+              28
+            ],
+            "text": "23.5° tilt"
+          },
+          {
+            "kind": "line",
+            "at": 2.6,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              58.5,
+              45,
+              62,
+              40,
+              68,
+              35,
+              74,
+              40,
+              77.5,
+              45
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.2,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              50,
+              30,
+              30
+            ],
+            "text": "North: summer"
+          },
+          {
+            "kind": "arrow",
+            "at": 3.6,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              52,
+              34,
+              60,
+              42
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 4.2,
+            "dur": 0.4,
+            "color": "blue",
+            "args": [
+              70,
+              88,
+              28
+            ],
+            "text": "leans toward sun"
+          }
+        ]
+      },
+      "docFile": "docs/seasons-L3-opus-5-5.json",
+      "nodes": 14,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 1138,
+          "apiMs": 2873,
+          "inputTokens": 1333,
+          "outputTokens": 480,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2880,
+      "totalMs": 2880,
+      "output": {
+        "elements": [
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.6,
+            "color": "yellow",
+            "args": [
+              30,
+              50,
+              9,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.2,
+            "dur": 0.6,
+            "color": "ink",
+            "args": [
+              30,
+              30,
+              30
+            ],
+            "text": "Sun"
+          },
+          {
+            "kind": "line",
+            "at": 0.6,
+            "dur": 1.2,
+            "color": "grey",
+            "args": [
+              70,
+              50,
+              90,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 1.2,
+            "dur": 0.8,
+            "color": "blue",
+            "args": [
+              70,
+              50,
+              12,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.8,
+            "dur": 1,
+            "color": "red",
+            "args": [
+              70,
+              50,
+              63,
+              36
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 2.4,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              67,
+              28,
+              28
+            ],
+            "text": "Tilt"
+          },
+          {
+            "kind": "line",
+            "at": 2.6,
+            "dur": 1.4,
+            "color": "ink",
+            "args": [
+              70,
+              50,
+              58,
+              28,
+              46,
+              22
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 3,
+            "dur": 0.8,
+            "color": "yellow",
+            "args": [
+              40,
+              50,
+              52,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 3.8,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              78,
+              80,
+              30
+            ],
+            "text": "Summer side"
+          },
+          {
+            "kind": "text",
+            "at": 4.2,
+            "dur": 0.6,
+            "color": "grey",
+            "args": [
+              60,
+              92,
+              26
+            ],
+            "text": "Tilt sets the season"
+          }
+        ]
+      },
+      "docFile": "docs/seasons-L3-haiku-5-5.json",
+      "nodes": 12,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 1205,
+          "apiMs": 24295,
+          "inputTokens": 2030,
+          "outputTokens": 3327,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 24833,
+      "totalMs": 24833,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst INK = hex(\"#1F2A44\"), RED = hex(\"#E4572E\"), BLUE = hex(\"#2E86E4\"), GREEN = hex(\"#2E9E5B\"), YELLOW = hex(\"#E0A100\"), GREY = hex(\"#9A958A\");\n\nconst v = (x: number, y: number): PathVertex => ({ point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } });\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst fadeIn = (id: string, t0: number, t1: number) => keyed(id + \"-op\", [[t0, 0, OUT], [t1, 1]]);\n\n// Sun on the left\nconst sun: SceneNode = { ...base(\"sun\", { outTick: 1440, x: 180, y: 400, opacity: fadeIn(\"sun\", 0, 240) }), type: \"ellipse\", size: constant({ width: 200, height: 200 }), style: { fill: fill(YELLOW) } };\n\nconst sunLabel: SceneNode = { ...base(\"sunLabel\", { outTick: 1440, x: 80, y: 520, opacity: fadeIn(\"sunLabel\", 120, 360) }), type: \"text\",\n  runs: constant([{ text: \"Sun\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: INK }]),\n  box: { width: 200, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\" };\n\n// Earth centre\nconst EX = 760, EY = 400, R = 130;\nconst TILT = 23.5 * Math.PI / 180;\n\n// Earth: northern hemisphere tinted green (summer), southern blue\nconst earth: SceneNode = { ...base(\"earth\", { outTick: 1440, x: EX, y: EY, opacity: fadeIn(\"earth\", 0, 240) }), type: \"ellipse\", size: constant({ width: 2 * R, height: 2 * R }), style: { fill: fill(BLUE) } };\n\n// North half as path (semicircle on tilted side, toward sun = left-up tilt)\nconst northPts: PathVertex[] = [];\nfor (let i = 0; i <= 40; i++) {\n  const a = -TILT + Math.PI + (i / 40) * Math.PI; // from left to right through top, rotated\n  northPts.push(v(EX + R * Math.cos(a), EY + R * Math.sin(a)));\n}\nconst north: SceneNode = { ...base(\"north\", { outTick: 1440, x: 0, y: 0, opacity: fadeIn(\"north\", 720, 1080) }), type: \"path\",\n  path: constant({ contours: [{ closed: true, vertices: northPts }] }), style: { fill: fill(GREEN) } };\n\n// Equator line\nconst eqDx = R * Math.cos(TILT), eqDy = R * Math.sin(TILT);\nconst equator: SceneNode = { ...base(\"equator\", { outTick: 1440, x: 0, y: 0 }), type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: [v(EX - eqDx, EY + eqDy), v(EX + eqDx, EY - eqDy)] }] }),\n  style: { stroke: stroke(INK, 4) }, operators: [trim(\"equator-trim\", { end: keyed(\"equator-end\", [[720, 0, OUT], [960, 1]]) })] };\n\n// Tilted axis: top leans toward the sun (left)\nconst AL = 200;\nconst axDx = AL * Math.sin(TILT), axDy = AL * Math.cos(TILT);\nconst axis: SceneNode = { ...base(\"axis\", { outTick: 1440, x: 0, y: 0 }), type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: [v(EX + axDx, EY + axDy), v(EX - axDx, EY - axDy)] }] }),\n  style: { stroke: stroke(RED, 8) }, operators: [trim(\"axis-trim\", { end: keyed(\"axis-end\", [[120, 0, OUT], [480, 1]]) })] };\n\n// Vertical reference (dashed feel via grey thin)\nconst vert: SceneNode = { ...base(\"vert\", { outTick: 1440, x: 0, y: 0, opacity: fadeIn(\"vert\", 360, 600) }), type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: [v(EX, EY - AL), v(EX, EY - R - 10)] }] }),\n  style: { stroke: stroke(GREY, 4) } };\n\n// Tilt arc\nconst arcPts: PathVertex[] = [];\nfor (let i = 0; i <= 12; i++) {\n  const a = -Math.PI / 2 - (i / 12) * TILT;\n  arcPts.push(v(EX + 175 * Math.cos(a), EY + 175 * Math.sin(a)));\n}\nconst arc: SceneNode = { ...base(\"arc\", { outTick: 1440, x: 0, y: 0 }), type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: arcPts }] }), style: { stroke: stroke(RED, 4) },\n  operators: [trim(\"arc-trim\", { end: keyed(\"arc-end\", [[480, 0, OUT], [720, 1]]) })] };\n\nconst tiltLabel: SceneNode = { ...base(\"tiltLabel\", { outTick: 1440, x: EX - 30, y: EY - 260, opacity: fadeIn(\"tiltLabel\", 540, 780) }), type: \"text\",\n  runs: constant([{ text: \"23.5 deg tilt\", fontAssetId: \"inter\", fontSize: 30, fontWeight: 600, letterSpacing: 0, lineHeight: 36, color: RED }]),\n  box: { width: 260, height: 36 }, wrap: \"none\", align: \"left\", verticalAlign: \"top\" };\n\n// Sun rays hitting northern half\nconst rays: SceneNode[] = [];\n[-60, -20, 20].forEach((dy, i) => {\n  const t0 = 1080 + i * 80;\n  rays.push({ ...base(\"ray\" + i, { outTick: 1440, x: 0, y: 0 }), type: \"path\",\n    path: constant({ contours: [{ closed: false, vertices: [v(300, EY + dy - 40), v(EX - R - 10, EY + dy - 40)] }] }),\n    style: { stroke: stroke(YELLOW, 6) },\n    operators: [trim(\"ray\" + i + \"-trim\", { end: keyed(\"ray\" + i + \"-end\", [[t0, 0, OUT], [t0 + 240, 1]]) })] } as SceneNode);\n});\n\nconst summer: SceneNode = { ...base(\"summer\", { outTick: 1440, x: EX + 150, y: EY - 170, opacity: fadeIn(\"summer\", 1080, 1320) }), type: \"text\",\n  runs: constant([{ text: \"Summer\", fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: GREEN }]),\n  box: { width: 220, height: 41 }, wrap: \"none\", align: \"left\", verticalAlign: \"top\" };\n\nconst nodes: Record<string, SceneNode> = { paper, sun, sunLabel, earth, north, equator, vert, axis, arc, tiltLabel, summer };\nrays.forEach(r => { nodes[(r as any).id ?? \"\"] = r; });\nconst rayIds = [\"ray0\", \"ray1\", \"ray2\"];\nrays.forEach((r, i) => { nodes[rayIds[i]] = r; });\ndelete nodes[\"\"];\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes,\n    rootNodeIds: [\"paper\", \"sun\", \"sunLabel\", ...rayIds, \"earth\", \"north\", \"equator\", \"vert\", \"axis\", \"arc\", \"tiltLabel\", \"summer\"] } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/seasons-L4-opus-5-5.json",
+      "nodes": 14,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "seasons",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 5.8,
+      "attempts": [
+        {
+          "ttftMs": 14361,
+          "apiMs": 21322,
+          "inputTokens": 2030,
+          "outputTokens": 4680,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 22110,
+      "totalMs": 22110,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\nfunction vtx(x: number, y: number): PathVertex {\n  return { point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } };\n}\n\n// Tilt geometry: axis is 23.5 degrees from vertical, Earth centre at (720, 400).\nconst CX = 720;\nconst CY = 400;\nconst A = (23.5 * Math.PI) / 180;\nconst U = { x: Math.sin(A), y: -Math.cos(A) }; // north pole direction\nconst N = { x: -Math.cos(A), y: -Math.sin(A) }; // perpendicular toward the sun (left)\n\n// Axis line through the centre.\nconst axisVerts: PathVertex[] = [\n  vtx(CX + 200 * U.x, CY + 200 * U.y),\n  vtx(CX - 200 * U.x, CY - 200 * U.y),\n];\n\n// Northern hemisphere arc on the sun-facing side.\nconst R = 150;\nconst hemiVerts: PathVertex[] = [];\nfor (let i = 0; i <= 24; i++) {\n  const t = -Math.PI / 2 + (Math.PI * i) / 24;\n  const c = Math.cos(t);\n  const s = Math.sin(t);\n  hemiVerts.push(vtx(CX + R * (c * N.x + s * U.x), CY + R * (c * N.y + s * U.y)));\n}\n\nconst sunScale = keyed(\"sunScale\", [\n  [0, { x: 0, y: 0, z: 1 }, OUT],\n  [240, { x: 1, y: 1, z: 1 }],\n]);\nconst earthScale = keyed(\"earthScale\", [\n  [0, { x: 0, y: 0, z: 1 }, OUT],\n  [240, { x: 1, y: 1, z: 1 }],\n]);\n\nconst sun: SceneNode = {\n  ...base(\"sun\", { outTick: 1440, x: 220, y: 400, scale: sunScale }),\n  type: \"ellipse\",\n  size: constant({ width: 180, height: 180 }),\n  style: { fill: fill(hex(\"#E0A100\")) },\n} as SceneNode;\n\nconst earth: SceneNode = {\n  ...base(\"earth\", { outTick: 1440, x: CX, y: CY, scale: earthScale }),\n  type: \"ellipse\",\n  size: constant({ width: 280, height: 280 }),\n  style: { fill: fill(hex(\"#2E86E4\")) },\n} as SceneNode;\n\nconst axis: SceneNode = {\n  ...base(\"axis\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: axisVerts }] }),\n  style: { stroke: stroke(hex(\"#1F2A44\"), 8) },\n  operators: [\n    trim(\"axisTrim\", {\n      end: keyed(\"axisTrimEnd\", [\n        [240, 0, OUT],\n        [720, 1],\n      ]),\n    }),\n  ],\n} as SceneNode;\n\nconst hemi: SceneNode = {\n  ...base(\"hemi\", { outTick: 1440, x: 0, y: 0 }),\n  type: \"path\",\n  path: constant({ contours: [{ closed: false, vertices: hemiVerts }] }),\n  style: { stroke: stroke(hex(\"#E4572E\"), 14) },\n  operators: [\n    trim(\"hemiTrim\", {\n      end: keyed(\"hemiTrimEnd\", [\n        [720, 0, OUT],\n        [1200, 1],\n      ]),\n    }),\n  ],\n} as SceneNode;\n\nconst northLabel: SceneNode = {\n  ...base(\"northLabel\", {\n    outTick: 1440,\n    x: 800,\n    y: 180,\n    opacity: keyed(\"northOp\", [\n      [240, 0, OUT],\n      [480, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"N\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#1F2A44\"),\n    },\n  ]),\n  box: { width: 40, height: 41 },\n  wrap: \"none\",\n  align: \"center\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\nconst caption: SceneNode = {\n  ...base(\"caption\", {\n    outTick: 1440,\n    x: 150,\n    y: 120,\n    opacity: keyed(\"captionOp\", [\n      [1200, 0, OUT],\n      [1360, 1],\n    ]),\n  }),\n  type: \"text\",\n  runs: constant([\n    {\n      text: \"Lit side: summer\",\n      fontAssetId: \"inter\",\n      fontSize: 34,\n      fontWeight: 600,\n      letterSpacing: 0,\n      lineHeight: 41,\n      color: hex(\"#E4572E\"),\n    },\n  ]),\n  box: { width: 420, height: 41 },\n  wrap: \"none\",\n  align: \"left\",\n  verticalAlign: \"top\",\n} as SceneNode;\n\nconst nodes: Record<string, SceneNode> = {\n  paper,\n  sun,\n  earth,\n  axis,\n  hemi,\n  northLabel,\n  caption,\n};\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: {\n      id: \"inter\",\n      type: \"font\",\n      uri: \"/fonts/Inter-SemiBold.otf\",\n      family: \"Inter\",\n      style: \"normal\",\n      weight: 600,\n    },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\"paper\", \"sun\", \"earth\", \"axis\", \"hemi\", \"northLabel\", \"caption\"],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as AnimationDocument);\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/seasons-L4-haiku-5-5.json",
+      "nodes": 7,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 1,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 1873,
+          "apiMs": 1874,
+          "inputTokens": 746,
+          "outputTokens": 12,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1897,
+      "totalMs": 1897,
+      "output": {
+        "primitive": "network"
+      },
+      "docFile": "docs/neural-network-L1-opus-5-5.json",
+      "nodes": 30,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 1,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 1244,
+          "apiMs": 1436,
+          "inputTokens": 746,
+          "outputTokens": 12,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1453,
+      "totalMs": 1453,
+      "output": {
+        "primitive": "network"
+      },
+      "docFile": "docs/neural-network-L1-haiku-5-5.json",
+      "nodes": 30,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 2,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 1337,
+          "apiMs": 2662,
+          "inputTokens": 1553,
+          "outputTokens": 173,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2689,
+      "totalMs": 2689,
+      "output": {
+        "layout": "column",
+        "caption": "Numbers flow through layers",
+        "items": [
+          {
+            "primitive": "network",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "layers",
+                "value": "3|5|4|2"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "bars",
+            "startsAt": 1.2,
+            "params": [
+              {
+                "name": "values",
+                "value": "0.8|0.3|0.6"
+              },
+              {
+                "name": "labels",
+                "value": "Input 1|Input 2|Input 3"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/neural-network-L2-opus-5-5.json",
+      "nodes": 66,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 2,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 869,
+          "apiMs": 1327,
+          "inputTokens": 1553,
+          "outputTokens": 147,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 1350,
+      "totalMs": 1350,
+      "output": {
+        "layout": "row",
+        "caption": "Numbers flow through layers",
+        "items": [
+          {
+            "primitive": "network",
+            "startsAt": 0,
+            "params": [
+              {
+                "name": "layers",
+                "value": "3|5|5|2"
+              },
+              {
+                "name": "color",
+                "value": "blue"
+              }
+            ]
+          },
+          {
+            "primitive": "flow",
+            "startsAt": 1.2,
+            "params": [
+              {
+                "name": "steps",
+                "value": "Inputs|Weights|Output"
+              },
+              {
+                "name": "color",
+                "value": "green"
+              }
+            ]
+          }
+        ]
+      },
+      "docFile": "docs/neural-network-L2-haiku-5-5.json",
+      "nodes": 77,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 3,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 5175,
+          "apiMs": 12667,
+          "inputTokens": 1323,
+          "outputTokens": 1090,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 12677,
+      "totalMs": 12677,
+      "output": {
+        "elements": [
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              20,
+              30,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              20,
+              50,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              20,
+              70,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.4,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              50,
+              25,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.4,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              50,
+              42,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.4,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              50,
+              58,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.4,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              50,
+              75,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "circle",
+            "at": 0.8,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              80,
+              50,
+              3,
+              1
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              30,
+              47,
+              25
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              30,
+              47,
+              58
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              50,
+              47,
+              42
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              50,
+              47,
+              75
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              70,
+              47,
+              58
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              23,
+              70,
+              47,
+              25
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              53,
+              25,
+              77,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              53,
+              42,
+              77,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              53,
+              58,
+              77,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "line",
+            "at": 1.2,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              53,
+              75,
+              77,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 1.6,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              20,
+              50,
+              50,
+              42,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 2.1,
+            "dur": 0.6,
+            "color": "red",
+            "args": [
+              50,
+              42,
+              80,
+              50,
+              1.2
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.1,
+            "dur": 0.3,
+            "color": "blue",
+            "args": [
+              20,
+              88,
+              30
+            ],
+            "text": "input"
+          },
+          {
+            "kind": "text",
+            "at": 0.5,
+            "dur": 0.3,
+            "color": "purple",
+            "args": [
+              50,
+              88,
+              30
+            ],
+            "text": "hidden layer"
+          },
+          {
+            "kind": "text",
+            "at": 0.9,
+            "dur": 0.3,
+            "color": "green",
+            "args": [
+              80,
+              88,
+              30
+            ],
+            "text": "output"
+          },
+          {
+            "kind": "text",
+            "at": 1.5,
+            "dur": 0.3,
+            "color": "ink",
+            "args": [
+              35,
+              12,
+              30
+            ],
+            "text": "weights"
+          }
+        ]
+      },
+      "docFile": "docs/neural-network-L3-opus-5-5.json",
+      "nodes": 25,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 3,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 1278,
+          "apiMs": 2881,
+          "inputTokens": 1323,
+          "outputTokens": 479,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 2887,
+      "totalMs": 2887,
+      "output": {
+        "elements": [
+          {
+            "kind": "text",
+            "at": 0,
+            "dur": 0.6,
+            "color": "ink",
+            "args": [
+              50,
+              8,
+              40
+            ],
+            "text": "Layers"
+          },
+          {
+            "kind": "rect",
+            "at": 0.2,
+            "dur": 0.6,
+            "color": "blue",
+            "args": [
+              8,
+              30,
+              18,
+              40,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 0.5,
+            "dur": 0.6,
+            "color": "green",
+            "args": [
+              41,
+              30,
+              18,
+              40,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "rect",
+            "at": 0.8,
+            "dur": 0.6,
+            "color": "purple",
+            "args": [
+              74,
+              30,
+              18,
+              40,
+              0
+            ],
+            "text": ""
+          },
+          {
+            "kind": "text",
+            "at": 0.3,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              17,
+              78,
+              22
+            ],
+            "text": "Input"
+          },
+          {
+            "kind": "text",
+            "at": 0.6,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              50,
+              78,
+              22
+            ],
+            "text": "Weights"
+          },
+          {
+            "kind": "text",
+            "at": 0.9,
+            "dur": 0.4,
+            "color": "grey",
+            "args": [
+              83,
+              78,
+              22
+            ],
+            "text": "Output"
+          },
+          {
+            "kind": "arrow",
+            "at": 1.1,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              27,
+              50,
+              40,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "arrow",
+            "at": 1.4,
+            "dur": 0.4,
+            "color": "red",
+            "args": [
+              60,
+              50,
+              73,
+              50
+            ],
+            "text": ""
+          },
+          {
+            "kind": "move",
+            "at": 1.5,
+            "dur": 1.1,
+            "color": "yellow",
+            "args": [
+              12,
+              50,
+              90,
+              50,
+              1.2
+            ],
+            "text": ""
+          }
+        ]
+      },
+      "docFile": "docs/neural-network-L3-haiku-5-5.json",
+      "nodes": 13,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 4,
+      "model": "claude-opus-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 1266,
+          "apiMs": 17084,
+          "inputTokens": 2020,
+          "outputTokens": 2213,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 17727,
+      "totalMs": 17727,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION, assertValidAnimationDocument, withComputedRevision,\n  base, constant, keyed, fill, stroke, trim, hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\nconst ink = hex(\"#1F2A44\"), blue = hex(\"#2E86E4\"), grey = hex(\"#9A958A\"), red = hex(\"#E4572E\"), green = hex(\"#2E9E5B\"), purple = hex(\"#7A4FD6\");\n\nconst paper: SceneNode = { ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }), type: \"rect\", size: constant({ width: 1200, height: 800 }), cornerRadius: constant(0), style: { fill: fill(hex(\"#F7F5EF\")) } };\n\nconst others: Record<string, SceneNode> = {};\nconst order: string[] = [];\nconst add = (n: SceneNode, id: string) => { others[id] = n; order.push(id); };\n\nconst layerX = [300, 600, 900];\nconst counts = [3, 4, 2];\nconst colors = [blue, purple, green];\nconst names = [\"input\", \"layer\", \"output\"];\nconst ys = counts.map(c => Array.from({ length: c }, (_, i) => 400 + (i - (c - 1) / 2) * 140));\nconst v = (x: number, y: number): PathVertex => ({ point: { x, y }, inTangent: { x: 0, y: 0 }, outTangent: { x: 0, y: 0 } });\n\n// edges first (drawn under nodes)\nlet e = 0;\nfor (let l = 0; l < 2; l++) {\n  const t0 = 160 + l * 200;\n  for (const ya of ys[l]) for (const yb of ys[l + 1]) {\n    const id = `edge${e}`;\n    const w = 2 + ((e * 7) % 5) * 1.6;\n    add({\n      ...base(id, { outTick: 1440 }), type: \"path\",\n      path: constant({ contours: [{ closed: false, vertices: [v(layerX[l], ya), v(layerX[l + 1], yb)] }] }),\n      style: { stroke: stroke(grey, w) },\n      operators: [trim(`${id}t`, { end: keyed(`${id}e`, [[t0, 0, OUT], [t0 + 200, 1]]) })],\n    } as SceneNode, id);\n    e++;\n  }\n}\n\n// nodes\nfor (let l = 0; l < 3; l++) {\n  const t0 = l * 80;\n  ys[l].forEach((y, i) => {\n    const id = `n${l}_${i}`;\n    add({\n      ...base(id, { outTick: 1440, x: layerX[l], y, scale: keyed(`${id}s`, [[t0, { x: 0, y: 0, z: 1 }, OUT], [t0 + 160, { x: 1, y: 1, z: 1 }]]) }),\n      type: \"ellipse\", size: constant({ width: 70, height: 70 }), style: { fill: fill(colors[l]) },\n    } as SceneNode, id);\n  });\n  const tid = `lab${l}`;\n  add({\n    ...base(tid, { outTick: 1440, x: layerX[l] - 100, y: 660, opacity: keyed(`${tid}o`, [[t0, 0, OUT], [t0 + 160, 1]]) }),\n    type: \"text\",\n    runs: constant([{ text: names[l], fontAssetId: \"inter\", fontSize: 34, fontWeight: 600, letterSpacing: 0, lineHeight: 41, color: ink }]),\n    box: { width: 200, height: 41 }, wrap: \"none\", align: \"center\", verticalAlign: \"top\",\n  } as SceneNode, tid);\n}\n\n// number pulses travelling through layers\nconst paths = [[0, 1, 0], [2, 3, 1]];\npaths.forEach((p, k) => {\n  const id = `pulse${k}`;\n  const s = 360 + k * 40;\n  add({\n    ...base(id, {\n      outTick: 1440,\n      position: keyed(`${id}p`, [\n        [s, { x: layerX[0], y: ys[0][p[0]], z: 0 }, \"linear\"],\n        [s + 120, { x: layerX[1], y: ys[1][p[1]], z: 0 }, \"linear\"],\n        [s + 240, { x: layerX[2], y: ys[2][p[2]], z: 0 }],\n      ]),\n      opacity: keyed(`${id}o`, [[s - 4, 0, \"hold\"], [s, 1]]),\n    }),\n    type: \"ellipse\", size: constant({ width: 30, height: 30 }), style: { fill: fill(red) },\n  } as SceneNode, id);\n});\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION, id: \"visual\", name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: { ticksPerSecond: 240, frameRate: { numerator: 60, denominator: 1 }, durationTicks: 1440, displayStartTick: 0 },\n  assets: { inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 } },\n  rootCompositionId: \"main\", components: {},\n  compositions: { main: { id: \"main\", name: \"Main\", width: 1200, height: 800, durationTicks: 1440, nodes: { paper, ...others }, rootNodeIds: [\"paper\", ...order] } },\n  markers: [], design: { tokens: { looping: false } }, capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n});\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/neural-network-L4-opus-5-5.json",
+      "nodes": 35,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    },
+    {
+      "beat": "neural-network",
+      "level": 4,
+      "model": "claude-haiku-5-5",
+      "visualSeconds": 2.7,
+      "attempts": [
+        {
+          "ttftMs": 12020,
+          "apiMs": 18957,
+          "inputTokens": 2020,
+          "outputTokens": 4741,
+          "stopReason": "end_turn",
+          "error": null
+        }
+      ],
+      "firstTryValid": true,
+      "finalValid": true,
+      "msToValid": 19476,
+      "totalMs": 19476,
+      "output": "import {\n  ANIMATION_DOCUMENT_VERSION,\n  assertValidAnimationDocument,\n  withComputedRevision,\n  base,\n  constant,\n  keyed,\n  fill,\n  stroke,\n  trim,\n  hex,\n} from \"@clayzo/animation/authoring\";\nimport type { AnimationDocument, SceneNode, PathVertex } from \"@clayzo/animation/authoring\";\n\nconst OUT = { x1: 0.2, y1: 0.6, x2: 0.35, y2: 1 };\n\ntype Pt = { x: number; y: number };\n\nconst paper: SceneNode = {\n  ...base(\"paper\", { outTick: 1440, x: 600, y: 400 }),\n  type: \"rect\",\n  size: constant({ width: 1200, height: 800 }),\n  cornerRadius: constant(0),\n  style: { fill: fill(hex(\"#F7F5EF\")) },\n} as SceneNode;\n\n// Neuron: a circle that grows in from nothing.\nfunction neuron(id: string, p: Pt, t0: number, dur: number, color: string): SceneNode {\n  return {\n    ...base(id, {\n      outTick: 1440,\n      x: p.x,\n      y: p.y,\n      scale: keyed(`${id}-scale`, [\n        [t0, { x: 0, y: 0, z: 1 }, OUT],\n        [t0 + dur, { x: 1, y: 1, z: 1 }],\n      ]),\n    }),\n    type: \"ellipse\",\n    size: constant({ width: 72, height: 72 }),\n    style: { fill: fill(hex(color)) },\n  } as SceneNode;\n}\n\n// Connection: a line that draws itself on between two neurons.\nfunction connection(id: string, a: Pt, b: Pt, t0: number, dur: number): SceneNode {\n  const v = (p: Pt): PathVertex => ({\n    point: { x: p.x, y: p.y },\n    inTangent: { x: 0, y: 0 },\n    outTangent: { x: 0, y: 0 },\n  });\n  return {\n    ...base(id, { outTick: 1440, x: 0, y: 0 }),\n    type: \"path\",\n    path: constant({ contours: [{ closed: false, vertices: [v(a), v(b)] }] }),\n    style: { stroke: stroke(hex(\"#9A958A\"), 4) },\n    operators: [\n      trim(`${id}-trim`, {\n        end: keyed(`${id}-end`, [\n          [t0, 0, OUT],\n          [t0 + dur, 1],\n        ]),\n      }),\n    ],\n  } as SceneNode;\n}\n\nfunction label(id: string, text: string, cx: number, y: number): SceneNode {\n  return {\n    ...base(id, { outTick: 1440, x: cx - 100, y }),\n    type: \"text\",\n    runs: constant([\n      {\n        text,\n        fontAssetId: \"inter\",\n        fontSize: 34,\n        fontWeight: 600,\n        letterSpacing: 0,\n        lineHeight: 41,\n        color: hex(\"#1F2A44\"),\n      },\n    ]),\n    box: { width: 200, height: 41 },\n    wrap: \"none\",\n    align: \"center\",\n    verticalAlign: \"top\",\n  } as SceneNode;\n}\n\n// Layout: three columns of neurons.\nconst inputs: Pt[] = [\n  { x: 300, y: 280 },\n  { x: 300, y: 400 },\n  { x: 300, y: 520 },\n];\nconst hidden: Pt[] = [\n  { x: 600, y: 240 },\n  { x: 600, y: 340 },\n  { x: 600, y: 440 },\n  { x: 600, y: 540 },\n];\nconst outputs: Pt[] = [\n  { x: 900, y: 330 },\n  { x: 900, y: 470 },\n];\n\nconst edges: SceneNode[] = [];\nconst neurons: SceneNode[] = [];\n\n// Layer 1 neurons grow in first (0 - 96 ticks).\ninputs.forEach((p, i) => neurons.push(neuron(`in-${i}`, p, 0, 96, \"#2E86E4\")));\n\n// Input -> hidden connections draw on (96 - 240).\nlet e = 0;\ninputs.forEach((a, i) =>\n  hidden.forEach((b, j) => {\n    edges.push(connection(`e1-${e++}`, a, b, 96 + (i + j) * 4, 120));\n  })\n);\n\n// Hidden layer neurons (240 - 336).\nhidden.forEach((p, i) => neurons.push(neuron(`hid-${i}`, p, 240, 96, \"#7A4FD6\")));\n\n// Hidden -> output connections draw on (336 - 480).\ne = 0;\nhidden.forEach((a, i) =>\n  outputs.forEach((b, j) => {\n    edges.push(connection(`e2-${e++}`, a, b, 336 + (i + j) * 4, 120));\n  })\n);\n\n// Output neurons (480 - 576).\noutputs.forEach((p, i) => neurons.push(neuron(`out-${i}`, p, 480, 96, \"#2E9E5B\")));\n\n// Static layer labels below each column.\nconst labels: SceneNode[] = [\n  label(\"lbl-in\", \"input\", 300, 610),\n  label(\"lbl-hid\", \"layer\", 600, 610),\n  label(\"lbl-out\", \"output\", 900, 610),\n];\n\nconst others: SceneNode[] = [...edges, ...neurons, ...labels];\nconst nodes: Record<string, SceneNode> = { paper };\nfor (const n of others) {\n  nodes[(n as { id: string }).id] = n;\n}\n\nconst doc: AnimationDocument = withComputedRevision({\n  version: ANIMATION_DOCUMENT_VERSION,\n  id: \"visual\",\n  name: \"visual\",\n  canvas: { width: 1200, height: 800, pixelAspectRatio: 1, backgroundColor: hex(\"#F7F5EF\") },\n  timing: {\n    ticksPerSecond: 240,\n    frameRate: { numerator: 60, denominator: 1 },\n    durationTicks: 1440,\n    displayStartTick: 0,\n  },\n  assets: {\n    inter: { id: \"inter\", type: \"font\", uri: \"/fonts/Inter-SemiBold.otf\", family: \"Inter\", style: \"normal\", weight: 600 },\n  },\n  rootCompositionId: \"main\",\n  components: {},\n  compositions: {\n    main: {\n      id: \"main\",\n      name: \"Main\",\n      width: 1200,\n      height: 800,\n      durationTicks: 1440,\n      nodes,\n      rootNodeIds: [\"paper\", ...others.map((n) => (n as { id: string }).id)],\n    },\n  },\n  markers: [],\n  design: { tokens: { looping: false } },\n  capabilities: { required: [], optional: [], unsupportedPolicy: \"warn\" },\n} as unknown as AnimationDocument);\n\nassertValidAnimationDocument(doc);\nexport default doc;\n",
+      "docFile": "docs/neural-network-L4-haiku-5-5.json",
+      "nodes": 33,
+      "coverage": {
+        "supported": true,
+        "reasons": []
+      }
+    }
+  ]
+}
