@@ -102,6 +102,8 @@ End the spoken reply with a short check question when you explained something ("
 
 While you speak, a cursor (a teacher's hand) can point at, circle, or sweep between elements already on the board. Add a cursor cue for each element you mention, anchored to the exact word of your reply where you mention it (write the word as it appears; add #2 if it's the second occurrence of that word, e.g. "orbit#2"). Only use element ids from the board list. "sweep" needs "to": another element id. No cues if nothing on the board fits.
 
+Everything before the trailer line is spoken aloud to the learner, word for word. Start speaking to them at once: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there; that all goes in the JSON.
+
 Output format, exactly: the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
 {"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next"}
 Nothing else: no code fences, no commentary.`;
@@ -153,6 +155,17 @@ function parseAt(at: unknown): { word: string; occurrence: number } | null {
 const WANTS_DRAWING = /\b(draw|drawing|sketch|diagram|picture|show me|on the board)\b/i;
 
 const MAX_CUES = 4;
+
+/**
+ * With thinking off, the model sometimes says its plan out loud ("The learner
+ * is confused, give an answer rather than a detour..."). Such a sentence is
+ * never spoken.
+ */
+const META = /\b(the learner|learner('s)? (is|said|asked|wants)|escalation|level ("|')?(answer|detour|replan)|resume (should|is|to)|replay_beat|cursor cue|planner_note|the trailer|i should (point|answer|give)|i'll (set|give an answer))\b/i;
+
+export function isMetaTalk(sentence: string): boolean {
+  return META.test(sentence);
+}
 const STOP = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "at", "it", "its", "is", "arrow", "label", "box", "circle", "line", "shape", "part"]);
 
 /**
@@ -171,9 +184,15 @@ export function groundCues(cues: CursorCue[], spoken: string, board: BoardElemen
   for (const ws of parts.values()) for (const w of new Set(ws)) count.set(w, (count.get(w) ?? 0) + 1);
   const names = (id: string) => (parts.get(id) ?? []).filter((w) => count.get(w) === 1);
   const said = (token: string, ns: string[]) => ns.some((n) => token === n || token === `${n}s`);
-  const near = (pos: number, id: string) => {
+  /** Where the reply names an element: a word only its id has ("sun"), or its id's words in a row ("red wave" when "red" also names red-band). */
+  const namedAt = (pos: number, id: string) => {
     const ns = names(id);
-    for (let k = Math.max(0, pos - 3); k <= Math.min(tokens.length - 1, pos + 3); k++) if (said(tokens[k], ns)) return true;
+    if (ns.length) return said(tokens[pos], ns);
+    const ps = parts.get(id) ?? [];
+    return ps.length > 1 && ps.every((w, j) => tokens[pos + j] === w || tokens[pos + j] === `${w}s`);
+  };
+  const near = (pos: number, id: string) => {
+    for (let k = Math.max(0, pos - 3); k <= Math.min(tokens.length - 1, pos + 3); k++) if (namedAt(k, id)) return true;
     return false;
   };
   const occurrenceAt = (pos: number) => tokens.slice(0, pos + 1).filter((w) => w === tokens[pos]).length;
@@ -190,8 +209,7 @@ export function groundCues(cues: CursorCue[], spoken: string, board: BoardElemen
   for (const e of board) {
     if (out.length >= MAX_CUES) break;
     if (cued.has(e.id) || e.id.includes(".")) continue;
-    const ns = names(e.id);
-    const pos = tokens.findIndex((t) => said(t, ns));
+    const pos = tokens.findIndex((_, k) => namedAt(k, e.id));
     if (pos < 0) continue;
     out.push({ cue: { word: tokens[pos], occurrence: occurrenceAt(pos), target: e.id, gesture: "point" }, pos });
     cued.add(e.id);
@@ -272,7 +290,11 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
     let trailerText = "";
     let inTrailer = false;
     const usage = { input: 0, output: 0 };
-    const say = (text: string): ConverseEvent => {
+    const say = (text: string): ConverseEvent | null => {
+      if (isMetaTalk(text)) {
+        console.warn(`[converse] dropped a sentence that narrates the plan: "${text.slice(0, 160)}"`);
+        return null;
+      }
       spoken += (spoken ? " " : "") + text;
       sentences++;
       return { type: "sentence", text, tMs: ms() };
@@ -294,7 +316,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
             trailerText = pending.slice(cut + SENTINEL.length);
             pending = "";
             inTrailer = true;
-            if (speech) yield say(speech);
+            const ev = speech ? say(speech) : null;
+            if (ev) yield ev;
             continue;
           }
           // Emit whole sentences as they complete; a sentinel in progress ("<<<tra") is never a sentence.
@@ -304,7 +327,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
             const sentence = pending.slice(0, end).trim();
             if (sentence.includes("<<")) break;
             pending = pending.slice(end);
-            if (sentence) yield say(sentence);
+            const ev = sentence ? say(sentence) : null;
+            if (ev) yield ev;
           }
         } else if (event.type === "message_delta") {
           usage.output = event.usage.output_tokens;
@@ -322,7 +346,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         const brace = inTrailer ? -1 : rest.indexOf("{");
         const speech = (brace >= 0 ? rest.slice(0, brace) : rest).trim();
         if (brace >= 0) trailerText = rest.slice(brace);
-        if (speech) yield say(speech);
+        const ev = speech ? say(speech) : null;
+        if (ev) yield ev;
       }
       let trailer: ConverseTrailer;
       try {
