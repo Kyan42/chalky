@@ -61,6 +61,7 @@ interface BeatState {
   elements: PresetElement[] | null;
   drawMs?: number;
   model?: string;
+  dropped?: number;
   error?: string | null;
   /** Seconds after its anchor word the drawing arrived; unset when it was in time. */
   lateSec?: number;
@@ -157,6 +158,7 @@ export default function Lesson() {
   const [error, setError] = useState<string | null>(null);
   const [firstSoundMs, setFirstSoundMs] = useState<number | null>(null);
   const [lessonSoundMs, setLessonSoundMs] = useState<number | null>(null);
+  const [layoutMs, setLayoutMs] = useState<number | null>(null);
   const [lastReplyMs, setLastReplyMs] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -374,6 +376,7 @@ export default function Lesson() {
     setWords([]);
     setFirstSoundMs(null);
     setLessonSoundMs(null);
+    setLayoutMs(null);
     setLastReplyMs(null);
     setTitle("Planning…");
     setStatus("planning");
@@ -395,7 +398,73 @@ export default function Lesson() {
     let firstBeat: () => void = () => {};
     const firstBeatPlanned = new Promise<void>((r) => (firstBeat = r));
 
-    // Planner: every draw beat is drawn as soon as it is planned, from the layout alone, so beats draw in parallel.
+    // Visual beats (draw or point) in order. The first two draw straight away from the
+    // planner's own layout; the rest wait for the layout pass, which re-places them once
+    // the whole plan is in, hidden behind the first beats' speech.
+    const visualBeats: BeatState[] = [];
+    let resolveLayout: () => void = () => {};
+    const layout = new Promise<void>((r) => (resolveLayout = r));
+    const SHAPES = new Set(["circle", "box", "flow", "cycle", "plot", "bar", "equation", "text", "move", "line", "arrow"]);
+    /** The ids a drawn beat actually put on the board (what later beats can refer to). */
+    const drawnIds = (s: BeatState) => (s.elements ?? []).filter((e) => SHAPES.has(e.kind)).map((e) => e.id);
+
+    /** Draws a beat from its (current) layout, or marks it local when the planner's points suffice. */
+    const startDraw = (state: BeatState): Promise<PresetElement[] | null> => {
+      const beat = state.beat;
+      if (beat.mode === "point" && beat.points.length) {
+        state.draw = "local";
+        state.elements = [];
+        setBeats([...list]);
+        return Promise.resolve(null);
+      }
+      state.draw = "pending";
+      state.elements = null;
+      const index = list.indexOf(state);
+      const earlier = list.filter((b, i) => i < index && b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
+      return post("/api/draw", { question: q, beat, earlier })
+        .then((r) => r.json())
+        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null }) => {
+          state.elements = r.elements ?? [];
+          state.draw = state.elements.length ? "ready" : "failed";
+          state.drawMs = r.ms;
+          state.model = r.model;
+          state.dropped = r.dropped;
+          state.error = r.error ?? null;
+          return state.elements.length ? state.elements : null;
+        })
+        .catch((e: Error) => {
+          state.elements = [];
+          state.draw = "failed";
+          state.error = abort.signal.aborted ? "stopped" : String(e.message ?? e);
+          return null;
+        })
+        .finally(() => setBeats([...list]));
+    };
+
+    /** Applies the layout pass to the beats not drawn yet; talk beats follow the scene before them. */
+    const applyLayout = (laid: { id: string; scene: number; region: PlannedBeat["region"]; adds: PlannedBeat["adds"]; points: PlannedBeat["points"] }[]) => {
+      let scene = 1;
+      for (const s of list) {
+        const l = laid.find((x) => x.id === s.beat.id);
+        if (s.beat.mode === "talk" || !l) {
+          s.beat.scene = scene;
+          continue;
+        }
+        if (visualBeats.indexOf(s) >= 2) {
+          s.beat.scene = l.scene;
+          s.beat.region = l.region;
+          s.beat.adds = l.adds;
+          s.beat.points = l.points;
+        } else {
+          // Drawn already: later beats refer to what is really on the board.
+          const ids = drawnIds(s);
+          if (ids.length) s.beat.adds = ids.map((id) => ({ id, what: s.beat.adds.find((a) => a.id === id)?.what ?? "" }));
+        }
+        scene = s.beat.scene;
+      }
+      setBeats([...list]);
+    };
+
     const planning = (async () => {
       const res = await post("/api/plan", { question: q });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
@@ -407,38 +476,35 @@ export default function Lesson() {
         else if (event.type === "beat") {
           const beat = event.beat;
           const state: BeatState = { beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null) };
-          if (beat.mode === "point" && beat.points.length) {
-            state.draw = "local";
-          } else if (beat.mode !== "talk") {
-            state.draw = "pending";
-            state.elements = null;
-            const earlier = list.filter((b) => b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
-            state.ready = post("/api/draw", { question: q, beat, earlier })
-              .then((r) => r.json())
-              .then((r: { elements?: PresetElement[]; ms?: number; model?: string; error?: string | null }) => {
-                state.elements = r.elements ?? [];
-                state.draw = state.elements.length ? "ready" : "failed";
-                state.drawMs = r.ms;
-                state.model = r.model;
-                state.error = r.error ?? null;
-                return state.elements.length ? state.elements : null;
-              })
-              .catch((e: Error) => {
-                state.elements = [];
-                state.draw = "failed";
-                state.error = abort.signal.aborted ? "stopped" : String(e.message ?? e);
-                return null;
-              })
-              .finally(() => setBeats([...list]));
-          }
           list.push(state);
+          if (beat.mode !== "talk") {
+            visualBeats.push(state);
+            if (visualBeats.length <= 2) state.ready = startDraw(state);
+            else {
+              state.draw = "pending";
+              state.elements = null;
+              state.ready = layout.then(() => startDraw(state));
+            }
+          }
           setBeats([...list]);
           if (list.length === 1) firstBeat();
           notify();
         }
       }
+      // The whole plan is in: lay the rest of the board out around the first drawings.
+      if (visualBeats.length > 2) {
+        await Promise.all(visualBeats.slice(0, 2).map((s) => s.ready));
+        const fixed = visualBeats.slice(0, 2).map((s) => ({ id: s.beat.id, region: s.beat.region, ids: drawnIds(s).length ? drawnIds(s) : s.beat.adds.map((a) => a.id) }));
+        const t1 = performance.now();
+        const r = await post("/api/layout", { question: q, beats: list.map((s) => s.beat), fixed })
+          .then((x) => x.json())
+          .catch(() => null);
+        if (r?.beats) applyLayout(r.beats);
+        setLayoutMs(r?.beats ? Math.round(performance.now() - t1) : null);
+      }
     })().finally(() => {
       planDone = true;
+      resolveLayout();
       firstBeat();
       notify();
     });
@@ -589,7 +655,7 @@ export default function Lesson() {
       case "local": return `points at ${b.beat.points.map((p) => p.id).join(", ")} · no model call`;
       case "pending": return "drawing…";
       case "failed": return `drawing failed: ${b.error ?? "unknown"}`;
-      case "ready": return `drawn in ${((b.drawMs ?? 0) / 1000).toFixed(1)} s (${(b.model ?? "").replace("claude-", "")}) · ${b.elements?.length ?? 0} elements${b.lateSec ? ` · landed ${b.lateSec} s after its word` : ""}`;
+      case "ready": return `drawn in ${((b.drawMs ?? 0) / 1000).toFixed(1)} s (${(b.model ?? "").replace("claude-", "")}) · ${b.elements?.length ?? 0} elements${b.dropped ? ` · ${b.dropped} dropped` : ""}${b.lateSec ? ` · landed ${b.lateSec} s after its word` : ""}`;
     }
   };
 
@@ -658,6 +724,7 @@ export default function Lesson() {
               First sound {(firstSoundMs / 1000).toFixed(1)} s after asking{lessonSoundMs !== null ? `; the lesson itself at ${(lessonSoundMs / 1000).toFixed(1)} s` : ""}.
             </p>
           )}
+          {layoutMs !== null && <p className="beat-meta" data-testid="layout-ms">Layout pass took {(layoutMs / 1000).toFixed(1)} s.</p>}
           {lastReplyMs !== null && <p className="beat-meta" data-testid="reply-ms">Last answer took {(lastReplyMs / 1000).toFixed(1)} s.</p>}
         </aside>
         <footer className="caption" data-testid="caption">

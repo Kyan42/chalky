@@ -357,7 +357,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         if (!target) return;
         dimmed.add(target.id);
         const b = grow(target.box, 8);
-        s.overlay(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1, { at, color: PAPER, opacity: 0.72, behind: false });
+        s.overlay(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1, { at, color: PAPER, opacity: 0.45, behind: false });
         return;
       }
     }
