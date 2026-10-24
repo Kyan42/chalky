@@ -42,6 +42,48 @@ export interface PlannedBeat {
   bridge?: string;
 }
 
+/**
+ * What the lesson has learned about the learner so far, kept in the browser
+ * (no persistence yet) and passed to the planner and the reply route: the
+ * intake answer, their check-in replies and what they got stuck on.
+ */
+export interface LearnerRecord {
+  level: "new" | "some" | "strong" | "unknown";
+  /** What they already know, in a few words. */
+  prior: string;
+  /** The part they care about, in a few words. */
+  focus: string;
+  /** What didn't land (the reply layer's planner notes), newest last. */
+  confusions: string[];
+  /** Their answers at check-ins, newest last. */
+  replies: string[];
+}
+
+export const NEW_LEARNER: LearnerRecord = { level: "unknown", prior: "", focus: "", confusions: [], replies: [] };
+
+/** The record as a few lines for a prompt; "" when nothing is known yet. */
+export function describeLearner(l: LearnerRecord | undefined): string {
+  if (!l) return "";
+  const lines = [
+    l.level !== "unknown" ? `level: ${l.level === "new" ? "new to this" : l.level === "some" ? "knows the basics" : "knows it well, wants depth"}` : "",
+    l.prior ? `already knows: ${l.prior}` : "",
+    l.focus ? `wants to focus on: ${l.focus}` : "",
+    l.confusions.length ? `got stuck on: ${l.confusions.slice(-3).join(" | ")}` : "",
+    l.replies.length ? `recent check-in answers: ${l.replies.slice(-3).map((r) => `"${r}"`).join(", ")}` : "",
+  ].filter(Boolean);
+  return lines.length ? `What we know about the learner:\n${lines.map((x) => `- ${x}`).join("\n")}` : "";
+}
+
+/** Checks a learner record sent by the browser. */
+export function cleanLearner(raw: unknown): LearnerRecord | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const list = (v: unknown) => (Array.isArray(v) ? v.map((x) => str(x, 300)).filter(Boolean).slice(-5) : []);
+  const level = ["new", "some", "strong"].includes(o.level as string) ? (o.level as LearnerRecord["level"]) : "unknown";
+  return { level, prior: str(o.prior), focus: str(o.focus), confusions: list(o.confusions), replies: list(o.replies) };
+}
+
 /** NDJSON events from POST /api/plan. */
 export type PlanEvent =
   | { type: "title"; title: string; tMs: number }

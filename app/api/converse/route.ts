@@ -6,7 +6,8 @@
  * aborts (the learner spoke again), the model request is aborted too.
  */
 import { converse, type ConverseEvent, type ConverseInput } from "@/lib/lesson/converse";
-import type { BeatMode } from "@/lib/lesson/types";
+import { decideIntake, intakeQuestion } from "@/lib/lesson/intake";
+import { cleanLearner, type BeatMode } from "@/lib/lesson/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,11 +49,26 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     board,
     history,
     escalation: esc >= 2 ? 2 : esc === 1 ? 1 : 0,
+    learner: cleanLearner(body.learner),
   };
 }
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  // The intake, before the lesson: ask one question, then decide from the answer. Plain JSON, not streamed.
+  if (body.intent === "intake_ask" || body.intent === "intake_answer") {
+    const question = str(body.question, 500).trim();
+    if (!question) return Response.json({ error: "question is required" }, { status: 400 });
+    try {
+      if (body.intent === "intake_ask") return Response.json(await intakeQuestion(question, request.signal));
+      const answer = str(body.answer, 600).trim();
+      if (!answer) return Response.json({ error: "answer is required" }, { status: 400 });
+      const beats = Array.isArray(body.beats) ? body.beats.filter((b): b is string => typeof b === "string").slice(0, 4) : [];
+      return Response.json(await decideIntake({ question, asked: str(body.asked, 300), answer, beats }, request.signal));
+    } catch (error) {
+      return Response.json({ error: String((error as Error)?.message ?? error) }, { status: 500 });
+    }
+  }
   const input = parse(body);
   if (typeof input === "string") return Response.json({ error: input }, { status: 400 });
 

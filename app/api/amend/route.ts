@@ -5,7 +5,7 @@
  * The browser's abort (the learner moved on) aborts the planner too.
  */
 import { amendLesson, type AmendOp } from "@/lib/lesson/planner";
-import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
+import { cleanLearner, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export async function POST(request: Request) {
       note: typeof body.note === "string" ? body.note.slice(0, 600) : "",
       heard: typeof body.heard === "string" ? body.heard.slice(0, 600) : undefined,
       prefix,
+      intake: body.intake === true,
+      learner: cleanLearner(body.learner),
     },
     upstream.signal,
   );

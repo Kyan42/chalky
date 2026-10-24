@@ -13,7 +13,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
 import { isResume } from "./resume";
-import type { BeatMode } from "./types";
+import { describeLearner, type BeatMode, type LearnerRecord } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
 export const CONVERSE_FALLBACK_MODEL = process.env.CONVERSE_FALLBACK_MODEL || "claude-sonnet-5-5";
@@ -75,6 +75,7 @@ export interface ConverseInput {
   history: Exchange[];
   /** Escalation already reached for this confusion: 0 none, 1 answer given, 2 detour given. */
   escalation: 0 | 1 | 2;
+  learner?: LearnerRecord;
 }
 
 /** NDJSON events from POST /api/converse. */
@@ -130,9 +131,12 @@ function context(o: ConverseInput): string {
     where,
     `Elements on the board (ids you can point at):\n${board}`,
     `Earlier exchanges in this conversation:\n${history}`,
+    describeLearner(o.learner),
     `Escalation already reached for this confusion: ${o.escalation} (0 none, 1 a brief answer was given, 2 a detour was given).`,
     `The learner just said: "${o.utterance}"`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Where the first complete sentence of `text` ends (just before the whitespace that follows it); -1 if none yet. */

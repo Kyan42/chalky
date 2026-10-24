@@ -34,7 +34,7 @@ import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseEvent, ConverseTrailer, Exchange } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
+import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
 import { unlockAudio } from "@/lib/voice/audio";
@@ -55,6 +55,10 @@ const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
 /** Words Ink-2 should expect: Chalky's own name, which it otherwise hears as "Chucky". */
 const BASE_KEYTERMS = ["Chalky"];
+/** Seconds of silence after the intake question before the lesson just goes on. */
+const INTAKE_SILENCE_MS = 4000;
+/** Answers to the intake question that mean "just start". */
+const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
 type Status = "idle" | "planning" | "speaking" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
 
@@ -219,6 +223,8 @@ export default function Lesson() {
   const cursorClock = useCallback(() => cursorClockRef.current(), []);
   const [pausedAt, setPausedAt] = useState<{ beatId: string; wordIndex: number } | null>(null);
   const [lastLevel, setLastLevel] = useState<string | null>(null);
+  const [learnerView, setLearnerView] = useState<LearnerRecord | null>(null);
+  const [intakeView, setIntakeView] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
@@ -251,6 +257,9 @@ export default function Lesson() {
   }, [status]);
 
   const askRef = useRef<(q: string) => void>(() => {});
+  /** Words Ink is hearing right now, and text being typed: the intake's silence timer waits while either is there. */
+  const partialRef = useRef("");
+  const draftRef = useRef("");
   const pauseRef = useRef<() => void>(() => {});
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
@@ -279,6 +288,9 @@ export default function Lesson() {
     // A press with no words leaves Chalky paused in "Your turn": say or type something, or Continue.
     onBargeInCancelled: () => {},
   });
+
+  partialRef.current = voice.partial;
+  draftRef.current = draft;
 
   const stop = useCallback(() => {
     queueRef.current = [];
@@ -512,11 +524,22 @@ export default function Lesson() {
     const params = new URLSearchParams(window.location.search);
     const fixture = process.env.NODE_ENV !== "production" ? params.get("fixture") : null;
 
-    // The opener: one line to say while the planner thinks.
-    const opener = post("/api/opener", { question: q })
-      .then((r) => r.json())
-      .then((r: { say?: string }) => (typeof r.say === "string" ? r.say : null))
-      .catch(() => null);
+    // The intake: one short question to the learner, asked while the planner writes the speculative plan.
+    // ?intake=0 turns it off (development).
+    const intakeAsk =
+      params.get("intake") === "0"
+        ? Promise.resolve(null)
+        : post("/api/converse", { intent: "intake_ask", question: q })
+            .then((r) => r.json())
+            .then((r: { say?: string; kind?: string; ms?: number; model?: string }) => (typeof r.say === "string" && r.say ? r : null))
+            .catch(() => null);
+    /** What the lesson knows about the learner; goes to every reply and plan change. */
+    const learner: LearnerRecord = { ...NEW_LEARNER, confusions: [], replies: [] };
+    const noteLearner = () => setLearnerView({ ...learner, confusions: [...learner.confusions], replies: [...learner.replies] });
+    noteLearner();
+    setIntakeView(null);
+    /** Beats after the first wait for the intake's decision, so a speculative beat 2 never plays before an amended one. */
+    let intakeGate: Promise<void> = Promise.resolve();
 
     const list: BeatState[] = [];
     let planDone = false;
@@ -667,7 +690,7 @@ export default function Lesson() {
       abort.signal.addEventListener("abort", () => ctl.abort(), { once: true });
       const prefix = `d${++amendCount}`;
       const beats = (async () => {
-        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, prefix }, ctl.signal);
+        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
@@ -685,7 +708,7 @@ export default function Lesson() {
     };
 
     /** Replaces the lesson from list position `from` with a new ending, streamed in as it is planned. */
-    const replan = (from: number, note: string, heardText: string) => {
+    const replan = (from: number, note: string, heardText: string, intake = false) => {
       dropDraft();
       const before = list.map((s) => s.beat);
       planReplaced = true;
@@ -694,7 +717,7 @@ export default function Lesson() {
       amending++;
       const prefix = `r${++amendCount}`;
       void (async () => {
-        const res = await post("/api/amend", { question: q, beats: before, op: "replace_from", index: from, note, heard: heardText, prefix });
+        const res = await post("/api/amend", { question: q, beats: before, op: "replace_from", index: from, note, heard: heardText, prefix, intake, learner });
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
@@ -767,6 +790,7 @@ export default function Lesson() {
             board: boardRef.current.list,
             history: history.slice(-6),
             escalation,
+            learner,
           },
           signal,
         );
@@ -866,6 +890,10 @@ export default function Lesson() {
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
         if (abort.signal.aborted) return -1;
+        if (heardText !== null) {
+          learner.replies = [...learner.replies, heardText].slice(-5);
+          noteLearner();
+        }
         if (heardText === null || isResume(heardText)) {
           escalation = 0;
           dropDraft();
@@ -887,6 +915,10 @@ export default function Lesson() {
         }
         history.push({ who: "chalky", text: reply.said });
         const { trailer } = reply;
+        if (trailer.planner_note) {
+          learner.confusions = [...learner.confusions, trailer.planner_note].slice(-5);
+          noteLearner();
+        }
         setLastLevel(`${trailer.level} / ${trailer.resume}${trailer.cursor.length ? ` · cursor ${trailer.cursor.map((c) => `${c.gesture} ${c.target}`).join(", ")}` : ""}`);
         if (trailer.level === "replan") {
           escalation = 0;
@@ -924,11 +956,65 @@ export default function Lesson() {
     };
 
     try {
-      // Say the opener if it lands before the first beat does.
-      const first = await Promise.race([opener, firstBeatPlanned.then(() => null)]);
-      if (first && !abort.signal.aborted) {
+      // The intake: ask one question, wait for an answer (or ~4 s of silence), and let the fast model
+      // decide whether the plan should change after beat 1. The plan has been streaming meanwhile.
+      const iq = await intakeAsk;
+      if (iq?.say && !abort.signal.aborted) {
+        const tAsk = performance.now();
         setStatus("speaking");
-        await playBeat(line(first), abort.signal, null, onFirstSound);
+        await playBeat(line(iq.say), abort.signal, null, onFirstSound);
+        setStatus("waiting");
+        const answer = await (async () => {
+          const waiting = awaitTurn(abort.signal);
+          let deadline = performance.now() + INTAKE_SILENCE_MS;
+          const timer = setInterval(() => {
+            // Hearing words or typing keeps the question open; silence lets the lesson go on.
+            if (partialRef.current.trim() || draftRef.current.trim()) deadline = performance.now() + INTAKE_SILENCE_MS;
+            else if (performance.now() > deadline) turnRef.current?.(null);
+          }, 200);
+          try {
+            return await waiting;
+          } finally {
+            clearInterval(timer);
+          }
+        })();
+        if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
+        const waitedMs = Math.round(performance.now() - tAsk);
+        if (!answer || SKIP_INTAKE.test(answer) || isResume(answer)) {
+          setIntakeView(`Asked “${iq.say}” (${iq.kind}, ${iq.model}); ${answer ? `“${answer}”: skipped` : "no answer: went on"}; the intake took ${(waitedMs / 1000).toFixed(1)} s.`);
+          if (answer) {
+            learner.replies = [answer];
+            noteLearner();
+          }
+        } else {
+          learner.replies = [answer];
+          setStatus("replying");
+          const tDecide = performance.now();
+          const decision: { amend?: boolean; note?: string; learner?: Partial<LearnerRecord>; error?: string } = await post("/api/converse", {
+            intent: "intake_answer",
+            question: q,
+            asked: iq.say,
+            answer,
+            beats: list.slice(0, 3).map((s) => s.beat.say),
+          })
+            .then((r) => r.json())
+            .catch((e) => ({ error: String(e) }));
+          Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
+          noteLearner();
+          const decideMs = Math.round(performance.now() - tDecide);
+          if (decision.amend && decision.note && !abort.signal.aborted) {
+            // Beat 1 plays as planned; everything after it is rewritten for this learner.
+            let release: () => void = () => {};
+            intakeGate = new Promise<void>((r) => (release = r));
+            void firstBeatPlanned.then(() => {
+              if (list.length >= 1 && !abort.signal.aborted) replan(1, decision.note!, answer, true);
+              release();
+            });
+          }
+          setIntakeView(
+            `Asked “${iq.say}” (${iq.kind}, ${iq.model}); answer “${answer}”; ${decision.error ? `decision failed: ${decision.error}` : decision.amend ? `the plan is rewritten from beat 2: ${decision.note}` : "the plan stays as it is"} (decided in ${(decideMs / 1000).toFixed(1)} s); the intake took ${((performance.now() - tAsk) / 1000).toFixed(1)} s.`,
+          );
+        }
       }
 
       let i = 0;
@@ -943,7 +1029,11 @@ export default function Lesson() {
           i = next;
           continue;
         }
-        if (i >= list.length) break;
+        if (i >= 1) await intakeGate;
+        if (i >= list.length) {
+          if (planOpen()) continue;
+          break;
+        }
         setCurrent(i);
         currentBeatIdRef.current = list[i].beat.id;
         setStatus("speaking");
@@ -1160,6 +1250,12 @@ export default function Lesson() {
           {layoutMs !== null && <p className="beat-meta" data-testid="layout-ms">Layout pass took {(layoutMs / 1000).toFixed(1)} s.</p>}
           {lastReplyMs !== null && <p className="beat-meta" data-testid="reply-ms">Last answer: first sound {(lastReplyMs / 1000).toFixed(1)} s after the learner finished.</p>}
           {lastLevel && <p className="beat-meta" data-testid="last-level">Last turn: {lastLevel}</p>}
+          {intakeView && <p className="beat-meta" data-testid="intake">Intake: {intakeView}</p>}
+          {learnerView && (learnerView.level !== "unknown" || learnerView.prior || learnerView.focus || learnerView.confusions.length > 0) && (
+            <p className="beat-meta" data-testid="learner">
+              Learner: {[learnerView.level !== "unknown" && `level ${learnerView.level}`, learnerView.prior && `prior: ${learnerView.prior}`, learnerView.focus && `focus: ${learnerView.focus}`, learnerView.confusions.length > 0 && `${learnerView.confusions.length} confusion(s)`].filter(Boolean).join(" · ")}
+            </p>
+          )}
           {pausedAt && <p className="beat-meta" data-testid="paused-at">Paused at {pausedAt.beatId}, word {pausedAt.wordIndex + 1}.</p>}
         </aside>
         <footer className="caption" data-testid="caption">

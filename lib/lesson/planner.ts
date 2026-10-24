@@ -15,7 +15,7 @@
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
 import { anthropic } from "./anthropic";
-import type { BeatMode, PlanEvent, PlannedBeat, Region } from "./types";
+import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
 
@@ -224,21 +224,26 @@ export interface AmendRequest {
   heard?: string;
   /** Unique id prefix for the new beats, e.g. "d1" → d1-1, d1-2… */
   prefix: string;
+  /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
+  intake?: boolean;
+  learner?: LearnerRecord;
 }
 
 function amendPrompt(r: AmendRequest, newScene: number): string {
   const lines = r.beats.map((b, i) => {
-    const visual = b.mode === "draw" ? ` adds ${b.adds.map((a) => a.id).join(", ") || "-"}` : b.mode === "point" ? ` points at ${b.points.map((p) => p.id).join(", ") || "-"}` : "";
+    const visual = b.mode === "draw" ? ` adds ${b.adds.map((a) => a.id).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]` : b.mode === "point" ? ` points at ${b.points.map((p) => p.id).join(", ") || "-"}` : "";
     return `${i + 1}. [${b.id}, scene ${b.scene}, ${b.mode}${visual}] ${b.say}`;
   });
-  const task =
-    r.op === "insert_after"
+  const task = r.intake
+    ? `REWRITE THE LESSON from beat ${r.index + 1} on, tailored to what the learner just told you (above): beats ${r.index + 1} onward are dropped, and the beats before stay as they are (beat 1 is already being spoken). Write the rest of a whole lesson, 10 to 16 beats, by the same rules as a full lesson (sections with goals, check-ins with bridges, a recap at the end). It continues on the same board: stay in scene ${newScene} for a while, drawing in free space beside what is already there (you may point at those ids), and start new scenes after it as the lesson moves on.`
+    : r.op === "insert_after"
       ? `Write a short DETOUR of 2 to 4 beats that will be spoken right after beat ${r.index + 1}, before the lesson goes on. It explains the same idea from a fresh angle (a concrete case, an analogy, real numbers), following the note above, and does not move the lesson forward. It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}. Its last beat ends with a short check-in question and has "check": true.`
       : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. Start on a clean board: the first beat is a draw beat in scene ${newScene}; later scenes count up from there. Add a check-in after roughly every fourth beat.`;
   return [
     `The lesson answers: ${r.question}`,
     `The lesson planned so far:\n${lines.join("\n")}`,
     r.heard ? `The learner just said: "${r.heard}"` : "",
+    describeLearner(r.learner),
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,
     `Same beat format and rules as a full lesson, except: ignore the beat count and do not write a title line. Output only the beat lines.`,
@@ -251,7 +256,8 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
-  const newScene = maxScene + 1;
+  // The intake rewrite continues on beat 1's board; every other change starts on a clean one.
+  const newScene = r.intake ? Math.max(1, maxScene) : maxScene + 1;
   const stream = anthropic().messages.stream(
     {
       model: AMEND_MODEL,
@@ -275,6 +281,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   });
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
   const st: PlanState = { scene: maxScene, known: new Map() };
+  if (r.intake) st.known.set(newScene, new Set(r.beats.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
   let n = 0;
   const parse = function* (line: string): Generator<PlanEvent> {
     const trimmed = line.trim();
@@ -287,7 +294,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       return;
     }
     if (typeof obj.title === "string" || typeof obj.say !== "string") return;
-    if (n === 0 && obj.mode !== "talk") obj.scene = Math.max(newScene, Number(obj.scene) || 0);
+    if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
     if (r.op === "insert_after" && obj.mode !== "talk") obj.scene = newScene;
     // index n + 1 (never 0): checkBeat treats beat 0 as the lesson's very first beat.
     const beat = checkBeat(obj, n + 1, st);
