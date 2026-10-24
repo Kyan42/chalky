@@ -8,6 +8,7 @@
  * Shared by the live /api/draw route and the board-layout experiment.
  */
 import { PALETTE } from "@/experiments/visual-flex/doc";
+import { BLOCK_LANGUAGE } from "@/lib/blocks/catalog";
 import { PRESET_KINDS } from "@/lib/lesson/presets";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
@@ -18,6 +19,8 @@ export const DRAW_SYSTEM = `You draw on a teacher's whiteboard, one beat of a sp
 export const PRESET_LANGUAGE = `Scene language. The board is a 100x100 grid: x right, y down, (0,0) top left; it is 3:2 on screen, so 1 unit of x is 1.5x as long as 1 unit of y. You choose WHAT to draw and roughly WHERE; the renderer places labels, snaps arrows to shapes and keeps text from overlapping, so prefer the kinds that do that for you.
 
 Every element has: id (short unique name, e.g. "sun", "leaf", "co2-in"), kind, at (seconds after the anchor word, 0-4.5), dur (seconds to draw, 0.1-3), color, args (numbers in the order below), text ("" if unused), refs (comma-separated ids, "" if unused).
+
+${BLOCK_LANGUAGE}
 
 Shapes (give them a text label; the renderer puts it inside or on the free side):
 - circle: args cx, cy, r (radius in x units, 3-15 is typical), filled (1 or 0). text = label.

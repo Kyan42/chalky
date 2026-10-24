@@ -295,7 +295,7 @@ interface Motion {
  * `motion` (her compileInstance). `enter` draws it stroke by stroke from `start` over `seconds`
  * (`"draw"`), or leaves that to the scale track (`"pop"`); `finished` draws it complete.
  */
-function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number; motion: Motion; inTick: number; enter: "draw" | "pop" | "finished"; start: number; seconds: number }): string {
+function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number; motion: Motion; inTick: number; enter: "draw" | "pop" | "finished"; start: number; seconds: number }): () => void {
   const [w, h] = block.size;
   const rootId = o.id;
   const drawing = o.enter === "draw";
@@ -349,8 +349,8 @@ function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number
     child(scene, { ...base(pid, { outTick: END }), type: "group", children: partChildren[part.id] ?? [] });
   }
   const { pos, scale, opacity } = o.motion;
-  const fading = opacity.list.length > 1;
-  root(scene, {
+  // The root group is rebuilt from `motion` whenever a later step (a pulse) changes it.
+  const node = (): SceneNode => ({
     ...base(rootId, {
       outTick: END,
       inTick: o.inTick,
@@ -361,9 +361,12 @@ function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number
     }),
     type: "group",
     children: block.parts.map((p) => `${rootId}-${p.id}`),
-    ...(fading ? { isolation: true } : {}),
-  } as SceneNode);
-  return rootId;
+    ...(opacity.list.length > 1 ? { isolation: true } : {}),
+  }) as SceneNode;
+  root(scene, node());
+  return () => {
+    scene.nodes[rootId] = node();
+  };
 }
 
 /** A quick scale bounce at `at` seconds, to say "this one". */
@@ -397,6 +400,8 @@ export interface RenderBlockOptions extends Placement {
 export interface Rendered {
   /** The root node's id in the document. */
   node: string;
+  /** Bounces the block at `at` seconds after the anchor word (her pulse). */
+  pulse: (at: number) => void;
   /** Seconds the entrance takes (0 when finished). */
   seconds: number;
   box: Box;
@@ -419,7 +424,7 @@ export function renderBlock(scene: Scene, block: Block, o: RenderBlockOptions): 
   if (!finished && enter === "pop") pop(motion.scale, placed.scale, start);
   for (const at of o.pulseAt ?? []) if (at >= 0) pulse(motion.scale, placed.scale, at);
   const id = nextId(scene, o.id ?? block.id);
-  compileBlock(scene, block, {
+  const rebuild = compileBlock(scene, block, {
     id,
     scale: placed.scale,
     motion,
@@ -428,7 +433,12 @@ export function renderBlock(scene: Scene, block: Block, o: RenderBlockOptions): 
     start,
     seconds,
   });
-  return { node: id, seconds, box: placed.box, parts: placed.parts, anchors: placed.anchors };
+  const bounce = (at: number) => {
+    if (at < 0) return;
+    pulse(motion.scale, placed.scale, at);
+    rebuild();
+  };
+  return { node: id, pulse: bounce, seconds, box: placed.box, parts: placed.parts, anchors: placed.anchors };
 }
 
 export interface RenderTravelOptions {
@@ -500,7 +510,7 @@ export function renderTravel(scene: Scene, block: Block, o: RenderTravelOptions)
  * Her hand-drawn circle highlight: a marker loop a little more than one turn around a stage
  * box, its radius drifting so the ends don't meet. `at < 0` draws it finished.
  */
-export function renderLoop(scene: Scene, box: Box, o: { at: number; dur?: number; color?: string; pad?: number; width?: number }): string {
+export function renderLoop(scene: Scene, box: Box, o: { at: number; dur?: number; color?: string; pad?: number; width?: number; until?: number }): string {
   const pad = o.pad ?? 14;
   const cx = (box.x1 + box.x2) / 2, cy = (box.y1 + box.y2) / 2;
   const rx = (box.x2 - box.x1) / 2 + pad, ry = (box.y2 - box.y1) / 2 + pad;
@@ -512,11 +522,13 @@ export function renderLoop(scene: Scene, box: Box, o: { at: number; dur?: number
   const id = nextId(scene, "loop");
   const finished = o.at < 0;
   const start = Math.max(0, o.at), seconds = Math.max(0.2, o.dur ?? 0.6);
+  const opacity = new Keys(1);
+  if (!finished && o.until !== undefined) opacity.to(tk(Math.max(start + seconds, o.until)), 0, 0.3, EASE.inOut);
   root(scene, {
     ...base(id, { outTick: END, inTick: finished ? 0 : tk(start) }),
     type: "path",
     path: constant({ contours: [{ closed: false, vertices: vs }] }),
-    style: { stroke: stroke(paint(o.color, "red"), o.width ?? MARKER + 1) },
+    style: { stroke: stroke(paint(o.color, "red"), o.width ?? MARKER + 1, { opacity: opacity.track(`${id}.o`) }) },
     ...(finished ? {} : { operators: [trim(`${id}.trim`, { end: drawOn(`${id}.end`, start, start + seconds) })] }),
   } as SceneNode);
   return id;

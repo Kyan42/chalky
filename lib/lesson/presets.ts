@@ -17,6 +17,7 @@
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { H, PAPER, Scene, W, type Pt } from "@/experiments/visual-flex/doc";
 import { compileFn } from "@/experiments/visual-flex/scene";
+import { BLOCK_KINDS, drawBlockElement, highlightBlock, type BlockContext } from "@/lib/blocks/compile";
 
 /** One element as the model sends it (every field present; unused ones empty). */
 export interface PresetElement {
@@ -32,7 +33,7 @@ export interface PresetElement {
   refs: string;
 }
 
-export const PRESET_KINDS = ["circle", "box", "label", "connect", "rays", "flow", "cycle", "equation", "arrow", "line", "plot", "bar", "move", "text", "highlight", "dim"] as const;
+export const PRESET_KINDS = ["circle", "box", "label", "connect", "rays", "flow", "cycle", "equation", "arrow", "line", "plot", "bar", "move", "text", "highlight", "dim", ...BLOCK_KINDS] as const;
 
 export interface Box {
   x1: number;
@@ -89,6 +90,8 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     placed.set(p.id, p);
     report.shapes.push({ id: p.id, box: p.box });
   };
+  // Janani's blocks (lib/blocks): `block` and `travel` register their boxes, parts and anchors here.
+  const blocks: BlockContext = { scene: s, placed, register, occupy: (id, box) => occupy(id, box), dangling: report.dangling };
   const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b) * 4;
 
   /** Places a text at the cheapest candidate centre; shrinks once if every spot collides. */
@@ -158,6 +161,10 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     const id = e.id || `${e.kind}-${placed.size}`;
     const labelSize = 26;
     switch (e.kind) {
+      case "block":
+      case "travel":
+        drawBlockElement(blocks, { ...e, id }, at);
+        return;
       case "circle": {
         const cx = sx(a[0]), cy = sy(a[1]), r = Math.max(8, (a[2] / 100) * W);
         const filled = a[3] !== 0;
@@ -348,6 +355,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         const [target] = resolve(e, 1) ?? [];
         if (!target) return;
         dimmed.delete(target.id);
+        if (highlightBlock(blocks, target, at, dur)) return;
         const b = grow(target.box, 14);
         const minW = 90, minH = 70;
         const [cx, cy] = centre(b);
