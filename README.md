@@ -26,6 +26,25 @@ If `CARTESIA_API_KEY` is unset, the route calls Cartesia without an `Authorizati
 is for environments whose egress proxy injects the key, like the Claude Code cloud environment,
 where the dev server must also run with `NODE_USE_ENV_PROXY=1` so Node's `fetch` uses the proxy.
 
+## The lesson loop (`/lesson`)
+
+Speech never waits for the board. Asking a question starts three things at once:
+
+1. **Opener** (`/api/opener`, Haiku): one spoken line within about a second, while the planner thinks.
+2. **Planner** (`/api/plan`, Opus, streaming): 9–14 beats as JSON lines. Each beat carries its own
+   layout: a scene number (the board wipes between scenes), a region on a 100×100 grid, the ids it
+   adds, and for point beats the ids to highlight plus the spoken word each highlight lands on.
+3. **Drawers** (`/api/draw`): every draw beat is drawn from that layout alone, so beats draw in
+   parallel. Beat 1 uses Haiku; later beats Sonnet, with a deadline and a Haiku fallback, never a
+   repair turn. The first two visual beats draw at once; once the whole plan is in, `/api/layout`
+   (Sonnet) re-lays out the rest around them, hidden behind the first beats' speech.
+
+The browser compiles each scene with `lib/lesson/presets.ts` (labels, arrows and layouts placed by
+code, drawings fitted to their region) and speaks a beat as soon as its text exists. A drawing that
+lands after its anchor word starts when it arrives. Point beats need no model call: Sonic's word
+timestamps place the highlights. `scripts/e2e-lesson.mjs` drives a whole lesson and screenshots
+every beat into `experiments/lesson-e2e/`.
+
 ## Layout
 
 | Path | What it is |

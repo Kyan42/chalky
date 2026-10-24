@@ -165,7 +165,10 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         const box = { x1: cx - r, y1: cy - r, x2: cx + r, y2: cy + r };
         register({ id, kind: "circle", box, circle: { cx, cy, r } });
         occupy(id, box);
-        if (e.text) placeText(`${id}:label`, e.text, around(box, e.text, labelSize, !filled), labelSize, { at: still ? -1 : at + 0.15, color: filled ? "ink" : col }, new Set(filled ? [] : [id]), id);
+        // A big outline circle is a container: later beats draw inside it, so its label goes just under its top edge, not at the centre.
+        const container = !filled && r > 70;
+        const candidates = container ? [[cx, cy - r + 28] as Pt, ...around(box, e.text, labelSize, false)] : around(box, e.text, labelSize, !filled);
+        if (e.text) placeText(`${id}:label`, e.text, candidates, labelSize, { at: still ? -1 : at + 0.15, color: filled ? "ink" : col }, new Set(filled ? [] : [id]), id);
         return;
       }
       case "box": {
