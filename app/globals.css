@@ -71,3 +71,6 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .lesson-beats li[data-state="done"] .beat-say { color: var(--ink); opacity: 0.6; }
 .beat-say { display: block; }
 .beat-meta { display: block; font-size: 0.85em; color: var(--muted); margin-top: 0.2em; }
+.ask button.continue { background: var(--accent); border-color: var(--accent); }
+.mic[data-state="waiting"] .dot { background: #e0b100; }
+.lesson-beats ol { overflow-y: auto; max-height: 82%; }

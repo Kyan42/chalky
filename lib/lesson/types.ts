@@ -1,11 +1,20 @@
-/** A planned lesson beat: one or two spoken sentences, the word its visual starts on, and what to draw. */
+/**
+ * What a beat does to the board: add a drawing, point at (highlight or dim)
+ * what is already there, or leave it alone while the teacher talks.
+ */
+export type BeatMode = "draw" | "point" | "talk";
+
+/** A planned lesson beat: two or three spoken sentences, the word its visual starts on, and what to draw. */
 export interface PlannedBeat {
   id: string;
   say: string;
   /** A word from `say`; the visual's time 0 is when Sonic speaks it. */
   at: string;
-  /** A short description of the visual for the scene-language generator. */
+  /** What to add (draw) or which parts to point at (point); "" for talk. */
   visual: string;
+  mode: BeatMode;
+  /** The beat ends with a check-in question; the lesson waits for the learner before going on. */
+  check: boolean;
 }
 
 /** NDJSON events from POST /api/plan. */

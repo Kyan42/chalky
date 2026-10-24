@@ -28,6 +28,7 @@ await page.click('[data-testid="ask"]');
 
 const shot = new Set();
 const stalls = new Map();
+let checkins = 0;
 let last = "";
 for (;;) {
   const s = await page.evaluate(() => {
@@ -68,10 +69,18 @@ for (;;) {
     await page.screenshot({ path: join(OUT, `beat-${s.current + 1}.png`) });
     shot.add(s.current);
   }
+  // At a check-in, answer like a learner who is following along.
+  if (s.status === "Waiting for you") {
+    checkins++;
+    await page.screenshot({ path: join(OUT, `checkin-${checkins}.png`) });
+    await page.waitForTimeout(800);
+    await page.click('[data-testid="continue"]');
+  }
   // EVERY_FRAME=1 also saves a screenshot every poll, to catch short-lived marks like highlights.
   if (process.env.EVERY_FRAME && s.status === "Speaking") await page.screenshot({ path: join(OUT, `t-${t.padStart(5, "0")}-beat${s.current + 1}.png`) });
-  if (["Done", "Error", "Stopped"].includes(s.status) || Date.now() - t0 > 180_000) {
+  if (["Done", "Error", "Stopped"].includes(s.status) || Date.now() - t0 > 420_000) {
     console.log(`\ntitle: ${s.title}\n${s.firstSound}\nerror: ${s.error}\nTTS responses: ${tts.join(",")}`);
+    console.log(`check-ins answered: ${checkins}`);
     console.log(`waits for a visual mid-lesson: ${[...stalls].map(([b, sec]) => `before beat ${b + 1} about ${sec} s`).join(", ") || "none"}`);
     s.meta.forEach((m, i) => console.log(`beat ${i + 1}: ${m}`));
     break;

@@ -69,12 +69,15 @@ export interface VisualResult {
 export async function generateVisual(question: string, beat: PlannedBeat, board: BoardElement[], signal?: AbortSignal): Promise<VisualResult> {
   const client = anthropic();
   const t0 = performance.now();
+  const pointOnly = beat.mode === "point";
   const brief = [
     `Question the learner asked: ${question}`,
-    `Sentence being spoken now: "${beat.say}"`,
+    `What the teacher is saying now: "${beat.say}"`,
     `Anchor word: "${beat.at}". Time 0 is when this word is spoken.`,
     `Timing: this beat's drawing must finish within about ${visualSeconds(beat)} seconds, then hold.`,
-    `What the teacher planned to draw: ${beat.visual}`,
+    pointOnly
+      ? `This beat only points at what is already on the board: use highlight and dim edits (at least one), and add no new elements. Time each highlight to the word that names it. What to point at: ${beat.visual}`
+      : `What the teacher planned to draw: ${beat.visual}`,
     "",
     describeBoard(board),
   ].join("\n");
@@ -108,6 +111,12 @@ export async function generateVisual(question: string, beat: PlannedBeat, board:
       if (message.stop_reason === "max_tokens") throw new Error("output was cut off at max_tokens");
       const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
       const spec = JSON.parse(text) as BoardSpec;
+      if (pointOnly) {
+        // A pointing beat never adds or wipes anything, whatever the model sent.
+        spec.clear = false;
+        spec.elements = spec.elements.filter((e) => e.kind === "highlight" || e.kind === "dim");
+        if (!spec.elements.length) throw new Error("this beat must highlight or dim at least one element that is already on the board");
+      }
       const result = compileBoard(board, spec, beat.id, `${beat.id}-${Date.now()}`);
       const edits = spec.elements.filter((e) => e.kind === "highlight" || e.kind === "dim");
       if (edits.length) console.info(`[visual] ${beat.id} edits: ${edits.map((e) => `${e.kind} ${e.text} at ${e.at}s for ${e.dur}s`).join("; ")}`);

@@ -24,12 +24,12 @@ const FRAME_TICKS = 4;
 const DOC_END = 6 * TPS;
 const GAP_SECONDS = 0.45;
 
-type Status = "idle" | "planning" | "drawing" | "speaking" | "done" | "stopped" | "error";
+type Status = "idle" | "planning" | "drawing" | "speaking" | "waiting" | "done" | "stopped" | "error";
 
 interface BeatState {
   beat: PlannedBeat;
   plannedAtMs: number;
-  visual: "drawing" | "ready" | "failed";
+  visual: "drawing" | "ready" | "failed" | "none";
   visualMs?: number;
   doc?: AnimationDocument;
   cleared?: boolean;
@@ -78,6 +78,7 @@ export default function Lesson() {
   const ctxRef = useRef<AudioContext | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<StreamPlayer | null>(null);
+  const continueRef = useRef<(() => void) | null>(null);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -111,9 +112,11 @@ export default function Lesson() {
     const ctx = ctxRef.current!;
     setWords(state.beat.say.split(/\s+/));
     setWordIndex(-1);
+    // A talk beat (or a failed visual) has no document of its own: the board stays as it is.
+    const follow = !!state.doc;
     const [response] = await Promise.all([
       fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal }),
-      showDocument(state.doc),
+      follow ? showDocument(state.doc) : Promise.resolve(),
     ]);
     if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
 
@@ -132,7 +135,7 @@ export default function Lesson() {
       if (t < 0) return;
       setWordIndex(wordAt(t, timestamps));
       const player = playerRef.current;
-      if (player && anchorStart !== null && !seeking) {
+      if (follow && player && anchorStart !== null && !seeking) {
         const tick = Math.max(0, Math.min(DOC_END - FRAME_TICKS, Math.round(((t - anchorStart) * TPS) / FRAME_TICKS) * FRAME_TICKS));
         if (tick !== lastTick) {
           seeking = true;
@@ -215,6 +218,10 @@ export default function Lesson() {
           const state: BeatState = { beat: event.beat, plannedAtMs: Math.round(performance.now() - t0), visual: "drawing", ready: Promise.resolve() };
           const before = board;
           const drawn = before.then(async (prev) => {
+            if (event.beat.mode === "talk") {
+              state.visual = "none";
+              return prev;
+            }
             const r: { doc?: AnimationDocument; board?: BoardElement[]; cleared?: boolean; ms?: number; edits?: BeatState["edits"] } = await fetch("/api/visual", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -263,6 +270,16 @@ export default function Lesson() {
         if (abort.signal.aborted) break;
         setStatus("speaking");
         await playBeat(list[i], abort.signal, onFirstSound);
+        // A check-in question waits for the learner before the lesson goes on.
+        const more = i + 1 < list.length || !planDone;
+        if (list[i].beat.check && more && !abort.signal.aborted) {
+          setStatus("waiting");
+          await new Promise<void>((resolve) => {
+            continueRef.current = resolve;
+            abort.signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+          continueRef.current = null;
+        }
       }
       if (!abort.signal.aborted) setStatus((s) => (s === "error" ? s : "done"));
       else setStatus("stopped");
@@ -275,9 +292,9 @@ export default function Lesson() {
     }
   }, [question, stop, showDocument, playBeat]);
 
-  const busy = status === "planning" || status === "drawing" || status === "speaking";
+  const busy = status === "planning" || status === "drawing" || status === "speaking" || status === "waiting";
   const micLabel: Record<Status, string> = {
-    idle: "Ready", planning: "Planning…", drawing: "Drawing…", speaking: "Speaking", done: "Done", stopped: "Stopped", error: "Error",
+    idle: "Ready", planning: "Planning…", drawing: "Drawing…", speaking: "Speaking", waiting: "Waiting for you", done: "Done", stopped: "Stopped", error: "Error",
   };
 
   return (
@@ -294,9 +311,14 @@ export default function Lesson() {
           >
             <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask a question" aria-label="Question" data-testid="question" />
             <button type="submit" disabled={!question.trim()} data-testid="ask">{busy ? "Ask again" : "Ask"}</button>
+            {status === "waiting" && (
+              <button type="button" className="continue" onClick={() => continueRef.current?.()} data-testid="continue">
+                Continue
+              </button>
+            )}
             {busy && <button type="button" onClick={stop} data-testid="stop">Stop</button>}
           </form>
-          <div className="mic" data-state={status === "speaking" ? "speaking" : "idle"} data-testid="status">
+          <div className="mic" data-state={status === "speaking" || status === "waiting" ? status : "idle"} data-testid="status">
             <span className="dot" />
             {micLabel[status]}
           </div>
@@ -314,7 +336,7 @@ export default function Lesson() {
                 <li key={b.beat.id} data-state={i === current ? "now" : i < current ? "done" : "next"}>
                   <span className="beat-say">{b.beat.say}</span>
                   <span className="beat-meta">
-                    planned at {(b.plannedAtMs / 1000).toFixed(1)} s · visual {b.visual === "drawing" ? "drawing…" : b.visual === "failed" ? "failed" : `${((b.visualMs ?? 0) / 1000).toFixed(1)} s`}
+                    {b.beat.mode}{b.beat.check ? " · check-in" : ""} · planned at {(b.plannedAtMs / 1000).toFixed(1)} s · {b.visual === "none" ? "no drawing" : `visual ${b.visual === "drawing" ? "drawing…" : b.visual === "failed" ? "failed" : `${((b.visualMs ?? 0) / 1000).toFixed(1)} s`}`}
                     {b.boardSize !== undefined && ` · ${b.cleared ? "new board, " : ""}+${b.edits?.added ?? 0} (${b.boardSize} on board)`}
                     {!!b.edits?.highlights && ` · ${b.edits.highlights} highlight${b.edits.highlights > 1 ? "s" : ""}`}
                     {!!b.edits?.dims && ` · ${b.edits.dims} dim${b.edits.dims > 1 ? "s" : ""}`}
