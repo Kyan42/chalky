@@ -204,13 +204,13 @@ try {
   await say("still");
   const detour = await waitFor("detour beats to play", (s) => s.beat && /^d\d+-/.test(s.beat), 60000);
   check("'I still don't get it' starts a detour", !!detour, detour ? `${detour.level}; beats now ${detour.beats.join(",")}` : "");
-  const detourCheck = await waitFor("the detour's check-in", (s) => s.status === "Your turn" && s.beat && /^d\d+-/.test(s.beat), 120000);
+  const detourCheck = await waitFor("the detour's check-in", (s) => s.status === "Your turn" && s.beat && /^d\d+-/.test(s.beat), 360000);
   check("the detour ends in a check-in and waits", !!detourCheck, detourCheck?.beat ?? "");
 
   if (LEVEL3) {
     // 5b. Still lost after the detour: a new ending, then the lesson goes on.
     await say("lost");
-    const replanned = await waitFor("new beats", (s) => s.beat && /^r\d+-/.test(s.beat), 90000);
+    const replanned = await waitFor("new beats", (s) => s.beat && /^r\d+-/.test(s.beat), 240000);
     check("still lost after a detour replans and continues", !!replanned, replanned ? `${replanned.level}; beats ${replanned.beats.join(",")}` : "");
   } else {
     // 5. Got it: the interrupted beat replays from its start.

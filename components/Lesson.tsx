@@ -725,6 +725,8 @@ export default function Lesson() {
       abort.signal.addEventListener("abort", onStop, { once: true });
       const signal = replyAbort.signal;
       setStatus("replying");
+      // A beat cut off mid-drawing froze half drawn; show its drawing finished so the reply can point at it.
+      void playerRef.current?.seek(DOC_END - FRAME_TICKS);
       const t1 = performance.now();
       const ctx = await unlockAudio();
       let audio: StreamPlayer | null = null;
