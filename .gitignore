@@ -24,3 +24,5 @@ npm-debug.log*
 /experiments/visual-flex/out/
 /experiments/lesson-e2e/
 /experiments/mic-e2e/
+/experiments/voice-e2e/
+/experiments/conversation-e2e/

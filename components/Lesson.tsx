@@ -33,8 +33,9 @@ import { mergeTimestamps, resolveAt, wordAt, type WordTimestamps } from "@/lib/b
 import { compilePresetBoard, type PresetElement } from "@/lib/lesson/presets";
 import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
+import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
 import { unlockAudio } from "@/lib/voice/audio";
-import { useListening } from "@/lib/voice/useListening";
+import { useHybridMic } from "@/lib/voice/useHybridMic";
 
 const TPS = 240;
 const FRAME_TICKS = 4;
@@ -46,8 +47,10 @@ const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
 const HIGHLIGHT_SECONDS = 1.8;
 const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
-/** Replies that just mean "carry on" (from Janani's session controller), answered without a model call. */
-const RESUME = /^\W*(ok(ay)?|sure|yes|yeah|yep|got it|makes sense|that makes sense|thanks?( you)?|cool|great)?\W*(resume|continue|keep going|go on|carry on|next|never ?mind|move on)?\W*$/i;
+/** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
+const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
+/** Words Ink-2 should expect: Chalky's own name, which it otherwise hears as "Chucky". */
+const BASE_KEYTERMS = ["Chalky"];
 
 type Status = "idle" | "planning" | "speaking" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
 
@@ -169,25 +172,48 @@ export default function Lesson() {
   const interruptedRef = useRef(false);
   const audioRef = useRef<StreamPlayer | null>(null);
   const speakingRef = useRef(false);
+  /** Chalky's voice is playing (or just stopped: the echo tail). Mirrors speakingRef for the mic. */
+  const [speakingAudio, setSpeakingAudio] = useState(false);
+  const setSpeaking = useCallback((on: boolean) => {
+    speakingRef.current = on;
+    setSpeakingAudio(on);
+  }, []);
+  /** The word of the current beat being spoken; read when the learner pauses Chalky. */
+  const wordIndexRef = useRef(-1);
+  /** Where Chalky stopped when the learner cut in: the beat to replay and the word reached. */
+  const resumeRef = useRef<{ beatId: string; wordIndex: number } | null>(null);
   /** Set while the lesson waits for the learner; resolves with what they said (null = just carry on). */
   const turnRef = useRef<((text: string | null) => void) | null>(null);
   const statusRef = useRef<Status>("idle");
+  const currentBeatIdRef = useRef("");
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
   const askRef = useRef<(q: string) => void>(() => {});
-  const voice = useListening(
-    {
-      onEnd: (text) => {
-        const said = text.trim();
-        if (!said) return;
-        if (turnRef.current) turnRef.current(said);
-        else if (["idle", "done", "stopped", "error"].includes(statusRef.current)) askRef.current(said);
-      },
+  const pauseRef = useRef<() => void>(() => {});
+  const [heardNote, setHeardNote] = useState<string | null>(null);
+  const voice = useHybridMic({
+    speaking: MUTED.has(status) || speakingAudio,
+    // Space down while Chalky talks: stop now, keep the resume point, then listen.
+    onBargeIn: () => pauseRef.current(),
+    onUtterance: (text) => {
+      const said = text.trim();
+      if (!said) return;
+      if (turnRef.current) turnRef.current(said);
+      else if (["idle", "done", "stopped", "error"].includes(statusRef.current)) {
+        // "Hey Chalky." on its own is not a question; wait for the rest.
+        if (isGreetingOnly(said)) {
+          setHeardNote(`Heard “${said}”. Go ahead, what do you want to learn?`);
+          return;
+        }
+        setHeardNote(null);
+        askRef.current(said);
+      }
     },
-    () => speakingRef.current,
-  );
+    // A press with no words leaves Chalky paused in "Your turn": say or type something, or Continue.
+    onBargeInCancelled: () => {},
+  });
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -232,7 +258,8 @@ export default function Lesson() {
     const ctx = await unlockAudio();
     setWords(state.beat.say.split(/\s+/));
     setWordIndexNow(-1);
-    speakingRef.current = true;
+    wordIndexRef.current = -1;
+    setSpeaking(true);
     let audio: StreamPlayer | null = null;
     let timestamps: WordTimestamps = { words: [], start: [], end: [] };
     let anchorStart: number | null = null;
@@ -253,7 +280,9 @@ export default function Lesson() {
       if (!audio) return;
       const t = audio.position();
       if (t < 0) return;
-      setWordIndexNow(wordAt(t, timestamps));
+      const w = wordAt(t, timestamps);
+      wordIndexRef.current = w;
+      setWordIndexNow(w);
       const player = playerRef.current;
       if (compile && player && anchorStart !== null && !seeking) {
         const tick = Math.max(0, Math.min(DOC_END - FRAME_TICKS, Math.round(((t - anchorStart) * TPS) / FRAME_TICKS) * FRAME_TICKS));
@@ -328,9 +357,12 @@ export default function Lesson() {
       playing = false;
       cancelAnimationFrame(raf);
       if (signal.aborted) audio?.stop();
-      setTimeout(() => (speakingRef.current = false), ECHO_TAIL_MS);
+      setTimeout(() => {
+        // Another line may have started meanwhile; only the last one to finish clears the flag.
+        if (audioRef.current === audio || audio === null) setSpeaking(false);
+      }, ECHO_TAIL_MS);
     }
-  }, [showDocument]);
+  }, [showDocument, setSpeaking]);
 
   /** Waits for the learner: a spoken turn, a typed reply, or Continue (null). */
   const awaitTurn = useCallback((signal: AbortSignal) => {
@@ -353,6 +385,7 @@ export default function Lesson() {
     await unlockAudio(); // inside the click or right after a spoken turn, so autoplay allows it
     const t0 = performance.now();
     const since = () => Math.round(performance.now() - t0);
+    setHeardNote(null);
     let heard = false;
     const onFirstSound = () => {
       if (heard) return;
@@ -471,7 +504,7 @@ export default function Lesson() {
       for await (const event of ndjson<PlanEvent>(res)) {
         if (event.type === "title") {
           setTitle(event.title);
-          voice.setKeyterms([...event.title.split(/\s+/), ...q.split(/\s+/)].filter((w) => w.length > 4));
+          voice.setKeyterms([...BASE_KEYTERMS, ...[...event.title.split(/\s+/), ...q.split(/\s+/)].filter((w) => w.length > 4)]);
         } else if (event.type === "error") throw new Error(`planner: ${event.message}`);
         else if (event.type === "beat") {
           const beat = event.beat;
@@ -517,7 +550,7 @@ export default function Lesson() {
 
     /** Answers what the learner said, out loud. Returns false if they want to stop. */
     const answer = async (heardText: string, kind: "check-in" | "interrupt", now?: string) => {
-      if (RESUME.test(heardText)) return true;
+      if (isResume(heardText)) return true;
       setStatus("replying");
       const r: { say?: string; intent?: string; ms?: number; error?: string } = await post("/api/reply", { question: q, said, now, heard: heardText, kind }).then((x) => x.json());
       if (r.ms) setLastReplyMs(r.ms);
@@ -541,6 +574,7 @@ export default function Lesson() {
         while (i >= list.length && !planDone) await changed();
         if (i >= list.length || abort.signal.aborted) break;
         setCurrent(i);
+        currentBeatIdRef.current = list[i].beat.id;
         setStatus("speaking");
         const compile: Compile | null = list[i].beat.mode === "talk" ? null : (currentElements) => compileScene(sceneGroups(list, i, currentElements));
         const beatAbort = new AbortController();
@@ -557,7 +591,7 @@ export default function Lesson() {
         // Cut in mid-beat: listen, answer, then replay this beat from its start.
         if (interruptedRef.current) {
           interruptedRef.current = false;
-          setStatus("listening");
+          setStatus("waiting");
           const heardText = await awaitTurn(abort.signal);
           if (abort.signal.aborted) break;
           if (heardText && !(await answer(heardText, "interrupt", list[i].beat.say))) break;
@@ -594,27 +628,23 @@ export default function Lesson() {
   const interrupt = useCallback(() => {
     if (statusRef.current !== "speaking" || !beatAbortRef.current) return;
     interruptedRef.current = true;
+    resumeRef.current = { beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
     beatAbortRef.current.abort();
     audioRef.current?.stop();
     playerRef.current?.pause();
-  }, []);
-
-  // Space cuts in while Chalky speaks (unless you're typing).
+    // The audio is cut: open the mic now rather than after the echo tail.
+    setSpeaking(false);
+    setStatus("waiting");
+  }, [setSpeaking]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || (e.target as HTMLElement)?.tagName === "INPUT") return;
-      if (statusRef.current === "speaking") {
-        e.preventDefault();
-        interrupt();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    pauseRef.current = interrupt;
   }, [interrupt]);
+  // Space is handled by the hybrid mic (hold to barge in); the old Space handler is gone so the two don't fight.
 
   const startTalking = useCallback(async () => {
     try {
       await voice.start();
+      voice.setKeyterms(BASE_KEYTERMS);
       const abort = new AbortController();
       abortRef.current = abort;
       setStatus("speaking");
@@ -642,9 +672,9 @@ export default function Lesson() {
     : status === "planning" || status === "replying" ? "thinking"
     : voice.started ? "listening"
     : "idle";
-  const orbLevel = useCallback(() => (speakingRef.current ? (audioRef.current?.level() ?? 0) : voice.micLevel()), [voice]);
+  const orbLevel = useCallback(() => (speakingRef.current ? (audioRef.current?.level() ?? 0) : voice.level()), [voice]);
   const statusLabel: Record<Status, string> = {
-    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: "Speaking", waiting: "Your turn",
+    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", waiting: "Your turn",
     listening: "Listening", replying: "Thinking…", done: voice.started ? "Done · ask another" : "Done", stopped: "Stopped", error: "Error",
   };
   const showWelcome = !question && status !== "speaking";
@@ -661,7 +691,7 @@ export default function Lesson() {
 
   return (
     <div className="board-wrap">
-      <div className="board" data-status={status}>
+      <div className="board" data-status={status} data-mic={voice.mode}>
         <header className="topic">
           <h1 data-testid="title">{title}</h1>
           <form
@@ -730,6 +760,8 @@ export default function Lesson() {
         <footer className="caption" data-testid="caption">
           {voice.partial ? (
             <p className="heard" data-testid="heard">“{voice.partial}”</p>
+          ) : heardNote && !question ? (
+            <p className="heard" data-testid="heard-note">{heardNote}</p>
           ) : (
             <p>
               {words.map((w, i) => (

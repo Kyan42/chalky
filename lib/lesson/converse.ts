@@ -12,6 +12,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
+import { isResume } from "./resume";
 import type { BeatMode } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
@@ -84,19 +85,7 @@ export type ConverseEvent =
   | { type: "done"; tMs: number; model: string; inputTokens: number; outputTokens: number; fellBack: boolean }
   | { type: "error"; message: string; tMs: number };
 
-/**
- * Replies that just mean "carry on": the fast path in components/Lesson.tsx,
- * widened to allow several acknowledgements in a row ("yeah ok keep going").
- */
-const ACK = "ok(ay)?|sure|yes|yeah|yep|yup|right|alright|got it|i see|makes sense|that makes sense|thanks?( you)?|cool|great|good|fine|uh huh|mhm";
-const GO = "resume|continue|keep going|go on|carry on|next|never ?mind|move on|go ahead";
-const GAP = "[^a-z0-9]*";
-const RESUME = new RegExp(`^${GAP}((${ACK})${GAP})*((${GO})${GAP})?$`, "i");
-
-export function isResume(text: string): boolean {
-  const t = text.trim();
-  return t.length > 0 && RESUME.test(t);
-}
+export { isResume };
 
 const SENTINEL = "<<<trailer>>>";
 
