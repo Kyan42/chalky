@@ -55,3 +55,19 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   color: #ddd; font-size: 13px; }
 .controls button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 0; cursor: pointer; }
 .controls .err { color: #ff8a80; max-width: 60vw; }
+
+/* Lesson page: question box and the planned beats. */
+.ask { display: flex; gap: 6px; align-items: center; flex: 1; justify-content: center; padding: 0 2%; }
+.ask input { width: min(520px, 100%); font: inherit; font-size: clamp(11px, 1vw, 15px); padding: 0.45em 0.8em;
+  border-radius: 6px; border: 1px solid var(--rule); background: #fff; color: var(--ink); }
+.ask button { font: inherit; font-size: clamp(11px, 1vw, 14px); padding: 0.45em 0.9em; border-radius: 6px;
+  border: 1px solid var(--rule); background: var(--ink); color: #fff; cursor: pointer; }
+.ask button[data-testid="stop"] { background: #fff; color: var(--ink); }
+.lesson-error { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); background: #3a1d1d; color: #ffb4a8;
+  padding: 6px 12px; border-radius: 6px; font-size: 13px; max-width: 70vw; }
+.lesson-beats ol { margin: 1em 0 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 0.7em; }
+.lesson-beats li { color: var(--muted); }
+.lesson-beats li[data-state="now"] { color: var(--ink); }
+.lesson-beats li[data-state="done"] .beat-say { color: var(--ink); opacity: 0.6; }
+.beat-say { display: block; }
+.beat-meta { display: block; font-size: 0.85em; color: var(--muted); margin-top: 0.2em; }

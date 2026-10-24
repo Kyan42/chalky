@@ -22,3 +22,4 @@ npm-debug.log*
 # visual-flex experiment: model-written level 4 code and render output
 /experiments/visual-flex/.tmp/
 /experiments/visual-flex/out/
+/experiments/lesson-e2e/
