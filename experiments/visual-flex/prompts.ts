@@ -93,7 +93,7 @@ Return JSON matching the schema.`;
 
 // Same reason as level 2: one flat element shape with every field required.
 // `args` holds the kind's numbers in a fixed order; `text` holds a label or a plot's fn.
-const L3_SCHEMA = {
+export const L3_SCHEMA = {
   type: "object",
   properties: {
     elements: {
@@ -120,7 +120,13 @@ const L3_SCHEMA = {
 function level3(beat: ExperimentBeat): string {
   return `${beatBrief(beat)}
 
-Draw the visual yourself with a small scene language. The canvas is a 100x100 grid: x goes right, y goes down, (0,0) is top left. The canvas is 3:2 (wider than tall), so 1 unit of x is 1.5x as long on screen as 1 unit of y. Use at most 30 elements. Every element has kind, at (seconds after the anchor word when it appears, 0–4.5), dur (seconds it takes to draw, 0.1–3), color, args (numbers, in the order below) and text ("" when unused).
+${SCENE_LANGUAGE}
+
+Return JSON matching the schema.`;
+}
+
+/** The level 3 scene language, shared with the live lesson's visual route. */
+export const SCENE_LANGUAGE = `Draw the visual yourself with a small scene language. The canvas is a 100x100 grid: x goes right, y goes down, (0,0) is top left. The canvas is 3:2 (wider than tall), so 1 unit of x is 1.5x as long on screen as 1 unit of y. Use at most 30 elements. Every element has kind, at (seconds after the anchor word when it appears, 0–4.5), dur (seconds it takes to draw, 0.1–3), color, args (numbers, in the order below) and text ("" when unused).
 
 Kinds and their args:
 - line: x1, y1, x2, y2, x3, y3, ... (2+ points). Draws itself along the points.
@@ -131,10 +137,7 @@ Kinds and their args:
 - bar: x (left), baseline (bottom y), w, h. Grows up from the baseline.
 - move: x1, y1, x2, y2, r (dot radius, e.g. 1.2). A dot that travels.
 - text: x, y (centre), size (pixels on a ${W}x${H} stage, e.g. 34). text = the label (max 4 words).
-Colors: ${COLORS.join(", ")}. Keep everything inside 3..97 on both axes and leave space between labels.
-
-Return JSON matching the schema.`;
-}
+Colors: ${COLORS.join(", ")}. Keep everything inside 3..97 on both axes and leave space between labels.`;
 
 // ---------- Level 4: raw Clayzo authoring code ----------
 

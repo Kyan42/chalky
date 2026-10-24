@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { BEATS, estimateVisualSeconds, type ExperimentBeat } from "./beats";
 import { compileLevel1, compileLevel2, type Level2Spec } from "./primitives";
 import { promptFor, type Level } from "./prompts";
-import { compileLevel3, type SceneElement } from "./scene";
+import { compileLevel3, fromFlatElements, type FlatElement } from "./scene";
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, "public/experiments/visual-flex");
@@ -108,50 +108,6 @@ function level2Spec(json: { layout: Level2Spec["layout"]; caption: string; items
   };
 }
 
-/** Level 3 sends each element's numbers as `args` in a fixed order per kind. */
-function level3Spec(json: { elements: { kind: string; at: number; dur: number; color: string; args: number[]; text: string }[] }) {
-  return {
-    elements: json.elements.map((e): SceneElement => {
-      const a = e.args;
-      const need = (n: number) => {
-        if (a.length < n) throw new Error(`${e.kind} needs ${n} args, got ${a.length}`);
-      };
-      const common = { at: e.at, dur: e.dur, color: e.color };
-      switch (e.kind) {
-        case "line": {
-          need(4);
-          const points: [number, number][] = [];
-          for (let i = 0; i + 1 < a.length; i += 2) points.push([a[i], a[i + 1]]);
-          return { kind: "line", points, ...common };
-        }
-        case "plot":
-          need(4);
-          return { kind: "plot", fn: e.text, box: [a[0], a[1], a[2], a[3]], xRange: a.length >= 6 ? [a[4], a[5]] : undefined, ...common };
-        case "circle":
-          need(3);
-          return { kind: "circle", cx: a[0], cy: a[1], r: a[2], filled: a[3] !== 0, ...common };
-        case "rect":
-          need(4);
-          return { kind: "rect", x: a[0], y: a[1], w: a[2], h: a[3], filled: a[4] !== 0, ...common };
-        case "arrow":
-          need(4);
-          return { kind: "arrow", from: [a[0], a[1]], to: [a[2], a[3]], ...common };
-        case "bar":
-          need(4);
-          return { kind: "bar", x: a[0], baseline: a[1], w: a[2], h: a[3], ...common };
-        case "move":
-          need(4);
-          return { kind: "move", from: [a[0], a[1]], to: [a[2], a[3]], r: a[4], ...common };
-        case "text":
-          need(2);
-          return { kind: "text", x: a[0], y: a[1], size: a[2], text: e.text, ...common };
-        default:
-          throw new Error(`unknown element kind "${e.kind}"`);
-      }
-    }),
-  };
-}
-
 const ALLOWED_IMPORT = "@clayzo/animation/authoring";
 const FORBIDDEN = /\brequire\s*\(|\bprocess\s*\.|\bglobalThis\b|\beval\s*\(|\bnew\s+Function\b|\bfetch\s*\(|\bimport\s*\(|child_process|XMLHttpRequest|WebSocket/;
 
@@ -202,7 +158,7 @@ async function toDocument(level: Level, text: string, id: string): Promise<{ doc
   const json = clean(JSON.parse(text)) as Record<string, unknown>;
   if (level === 1) return { doc: compileLevel1(String(json.primitive), id), output: json };
   if (level === 2) return { doc: compileLevel2(level2Spec(json as unknown as Parameters<typeof level2Spec>[0]), id), output: json };
-  return { doc: compileLevel3(level3Spec(json as unknown as Parameters<typeof level3Spec>[0]), id), output: json };
+  return { doc: compileLevel3(fromFlatElements(json as unknown as { elements: FlatElement[] }), id), output: json };
 }
 
 // ---------- one generation, with one repair turn ----------

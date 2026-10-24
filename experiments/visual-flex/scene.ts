@@ -90,3 +90,57 @@ export function compileLevel3(spec: Level3Spec, id: string) {
   }
   return s.build(id, "L3 scene");
 }
+
+/** One element as the model sends it: every field present, numbers packed into `args`. */
+export interface FlatElement {
+  kind: string;
+  at: number;
+  dur: number;
+  color: string;
+  args: number[];
+  text: string;
+}
+
+/** Level 3 sends each element's numbers as `args` in a fixed order per kind. */
+export function fromFlatElements(json: { elements: FlatElement[] }): Level3Spec {
+  return {
+    elements: json.elements.map((e): SceneElement => {
+      const a = e.args;
+      const need = (n: number) => {
+        if (a.length < n) throw new Error(`${e.kind} needs ${n} args, got ${a.length}`);
+      };
+      const common = { at: e.at, dur: e.dur, color: e.color };
+      switch (e.kind) {
+        case "line": {
+          need(4);
+          const points: [number, number][] = [];
+          for (let i = 0; i + 1 < a.length; i += 2) points.push([a[i], a[i + 1]]);
+          return { kind: "line", points, ...common };
+        }
+        case "plot":
+          need(4);
+          return { kind: "plot", fn: e.text, box: [a[0], a[1], a[2], a[3]], xRange: a.length >= 6 ? [a[4], a[5]] : undefined, ...common };
+        case "circle":
+          need(3);
+          return { kind: "circle", cx: a[0], cy: a[1], r: a[2], filled: a[3] !== 0, ...common };
+        case "rect":
+          need(4);
+          return { kind: "rect", x: a[0], y: a[1], w: a[2], h: a[3], filled: a[4] !== 0, ...common };
+        case "arrow":
+          need(4);
+          return { kind: "arrow", from: [a[0], a[1]], to: [a[2], a[3]], ...common };
+        case "bar":
+          need(4);
+          return { kind: "bar", x: a[0], baseline: a[1], w: a[2], h: a[3], ...common };
+        case "move":
+          need(4);
+          return { kind: "move", from: [a[0], a[1]], to: [a[2], a[3]], r: a[4], ...common };
+        case "text":
+          need(2);
+          return { kind: "text", x: a[0], y: a[1], size: a[2], text: e.text, ...common };
+        default:
+          throw new Error(`unknown element kind "${e.kind}"`);
+      }
+    }),
+  };
+}
