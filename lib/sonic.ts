@@ -1,0 +1,123 @@
+/**
+ * Server-only: Cartesia Sonic TTS over SSE with word timestamps.
+ *
+ * Request and event shapes follow Cartesia's official SDK
+ * (@cartesia/cartesia-js 4.2.0, `tts.generateSSE`): POST /tts/sse with
+ * `add_timestamps: true`; events are `chunk` (base64 audio), `timestamps`
+ * (`word_timestamps: { words, start, end }` in seconds), `done` and `error`.
+ */
+import "server-only";
+
+export const SONIC_SAMPLE_RATE = 44100;
+const CARTESIA_URL = "https://api.cartesia.ai/tts/sse";
+const CARTESIA_VERSION = "2026-08-14";
+const DEFAULT_VOICE = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"; // the SDK README's example voice
+const DEFAULT_MODEL = "sonic-3";
+
+/** What the route streams to the browser, one JSON object per line. */
+export type BeatAudioEvent =
+  | { type: "start"; source: "sonic"; sampleRate: number; encoding: "pcm_f32le" }
+  | { type: "audio"; seq: number; data: string; bytes: number; tMs: number }
+  | { type: "timestamps"; words: string[]; start: number[]; end: number[]; tMs: number }
+  | { type: "done"; tMs: number; stats: SonicStats }
+  | { type: "error"; message: string; tMs: number };
+
+export interface SonicStats {
+  firstAudioMs: number | null;
+  firstTimestampsMs: number | null;
+  chunks: number;
+  bytes: number;
+  audioSeconds: number;
+  /** Order in which the first audio chunk and the first timestamps arrived. */
+  order: ("audio" | "timestamps")[];
+}
+
+/** Splits an SSE byte stream into the JSON payloads of its `data:` lines. */
+async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let split: number;
+    while ((split = buffer.search(/\r?\n\r?\n/)) >= 0) {
+      const block = buffer.slice(0, split);
+      buffer = buffer.slice(split).replace(/^\r?\n\r?\n/, "");
+      const data = block
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data) yield data;
+    }
+  }
+  if (buffer.trim().startsWith("data:")) yield buffer.trim().slice(5).trimStart();
+}
+
+export async function* sonicStream(text: string, signal: AbortSignal): AsyncGenerator<BeatAudioEvent> {
+  // Locally the key comes from .env.local. In the cloud environment it is a
+  // network secret: the egress proxy adds the Authorization header itself.
+  const key = process.env.CARTESIA_API_KEY;
+
+  const t0 = performance.now();
+  const ms = () => Math.round(performance.now() - t0);
+  const stats: SonicStats = { firstAudioMs: null, firstTimestampsMs: null, chunks: 0, bytes: 0, audioSeconds: 0, order: [] };
+
+  const response = await fetch(CARTESIA_URL, {
+    method: "POST",
+    signal,
+    headers: {
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      "Cartesia-Version": CARTESIA_VERSION,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      model_id: process.env.CARTESIA_MODEL_ID || DEFAULT_MODEL,
+      transcript: text,
+      voice: { id: process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE },
+      output_format: { container: "raw", encoding: "pcm_f32le", sample_rate: SONIC_SAMPLE_RATE },
+      language: "en",
+      add_timestamps: true,
+    }),
+  });
+  if (!response.ok || !response.body) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Cartesia responded ${response.status}: ${detail.slice(0, 500)}`);
+  }
+
+  yield { type: "start", source: "sonic", sampleRate: SONIC_SAMPLE_RATE, encoding: "pcm_f32le" };
+  for await (const raw of sseData(response.body)) {
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (event.type === "chunk" && typeof event.data === "string") {
+      const bytes = Math.floor((event.data.length * 3) / 4) - (event.data.endsWith("==") ? 2 : event.data.endsWith("=") ? 1 : 0);
+      if (stats.firstAudioMs === null) {
+        stats.firstAudioMs = ms();
+        stats.order.push("audio");
+      }
+      stats.bytes += bytes;
+      stats.audioSeconds = stats.bytes / 4 / SONIC_SAMPLE_RATE;
+      yield { type: "audio", seq: stats.chunks++, data: event.data, bytes, tMs: ms() };
+    } else if (event.type === "timestamps" && event.word_timestamps) {
+      const wt = event.word_timestamps as { words: string[]; start: number[]; end: number[] };
+      if (stats.firstTimestampsMs === null) {
+        stats.firstTimestampsMs = ms();
+        stats.order.push("timestamps");
+      }
+      yield { type: "timestamps", words: wt.words, start: wt.start, end: wt.end, tMs: ms() };
+    } else if (event.type === "error") {
+      yield { type: "error", message: String(event.message ?? event.title ?? "Cartesia error"), tMs: ms() };
+      return;
+    } else if (event.type === "done") {
+      break;
+    }
+  }
+  yield { type: "done", tMs: ms(), stats };
+}

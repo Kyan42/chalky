@@ -1,0 +1,204 @@
+{
+  "done": true,
+  "ticksPerSecond": 240,
+  "frameRate": {
+    "numerator": 60,
+    "denominator": 1
+  },
+  "coverage": {
+    "supported": true,
+    "reasons": []
+  },
+  "createPlayerMs": 168,
+  "seek": [
+    {
+      "requested": 0,
+      "reported": 0,
+      "seekMs": 43.9,
+      "inkExtent": 0
+    },
+    {
+      "requested": 1,
+      "reported": 1,
+      "seekMs": 0,
+      "inkExtent": 0
+    },
+    {
+      "requested": 2,
+      "reported": 2,
+      "seekMs": 32,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 3,
+      "reported": 3,
+      "seekMs": 0,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 4,
+      "reported": 4,
+      "seekMs": 0.1,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 5,
+      "reported": 5,
+      "seekMs": 0,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 6,
+      "reported": 6,
+      "seekMs": 34.7,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 7,
+      "reported": 7,
+      "seekMs": 0,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 8,
+      "reported": 8,
+      "seekMs": 0,
+      "inkExtent": 0.0975
+    },
+    {
+      "requested": 48,
+      "reported": 48,
+      "seekMs": 43.4,
+      "inkExtent": 0.115
+    },
+    {
+      "requested": 96,
+      "reported": 96,
+      "seekMs": 49.4,
+      "inkExtent": 0.2117
+    },
+    {
+      "requested": 97,
+      "reported": 97,
+      "seekMs": 0,
+      "inkExtent": 0.2117
+    },
+    {
+      "requested": 98,
+      "reported": 98,
+      "seekMs": 44.2,
+      "inkExtent": 0.2183
+    },
+    {
+      "requested": 99,
+      "reported": 99,
+      "seekMs": 0.1,
+      "inkExtent": 0.2183
+    },
+    {
+      "requested": 100,
+      "reported": 100,
+      "seekMs": 0,
+      "inkExtent": 0.2183
+    },
+    {
+      "requested": 101,
+      "reported": 101,
+      "seekMs": 0,
+      "inkExtent": 0.2183
+    },
+    {
+      "requested": 192,
+      "reported": 192,
+      "seekMs": 43.3,
+      "inkExtent": 0.5058
+    },
+    {
+      "requested": 288,
+      "reported": 288,
+      "seekMs": 43,
+      "inkExtent": 0.7992
+    },
+    {
+      "requested": 383,
+      "reported": 383,
+      "seekMs": 37.7,
+      "inkExtent": 0.9142
+    },
+    {
+      "requested": 384,
+      "reported": 384,
+      "seekMs": 0,
+      "inkExtent": 0.9142
+    },
+    {
+      "requested": 479,
+      "reported": 479,
+      "seekMs": 43.4,
+      "inkExtent": 0.9142
+    },
+    {
+      "requested": 600,
+      "reported": 600,
+      "seekMs": 0.1,
+      "inkExtent": 0.9142
+    }
+  ],
+  "seekPerFrameMs": {
+    "median": 19.8,
+    "p95": 27.7,
+    "max": 28.9
+  },
+  "playRate": {
+    "ticks": 236.15999999999434,
+    "wallSeconds": 1.019,
+    "ticksPerWallSecond": 231.8
+  },
+  "documentSwap": {
+    "hasSetDocumentMethod": false,
+    "method": "dispose() then createPlayer() on the same canvas",
+    "ms": 93,
+    "error": null,
+    "tickAfterSeek": 200
+  },
+  "manyPlayers": [
+    {
+      "index": 0,
+      "playing": true,
+      "framesIn1500ms": 72,
+      "ticksAdvanced": 359.99999999999994
+    },
+    {
+      "index": 1,
+      "playing": true,
+      "framesIn1500ms": 71,
+      "ticksAdvanced": 355.99199999999996
+    },
+    {
+      "index": 2,
+      "playing": true,
+      "framesIn1500ms": 71,
+      "ticksAdvanced": 359.99999999999994
+    },
+    {
+      "index": 3,
+      "playing": true,
+      "framesIn1500ms": 70,
+      "ticksAdvanced": 355.99199999999996
+    },
+    {
+      "index": 4,
+      "playing": true,
+      "framesIn1500ms": 70,
+      "ticksAdvanced": 355.9919999999999
+    },
+    {
+      "index": 5,
+      "playing": true,
+      "framesIn1500ms": 70,
+      "ticksAdvanced": 358.08
+    }
+  ],
+  "errors": [],
+  "ticksPerSecondConvention": 240
+}

@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+# next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+# env files: never commit secrets
+.env*
+!.env.example
+# misc
+.DS_Store
+npm-debug.log*
+# local test output
+/test-results/
+/playwright-report/
+
+# installed agent skills (restore with: npx skills experimental_install)
+.claude/skills/
+.agents/

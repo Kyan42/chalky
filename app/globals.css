@@ -1,0 +1,57 @@
+:root {
+  --paper: #f7f5ef;
+  --ink: #1f2a44;
+  --muted: #8a8577;
+  --rule: #ddd8cb;
+  --accent: #e4572e;
+  --frame: #2b2b2b;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* The board is always 16:9 and as large as the window allows. */
+.board-wrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
+.board {
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  background: var(--paper);
+  display: grid;
+  grid-template-columns: 65fr 35fr;
+  grid-template-rows: 8% 1fr 14%;
+  grid-template-areas:
+    "topic topic"
+    "stage evidence"
+    "caption caption";
+  overflow: hidden;
+}
+
+.topic { grid-area: topic; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2.5%; border-bottom: 1px solid var(--rule); }
+.topic h1 { margin: 0; font-size: clamp(14px, 2vw, 30px); font-weight: 650; letter-spacing: -0.01em; }
+.mic { font-size: clamp(10px, 1vw, 15px); color: var(--muted); display: flex; align-items: center; gap: 0.5em; }
+.mic .dot { width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--rule); }
+.mic[data-state="speaking"] .dot { background: var(--accent); }
+.mic[data-state="paused"] .dot { background: #e0b100; }
+
+.stage { grid-area: stage; position: relative; display: grid; place-items: center;
+  padding: 2%; transition: opacity 120ms linear, filter 120ms linear; }
+.stage[data-dimmed="true"] { opacity: 0.35; filter: grayscale(0.6); }
+.stage .visual { width: 100%; max-height: 100%; aspect-ratio: 3 / 2; }
+.stage canvas { width: 100%; height: 100%; display: block; }
+
+.evidence { grid-area: evidence; border-left: 1px solid var(--rule); padding: 3%;
+  color: var(--muted); font-size: clamp(10px, 1vw, 15px); overflow: hidden; }
+.evidence .empty { border: 1px dashed var(--rule); border-radius: 8px; padding: 1em; }
+
+.caption { grid-area: caption; border-top: 1px solid var(--rule); display: flex; align-items: center;
+  justify-content: center; padding: 0 3%; font-size: clamp(14px, 1.9vw, 30px); text-align: center; }
+.caption .word { color: var(--rule); transition: color 60ms linear; }
+.caption .word[data-state="spoken"] { color: var(--ink); }
+.caption .word[data-state="now"] { color: var(--accent); }
+
+.controls { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center;
+  color: #ddd; font-size: 13px; }
+.controls button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 0; cursor: pointer; }
+.controls .err { color: #ff8a80; max-width: 60vw; }

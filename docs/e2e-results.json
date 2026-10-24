@@ -1,0 +1,864 @@
+{
+  "shots": [
+    {
+      "name": "01-ready",
+      "status": "ready",
+      "speechSeconds": null,
+      "playerTick": 0,
+      "ctx": null,
+      "bytes": null,
+      "outputLevel": null
+    },
+    {
+      "name": "02-before-wave",
+      "status": "speaking",
+      "speechSeconds": 0.8084807256235829,
+      "playerTick": 0,
+      "ctx": {
+        "state": "running",
+        "currentTime": 1.7008616780045351,
+        "sampleRate": 44100
+      },
+      "bytes": 679936,
+      "outputLevel": 0.06676262225857117,
+      "waveWordStart": 0.9133182
+    },
+    {
+      "name": "03-after-wave",
+      "status": "speaking",
+      "speechSeconds": 1.2786848072562358,
+      "playerTick": 86,
+      "ctx": {
+        "state": "running",
+        "currentTime": 2.1710657596371883,
+        "sampleRate": 44100
+      },
+      "bytes": 679936,
+      "outputLevel": 0.17784979375631427
+    },
+    {
+      "name": "04-paused",
+      "status": "paused",
+      "speechSeconds": null,
+      "playerTick": 302,
+      "ctx": {
+        "state": "running",
+        "currentTime": 3.152108843537415,
+        "sampleRate": 44100
+      },
+      "bytes": 679936,
+      "outputLevel": 0,
+      "resumePoint": {
+        "beatId": "b1",
+        "wordIndex": 6,
+        "word": "pressure,",
+        "speechSeconds": 2.178
+      }
+    },
+    {
+      "name": "05-resumed-start",
+      "status": "speaking",
+      "speechSeconds": 0.3092517006802724,
+      "playerTick": 0,
+      "ctx": {
+        "state": "running",
+        "currentTime": 4.702040816326531,
+        "sampleRate": 44100
+      },
+      "bytes": 524288,
+      "outputLevel": 0.2076154799729649
+    },
+    {
+      "name": "06-resumed-drawing",
+      "status": "speaking",
+      "speechSeconds": 1.629886621315192,
+      "playerTick": 195,
+      "ctx": {
+        "state": "running",
+        "currentTime": 6.022675736961451,
+        "sampleRate": 44100
+      },
+      "bytes": 655360,
+      "outputLevel": 0.019167483171481894
+    },
+    {
+      "name": "07-done",
+      "status": "done",
+      "speechSeconds": null,
+      "playerTick": 479,
+      "ctx": {
+        "state": "running",
+        "currentTime": 8.132789115646258,
+        "sampleRate": 44100
+      },
+      "bytes": 655360,
+      "outputLevel": 0.002081926171877858
+    }
+  ],
+  "pauseCheck": {
+    "tickAtPause": 302,
+    "tickAfter800ms": 302,
+    "playerPlaying": false,
+    "speechSecondsAfter": null,
+    "stageDimmed": "true",
+    "peakOutputLevelBeforeSpace": 0.0893,
+    "outputLevel60msAfterSpace": 0,
+    "outputLevel800msAfterSpace": 0,
+    "wordsSpokenBeforeSpace": 2.1581405895691606,
+    "interruptLog": {
+      "at": 4207,
+      "event": "interrupt",
+      "ctxTime": 3.0708,
+      "beatId": "b1",
+      "wordIndex": 6,
+      "word": "pressure,",
+      "speechSeconds": 2.178,
+      "playerTick": 302,
+      "bytes": 679936
+    }
+  },
+  "telemetry": {
+    "source": "sonic",
+    "log": [
+      {
+        "at": 1133,
+        "event": "request",
+        "ctxTime": 0,
+        "runId": 1,
+        "beat": "b1"
+      },
+      {
+        "at": 1922,
+        "event": "first-audio",
+        "ctxTime": 0.7924,
+        "msFromRequest": 789,
+        "serverMs": 769
+      },
+      {
+        "at": 1989,
+        "event": "timestamps",
+        "ctxTime": 0.862,
+        "words": 1,
+        "serverMs": 828,
+        "audibleSpeech": -1
+      },
+      {
+        "at": 2086,
+        "event": "timestamps",
+        "ctxTime": 0.952,
+        "words": 2,
+        "serverMs": 927,
+        "audibleSpeech": 0.06
+      },
+      {
+        "at": 2097,
+        "event": "action-resolved",
+        "ctxTime": 0.9607,
+        "action": "wave.draw",
+        "anchor": "wave",
+        "word": "wave",
+        "wordStart": 0.9133182
+      },
+      {
+        "at": 2097,
+        "event": "timestamps",
+        "ctxTime": 0.9607,
+        "words": 2,
+        "serverMs": 934,
+        "audibleSpeech": 0.068
+      },
+      {
+        "at": 2175,
+        "event": "timestamps",
+        "ctxTime": 1.042,
+        "words": 1,
+        "serverMs": 1017,
+        "audibleSpeech": 0.15
+      },
+      {
+        "at": 2221,
+        "event": "word",
+        "ctxTime": 1.0913,
+        "index": 0,
+        "word": "Noise",
+        "speech": 0.199
+      },
+      {
+        "at": 2251,
+        "event": "timestamps",
+        "ctxTime": 1.1204,
+        "words": 1,
+        "serverMs": 1095,
+        "audibleSpeech": 0.228
+      },
+      {
+        "at": 2341,
+        "event": "timestamps",
+        "ctxTime": 1.2103,
+        "words": 1,
+        "serverMs": 1181,
+        "audibleSpeech": 0.318
+      },
+      {
+        "at": 2437,
+        "event": "timestamps",
+        "ctxTime": 1.3003,
+        "words": 1,
+        "serverMs": 1278,
+        "audibleSpeech": 0.408
+      },
+      {
+        "at": 2481,
+        "event": "timestamps",
+        "ctxTime": 1.3526,
+        "words": 1,
+        "serverMs": 1326,
+        "audibleSpeech": 0.46
+      },
+      {
+        "at": 2481,
+        "event": "stream-done",
+        "ctxTime": 1.3526,
+        "serverMs": 1326,
+        "bytes": 679936,
+        "receivedSeconds": 3.8545124716553296
+      },
+      {
+        "at": 2704,
+        "event": "word",
+        "ctxTime": 1.5702,
+        "index": 1,
+        "word": "is",
+        "speech": 0.678
+      },
+      {
+        "at": 2854,
+        "event": "word",
+        "ctxTime": 1.7212,
+        "index": 2,
+        "word": "a",
+        "speech": 0.829
+      },
+      {
+        "at": 2954,
+        "event": "word",
+        "ctxTime": 1.8228,
+        "index": 3,
+        "word": "wave",
+        "speech": 0.93
+      },
+      {
+        "at": 2986,
+        "event": "wave-started",
+        "ctxTime": 1.8518,
+        "word": "wave",
+        "wordStart": 0.9133182,
+        "firstMovedSpeech": 0.9594,
+        "lateByMs": 46
+      },
+      {
+        "at": 3271,
+        "event": "word",
+        "ctxTime": 2.142,
+        "index": 4,
+        "word": "of",
+        "speech": 1.25
+      },
+      {
+        "at": 3401,
+        "event": "word",
+        "ctxTime": 2.2727,
+        "index": 5,
+        "word": "air",
+        "speech": 1.38
+      },
+      {
+        "at": 3622,
+        "event": "word",
+        "ctxTime": 2.4903,
+        "index": 6,
+        "word": "pressure,",
+        "speech": 1.598
+      },
+      {
+        "at": 4207,
+        "event": "interrupt",
+        "ctxTime": 3.0708,
+        "beatId": "b1",
+        "wordIndex": 6,
+        "word": "pressure,",
+        "speechSeconds": 2.178,
+        "playerTick": 302,
+        "bytes": 679936
+      },
+      {
+        "at": 5145,
+        "event": "resume",
+        "ctxTime": 4.0112,
+        "from": {
+          "beatId": "b1",
+          "wordIndex": 6,
+          "word": "pressure,",
+          "speechSeconds": 2.178
+        }
+      },
+      {
+        "at": 5162,
+        "event": "request",
+        "ctxTime": 4.0316,
+        "runId": 2,
+        "beat": "b1"
+      },
+      {
+        "at": 5420,
+        "event": "first-audio",
+        "ctxTime": 4.2928,
+        "msFromRequest": 259,
+        "serverMs": 248
+      },
+      {
+        "at": 5476,
+        "event": "timestamps",
+        "ctxTime": 4.3421,
+        "words": 1,
+        "serverMs": 301,
+        "audibleSpeech": -1
+      },
+      {
+        "at": 5573,
+        "event": "timestamps",
+        "ctxTime": 4.4408,
+        "words": 1,
+        "serverMs": 398,
+        "audibleSpeech": 0.048
+      },
+      {
+        "at": 5578,
+        "event": "timestamps",
+        "ctxTime": 4.4524,
+        "words": 1,
+        "serverMs": 403,
+        "audibleSpeech": 0.06
+      },
+      {
+        "at": 5584,
+        "event": "action-resolved",
+        "ctxTime": 4.4524,
+        "action": "wave.draw",
+        "anchor": "wave",
+        "word": "wave",
+        "wordStart": 0.8049584
+      },
+      {
+        "at": 5584,
+        "event": "timestamps",
+        "ctxTime": 4.4524,
+        "words": 2,
+        "serverMs": 407,
+        "audibleSpeech": 0.06
+      },
+      {
+        "at": 5658,
+        "event": "timestamps",
+        "ctxTime": 4.5308,
+        "words": 1,
+        "serverMs": 484,
+        "audibleSpeech": 0.138
+      },
+      {
+        "at": 5738,
+        "event": "word",
+        "ctxTime": 4.6121,
+        "index": 0,
+        "word": "Noise",
+        "speech": 0.219
+      },
+      {
+        "at": 5742,
+        "event": "timestamps",
+        "ctxTime": 4.6121,
+        "words": 1,
+        "serverMs": 566,
+        "audibleSpeech": 0.219
+      },
+      {
+        "at": 5827,
+        "event": "timestamps",
+        "ctxTime": 4.6904,
+        "words": 1,
+        "serverMs": 648,
+        "audibleSpeech": 0.298
+      },
+      {
+        "at": 5908,
+        "event": "timestamps",
+        "ctxTime": 4.7804,
+        "words": 1,
+        "serverMs": 732,
+        "audibleSpeech": 0.388
+      },
+      {
+        "at": 5943,
+        "event": "timestamps",
+        "ctxTime": 4.8123,
+        "words": 1,
+        "serverMs": 768,
+        "audibleSpeech": 0.42
+      },
+      {
+        "at": 5943,
+        "event": "stream-done",
+        "ctxTime": 4.8123,
+        "serverMs": 769,
+        "bytes": 655360,
+        "receivedSeconds": 3.715192743764173
+      },
+      {
+        "at": 6154,
+        "event": "word",
+        "ctxTime": 5.0213,
+        "index": 1,
+        "word": "is",
+        "speech": 0.629
+      },
+      {
+        "at": 6271,
+        "event": "word",
+        "ctxTime": 5.1403,
+        "index": 2,
+        "word": "a",
+        "speech": 0.748
+      },
+      {
+        "at": 6337,
+        "event": "word",
+        "ctxTime": 5.2013,
+        "index": 3,
+        "word": "wave",
+        "speech": 0.808
+      },
+      {
+        "at": 6337,
+        "event": "wave-started",
+        "ctxTime": 5.2013,
+        "word": "wave",
+        "wordStart": 0.8049584,
+        "firstMovedSpeech": 0.8085,
+        "lateByMs": 4
+      },
+      {
+        "at": 6720,
+        "event": "word",
+        "ctxTime": 5.5902,
+        "index": 4,
+        "word": "of",
+        "speech": 1.197
+      },
+      {
+        "at": 6904,
+        "event": "word",
+        "ctxTime": 5.7702,
+        "index": 5,
+        "word": "air",
+        "speech": 1.377
+      },
+      {
+        "at": 7121,
+        "event": "word",
+        "ctxTime": 5.9907,
+        "index": 6,
+        "word": "pressure,",
+        "speech": 1.598
+      },
+      {
+        "at": 7943,
+        "event": "word",
+        "ctxTime": 6.8122,
+        "index": 7,
+        "word": "rising",
+        "speech": 2.419
+      },
+      {
+        "at": 8554,
+        "event": "word",
+        "ctxTime": 7.4217,
+        "index": 8,
+        "word": "and",
+        "speech": 3.029
+      },
+      {
+        "at": 8737,
+        "event": "word",
+        "ctxTime": 7.6016,
+        "index": 9,
+        "word": "falling.",
+        "speech": 3.209
+      },
+      {
+        "at": 9254,
+        "event": "beat-done",
+        "ctxTime": 8.1212
+      }
+    ],
+    "firstAudioMs": 259,
+    "serverStats": {
+      "firstAudioMs": 248,
+      "firstTimestampsMs": 301,
+      "chunks": 21,
+      "bytes": 655360,
+      "audioSeconds": 3.7151927437641725,
+      "order": [
+        "audio",
+        "timestamps"
+      ]
+    },
+    "timestampLead": [
+      {
+        "word": "Noise",
+        "startsAt": 0.18575963,
+        "audibleAt": -1,
+        "leadMs": 186
+      },
+      {
+        "word": "is",
+        "startsAt": 0.6656387,
+        "audibleAt": 0.06,
+        "leadMs": 606
+      },
+      {
+        "word": "a",
+        "startsAt": 0.8204384,
+        "audibleAt": 0.06,
+        "leadMs": 761
+      },
+      {
+        "word": "wave",
+        "startsAt": 0.9133182,
+        "audibleAt": 0.068,
+        "leadMs": 845
+      },
+      {
+        "word": "of",
+        "startsAt": 1.2383976,
+        "audibleAt": 0.068,
+        "leadMs": 1170
+      },
+      {
+        "word": "air",
+        "startsAt": 1.3622373,
+        "audibleAt": 0.15,
+        "leadMs": 1213
+      },
+      {
+        "word": "pressure,",
+        "startsAt": 1.5944369,
+        "audibleAt": 0.228,
+        "leadMs": 1366
+      },
+      {
+        "word": "rising",
+        "startsAt": 2.2910354,
+        "audibleAt": 0.318,
+        "leadMs": 1973
+      },
+      {
+        "word": "and",
+        "startsAt": 3.157914,
+        "audibleAt": 0.408,
+        "leadMs": 2750
+      },
+      {
+        "word": "falling.",
+        "startsAt": 3.3436735,
+        "audibleAt": 0.46,
+        "leadMs": 2883
+      },
+      {
+        "word": "Noise",
+        "startsAt": 0.2012396,
+        "audibleAt": -1,
+        "leadMs": 201
+      },
+      {
+        "word": "is",
+        "startsAt": 0.6191988,
+        "audibleAt": 0.048,
+        "leadMs": 571
+      },
+      {
+        "word": "a",
+        "startsAt": 0.74303854,
+        "audibleAt": 0.06,
+        "leadMs": 683
+      },
+      {
+        "word": "wave",
+        "startsAt": 0.8049584,
+        "audibleAt": 0.06,
+        "leadMs": 745
+      },
+      {
+        "word": "of",
+        "startsAt": 1.1919577,
+        "audibleAt": 0.06,
+        "leadMs": 1132
+      },
+      {
+        "word": "air",
+        "startsAt": 1.3622373,
+        "audibleAt": 0.138,
+        "leadMs": 1224
+      },
+      {
+        "word": "pressure,",
+        "startsAt": 1.578957,
+        "audibleAt": 0.219,
+        "leadMs": 1360
+      },
+      {
+        "word": "rising",
+        "startsAt": 2.4148753,
+        "audibleAt": 0.298,
+        "leadMs": 2117
+      },
+      {
+        "word": "and",
+        "startsAt": 3.018594,
+        "audibleAt": 0.388,
+        "leadMs": 2631
+      },
+      {
+        "word": "falling.",
+        "startsAt": 3.2043538,
+        "audibleAt": 0.42,
+        "leadMs": 2785
+      }
+    ],
+    "waveCue": {
+      "word": "wave",
+      "wordStart": 0.8049584,
+      "firstMovedSpeech": 0.8085,
+      "lateByMs": 4,
+      "ctxTime": 5.2013
+    },
+    "waveCues": [
+      {
+        "word": "wave",
+        "wordStart": 0.9133182,
+        "firstMovedSpeech": 0.9594,
+        "lateByMs": 46,
+        "ctxTime": 1.8518
+      },
+      {
+        "word": "wave",
+        "wordStart": 0.8049584,
+        "firstMovedSpeech": 0.8085,
+        "lateByMs": 4,
+        "ctxTime": 5.2013
+      }
+    ],
+    "drift": [
+      -29.4,
+      -21,
+      -19.5,
+      -7.4,
+      -11.1,
+      1.4,
+      -6.8,
+      1.6,
+      -13.7,
+      -10.3,
+      -22.3,
+      -13,
+      -12.5,
+      -8.7,
+      -8.2,
+      -20.2,
+      -8.1,
+      -7.5,
+      -7,
+      1.3,
+      -6.9,
+      -18.9,
+      -21.6,
+      -21.1,
+      -9,
+      -12.6,
+      -20.5,
+      -8.3,
+      -7.8,
+      -7.3,
+      1,
+      -18.8,
+      -6.6,
+      -10.3,
+      -9.8,
+      -1.4,
+      -22.1,
+      -21.6,
+      -21.1,
+      -20.6,
+      -20.1,
+      -19.6,
+      -19,
+      -18.5,
+      -22.2,
+      -18.8,
+      -9.5,
+      -13.2,
+      -21,
+      -20.5,
+      -17.1,
+      -12,
+      -11.5,
+      1,
+      -19.7,
+      -19.2,
+      -18.7,
+      -22.3,
+      -21.8,
+      -9.7,
+      -1.3,
+      -17.9,
+      -12.8,
+      -12.3,
+      -11.8,
+      0.7,
+      -20,
+      -19.4,
+      -7.3,
+      -6.8,
+      0.6,
+      -7.5,
+      -7,
+      -10.7,
+      -10.2,
+      -13.4,
+      -0.9,
+      -13.3,
+      -12.8,
+      -12.3,
+      -8.5,
+      -8,
+      0.4,
+      -7.8,
+      -7.3,
+      1,
+      -18.8,
+      -6.6,
+      1.7,
+      -13.6,
+      -13.1,
+      -12.5,
+      -8.7,
+      -12.4,
+      0.1,
+      -8.1,
+      -7.6,
+      0.8,
+      -7.4,
+      -6.9,
+      1.4,
+      -9.7,
+      -13.3,
+      -0.8,
+      -13.2,
+      -21.4,
+      -20.9,
+      -20.3,
+      -11.5,
+      -19.3,
+      -18.8,
+      -27,
+      -10.7,
+      -10.2,
+      -1.8,
+      -12.9,
+      -12.4,
+      -17.3,
+      -12.3,
+      -11.8,
+      -8,
+      -19.1,
+      -6.9,
+      -18.9,
+      -6.8,
+      1.5,
+      -18.3,
+      -13.2,
+      -9.8,
+      -20.9,
+      -8.8,
+      -20.8,
+      -20.2,
+      -19.7,
+      -19.2,
+      -7.1,
+      -10.7,
+      -9.8,
+      -22.2,
+      -10.1,
+      -1.7,
+      -21.5,
+      -21,
+      -20.5,
+      -20,
+      -19.5,
+      -10.6,
+      -18.4,
+      -19.2,
+      -18.7,
+      -13.6,
+      -21.8,
+      -21.3,
+      -20.8,
+      -8.7,
+      -32.2,
+      -7.6,
+      -7.1,
+      -19.1,
+      -18.6,
+      -22.2,
+      -10.1,
+      -1.8,
+      -1.2,
+      -1.6,
+      -1.1,
+      -0.2,
+      0.3,
+      0.8,
+      0.1,
+      1,
+      1.5,
+      1.1,
+      1.6,
+      -2,
+      1.8,
+      -1.9,
+      -1.4,
+      -0.5,
+      0,
+      -0.7,
+      0.2,
+      0.7
+    ],
+    "seeks": 186,
+    "underrunSeconds": 0
+  },
+  "earlyInterrupt": {
+    "speechAtInterrupt": 0.051,
+    "wordAtInterrupt": null,
+    "bytesAtInterrupt": 98304,
+    "bytesAfter2500ms": 98304,
+    "streamDoneEventsForThisRun": 0,
+    "outputLevelAfter": 0,
+    "fullBeatBytes": 655360
+  },
+  "driftMs": {
+    "samples": 183,
+    "min": -32.2,
+    "median": -10.7,
+    "p95": 1.1,
+    "max": 1.8
+  }
+}
