@@ -197,6 +197,69 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** How long a beat waits for its prefetched speech to finish downloading before it just streams. */
+const HOLD_MAX_MS = 8000;
+
+/**
+ * A beat's speech fetched while the beat before it plays: every event is kept,
+ * so the beat plays from memory and never streams while it plays. Tied to one
+ * BeatState object, so a beat removed by a plan change can't be played from it.
+ */
+interface Prefetch {
+  state: BeatState;
+  events: BeatAudioEvent[];
+  bytes: number;
+  done: boolean;
+  failed: boolean;
+  abort: AbortController;
+  settled: Promise<void>;
+  wake: () => void;
+}
+
+function prefetchSpeech(state: BeatState, parent: AbortSignal): Prefetch {
+  const abort = new AbortController();
+  parent.addEventListener("abort", () => abort.abort(), { once: true });
+  const p: Prefetch = { state, events: [], bytes: 0, done: false, failed: false, abort, settled: Promise.resolve(), wake: () => {} };
+  p.settled = (async () => {
+    const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal: abort.signal });
+    if (!r.ok || !r.body) throw new Error(`speech failed (${r.status})`);
+    for await (const ev of ndjson<BeatAudioEvent>(r)) {
+      p.events.push(ev);
+      if (ev.type === "audio") p.bytes += ev.bytes;
+      if (ev.type === "error") throw new Error(ev.message);
+      p.wake();
+    }
+  })()
+    .catch(() => {
+      p.failed = true;
+    })
+    .finally(() => {
+      p.done = true;
+      p.wake();
+    });
+  return p;
+}
+
+/** Plays a prefetch's events back in order, waiting for any still arriving. */
+async function* replayPrefetch(p: Prefetch): AsyncGenerator<BeatAudioEvent> {
+  for (let k = 0; ; ) {
+    while (k >= p.events.length && !p.done) await new Promise<void>((r) => (p.wake = r));
+    if (k >= p.events.length) return;
+    yield p.events[k++];
+  }
+}
+
+/** Speech prefetch bookkeeping for the stats line. */
+interface PrefetchStats {
+  fetched: number;
+  fetchedKB: number;
+  fromMemory: number;
+  dropped: number;
+  wastedKB: number;
+  heldMs: number;
+}
+const NO_PREFETCH: PrefetchStats = { fetched: 0, fetchedKB: 0, fromMemory: 0, dropped: 0, wastedKB: 0, heldMs: 0 };
+
 export default function Lesson() {
   const [draft, setDraft] = useState("");
   const [question, setQuestion] = useState("");
@@ -225,6 +288,9 @@ export default function Lesson() {
   const [lastLevel, setLastLevel] = useState<string | null>(null);
   const [learnerView, setLearnerView] = useState<LearnerRecord | null>(null);
   const [intakeView, setIntakeView] = useState<string | null>(null);
+  const [prefetchStats, setPrefetchStats] = useState<PrefetchStats>(NO_PREFETCH);
+  /** Drops every prefetched beat's speech (an interrupt or a plan change); set by the running lesson. */
+  const dropPrefetchRef = useRef<(why: string) => void>(() => {});
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
@@ -333,7 +399,7 @@ export default function Lesson() {
    * the scene's document around this beat's elements (null: leave the board).
    * Resolves when the speech has played.
    */
-  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void) => {
+  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void }) => {
     const ctx = await unlockAudio();
     setWords(state.beat.say.split(/\s+/));
     setWordIndexNow(-1);
@@ -388,11 +454,21 @@ export default function Lesson() {
         highlightBeat = { ...state.beat, points: state.beat.points.filter((p) => !boxes[p.id]) };
         initial = pointElements(highlightBeat, () => null);
       } else if (compile && state.elements) initial = state.elements;
-      const [response] = await Promise.all([
-        fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal }),
-        compile ? show(initial) : Promise.resolve(),
-      ]);
-      if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
+      // Speech: from memory when the beat before fetched it (waiting for the download to finish, so it
+      // never streams while it plays), else streamed as it arrives (the first beat, replies, a miss).
+      const pre = speech?.prefetch && speech.prefetch.state === state && !speech.prefetch.failed ? speech.prefetch : null;
+      const openStream = async (): Promise<AsyncGenerator<BeatAudioEvent>> => {
+        if (pre) {
+          const t = performance.now();
+          if (!pre.done) await Promise.race([pre.settled, sleep(HOLD_MAX_MS), new Promise((r) => signal.addEventListener("abort", r, { once: true }))]);
+          speech?.onHeld?.(Math.round(performance.now() - t), pre.done && !pre.failed);
+          if (!pre.failed) return replayPrefetch(pre);
+        }
+        const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal });
+        if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
+        return ndjson<BeatAudioEvent>(response);
+      };
+      const [events] = await Promise.all([openStream(), compile ? show(initial) : Promise.resolve()]);
       if (compile && state.draw === "pending") {
         void state.ready.then((elements) => {
           if (!playing || signal.aborted || !elements?.length) return;
@@ -406,7 +482,7 @@ export default function Lesson() {
         });
       }
       raf = requestAnimationFrame(frame);
-      for await (const event of ndjson<BeatAudioEvent>(response)) {
+      for await (const event of events) {
         if (signal.aborted) break;
         if (event.type === "start") {
           audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
@@ -430,6 +506,8 @@ export default function Lesson() {
           }
         } else if (event.type === "done") {
           streamDone = true;
+          // This beat's speech is all here: the next beat's can download now without competing with it.
+          speech?.onStreamed?.();
           // Every word is timed now: place a point beat's highlights exactly.
           if (compile && state.draw === "local" && anchorStart !== null && highlightBeat.points.length) {
             const base = anchorStart;
@@ -538,6 +616,34 @@ export default function Lesson() {
     const noteLearner = () => setLearnerView({ ...learner, confusions: [...learner.confusions], replies: [...learner.replies] });
     noteLearner();
     setIntakeView(null);
+    // One beat of speech ahead: fetched while the beat before plays, dropped on any change of course.
+    const prefetches = new Map<BeatState, Prefetch>();
+    const stats: PrefetchStats = { ...NO_PREFETCH };
+    setPrefetchStats({ ...stats });
+    const kb = (bytes: number) => Math.round(bytes / 1024);
+    const dropPrefetches = (why: string) => {
+      for (const p of prefetches.values()) {
+        p.abort.abort();
+        stats.dropped++;
+        stats.wastedKB += kb(p.bytes);
+        console.info(`[prefetch] dropped ${p.state.beat.id} (${kb(p.bytes)} KB): ${why}`);
+      }
+      prefetches.clear();
+      setPrefetchStats({ ...stats });
+    };
+    dropPrefetchRef.current = dropPrefetches;
+    const prefetchNext = (i: number) => {
+      const next = list[i + 1];
+      if (!next || prefetches.has(next) || abort.signal.aborted) return;
+      const p = prefetchSpeech(next, abort.signal);
+      prefetches.set(next, p);
+      stats.fetched++;
+      void p.settled.then(() => {
+        stats.fetchedKB += kb(p.bytes);
+        setPrefetchStats({ ...stats });
+      });
+    };
+
     /** Beats after the first wait for the intake's decision, so a speculative beat 2 never plays before an amended one. */
     let intakeGate: Promise<void> = Promise.resolve();
 
@@ -710,6 +816,7 @@ export default function Lesson() {
     /** Replaces the lesson from list position `from` with a new ending, streamed in as it is planned. */
     const replan = (from: number, note: string, heardText: string, intake = false) => {
       dropDraft();
+      dropPrefetches(intake ? "the intake rewrote the plan" : "replan");
       const before = list.map((s) => s.beat);
       planReplaced = true;
       list.splice(from);
@@ -934,6 +1041,7 @@ export default function Lesson() {
           const detour = await d.beats.catch(() => [] as BeatState[]);
           if (abort.signal.aborted) return -1;
           if (detour.length) {
+            dropPrefetches("detour inserted");
             list.splice(resumeAt, 0, ...detour);
             setBeats([...list]);
             return resumeAt;
@@ -1052,8 +1160,21 @@ export default function Lesson() {
         const beatAbort = new AbortController();
         beatAbortRef.current = beatAbort;
         abort.signal.addEventListener("abort", () => beatAbort.abort(), { once: true });
+        // Only the prefetch made for exactly this beat object can play it; anything else left over is stale.
+        const pre = prefetches.get(list[i]) ?? null;
+        prefetches.delete(list[i]);
+        if (prefetches.size) dropPrefetches("out of order");
+        const bi2 = i;
         try {
-          await playBeat(list[i], beatAbort.signal, compile, onLessonSound);
+          await playBeat(list[i], beatAbort.signal, compile, onLessonSound, {
+            prefetch: pre,
+            onStreamed: () => prefetchNext(bi2),
+            onHeld: (ms, fromMemory) => {
+              stats.heldMs += ms;
+              if (fromMemory) stats.fromMemory++;
+              setPrefetchStats({ ...stats });
+            },
+          });
         } catch (e) {
           if (!interruptedRef.current) throw e;
         }
@@ -1111,6 +1232,7 @@ export default function Lesson() {
       reply.abort();
       replyAbortRef.current = null;
     } else if (beat) {
+      dropPrefetchRef.current("interrupted");
       interruptedRef.current = true;
       resumeRef.current = { beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
       setPausedAt(resumeRef.current);
@@ -1251,6 +1373,11 @@ export default function Lesson() {
           {lastReplyMs !== null && <p className="beat-meta" data-testid="reply-ms">Last answer: first sound {(lastReplyMs / 1000).toFixed(1)} s after the learner finished.</p>}
           {lastLevel && <p className="beat-meta" data-testid="last-level">Last turn: {lastLevel}</p>}
           {intakeView && <p className="beat-meta" data-testid="intake">Intake: {intakeView}</p>}
+          {prefetchStats.fetched > 0 && (
+            <p className="beat-meta" data-testid="prefetch">
+              Speech one beat ahead: {prefetchStats.fetched} fetched ({prefetchStats.fetchedKB} KB), {prefetchStats.fromMemory} played from memory, held {(prefetchStats.heldMs / 1000).toFixed(1)} s in all; {prefetchStats.dropped} dropped ({prefetchStats.wastedKB} KB wasted).
+            </p>
+          )}
           {learnerView && (learnerView.level !== "unknown" || learnerView.prior || learnerView.focus || learnerView.confusions.length > 0) && (
             <p className="beat-meta" data-testid="learner">
               Learner: {[learnerView.level !== "unknown" && `level ${learnerView.level}`, learnerView.prior && `prior: ${learnerView.prior}`, learnerView.focus && `focus: ${learnerView.focus}`, learnerView.confusions.length > 0 && `${learnerView.confusions.length} confusion(s)`].filter(Boolean).join(" · ")}

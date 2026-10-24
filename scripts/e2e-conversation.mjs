@@ -111,17 +111,20 @@ const state = () =>
       paused: document.querySelector('[data-testid="paused-at"]')?.textContent ?? null,
       reply: document.querySelector('[data-testid="reply-ms"]')?.textContent ?? null,
       error: document.querySelector('[data-testid="error"]')?.textContent ?? null,
+      prefetch: document.querySelector('[data-testid="prefetch"]')?.textContent ?? null,
       cursor: g ? { opacity: +g.getAttribute("opacity"), target: g.dataset.target, phase: g.dataset.phase } : null,
     };
   });
 
 // Frames every half second, in the background.
 let frame = 0;
+let lastPrefetch = null;
 let filming = true;
 const film = (async () => {
   while (filming) {
     const s = await state().catch(() => null);
     await page.screenshot({ path: join(OUT, `f${String(frame++).padStart(3, "0")}-${since()}s.png`) }).catch(() => {});
+    if (s?.prefetch) lastPrefetch = s.prefetch;
     if (s) {
       const line = `${s.status} (mic ${s.mic}) | beat ${s.beat ?? "-"} | word "${s.word}" | cursor ${s.cursor && s.cursor.opacity > 0.05 ? `${s.cursor.phase} ${s.cursor.target}` : "hidden"}${s.error ? ` | ERROR ${s.error}` : ""}`;
       if (line !== film.last) console.log(`${since().padStart(5)} s    ${line}`);
@@ -159,7 +162,7 @@ const say = async (name) => {
 };
 
 try {
-  await page.goto(`${BASE_URL}/lesson${FIXTURE ? `?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 4}` : ""}`, { waitUntil: "load" });
+  await page.goto(`${BASE_URL}/lesson${FIXTURE ? `?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 4}&intake=0` : ""}`, { waitUntil: "load" });
   await page.click('[data-testid="start-talking"]');
   await waitFor("greeting to end", (s) => s.status === "Listening", 20000);
   // 1. Ask (by voice, or typed with a fixture so the question matches the saved plan).
@@ -234,6 +237,7 @@ try {
   await page.screenshot({ path: join(OUT, "end.png") }).catch(() => {});
   await browser.close();
   const count = (p) => calls.filter((c) => c.path === p).length;
+  console.log(`prefetch: ${lastPrefetch ?? "(no prefetch line)"}`);
   console.log(`\ncalls: plan ${count("/api/plan")}, fixture ${count("/api/fixture")}, opener ${count("/api/opener")}, draw ${count("/api/draw")}, layout ${count("/api/layout")}, converse ${count("/api/converse")}, amend ${count("/api/amend")}`);
   console.log(`${results.filter((r) => r.ok).length}/${results.length} checks passed; ${frame} frames in ${OUT}`);
 }

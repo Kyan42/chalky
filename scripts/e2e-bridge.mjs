@@ -23,7 +23,7 @@ const st = () => page.evaluate(() => ({
 let frame = 0, last = "", on = true;
 const film = (async () => { while (on) { const s = await st().catch(() => null); await page.screenshot({ path: join(OUT, `f${String(frame++).padStart(3, "0")}-${since()}s.png`) }).catch(() => {}); if (s) { const l = `${s.status} | ${s.beat} | ${s.caption?.slice(0, 90)}`; if (l !== last) console.log(`${since().padStart(5)} s  ${l}`); last = l; } await page.waitForTimeout(500); } })();
 const waitFor = async (pred, ms) => { const until = Date.now() + ms; while (Date.now() < until) { const s = await st(); if (pred(s)) return s; await page.waitForTimeout(150); } return null; };
-await page.goto(`${BASE}/lesson?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 5}`);
+await page.goto(`${BASE}/lesson?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 5}&intake=0`);
 await page.fill('[data-testid="question"]', "Why is the sky blue?");
 await page.click('[data-testid="ask"]');
 const check = await waitFor((s) => s.status === "Your turn", 240000);
@@ -35,6 +35,8 @@ const bridge = await waitFor((s) => /next|zoom|let's/i.test(s.caption ?? "") && 
 console.log(`${bridge ? "PASS" : "FAIL"}  bridge spoken ${bridge ? `${Date.now() - tAns} ms after answering: "${bridge.caption}"` : ""}`);
 const next = await waitFor((s) => s.beat && s.beat !== check?.beat && s.status === "Speaking", 60000);
 console.log(`${next ? "PASS" : "FAIL"}  next beat ${next?.beat} starts after the bridge; ${next?.level}`);
+const stats = await page.$eval('[data-testid="prefetch"]', (el) => el.textContent).catch(() => "(no prefetch line)");
+console.log(`prefetch: ${stats}`);
 await page.waitForTimeout(2000);
 on = false; await film; await browser.close();
 console.log(`model calls: ${calls.filter((c) => c !== "/api/plan").length} (${calls.join(", ") || "none"}); ${frame} frames in ${OUT}`);
