@@ -1,0 +1,386 @@
+{
+  "question": "What is compound interest?",
+  "title": "How Compound Interest Grows Money",
+  "capturedAt": "2026-10-24T19:36:54.326Z",
+  "planMs": 19505,
+  "beats": [
+    {
+      "id": "b1",
+      "say": "Compound interest means you earn interest on your interest. Your money grows, and then the growth itself starts growing, like a snowball rolling downhill and picking up more snow.",
+      "at": "snowball",
+      "visual": "A diagonal hill line from top left to bottom right, with three circles along it getting larger as they go down, labeled 'snowball'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "hill",
+          "what": "sloped hill line"
+        },
+        {
+          "id": "snowball",
+          "what": "circles growing down hill"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b2",
+      "say": "Compare that to simple interest, where you only ever earn on your original deposit. Simple interest grows in a straight line, the same amount every year, forever.",
+      "at": "simple",
+      "visual": "Small axes with a straight upward line labeled 'simple', placed right of the hill.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 65,
+        "y": 15,
+        "w": 30,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "simple-line",
+          "what": "straight rising line"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b3",
+      "say": "Compound interest curves upward instead, because each year's interest gets added to the pile, and next year's interest is calculated on that bigger pile.",
+      "at": "compound",
+      "visual": "Axes with an upward-bending exponential curve labeled 'compound', below the simple line.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 65,
+        "y": 50,
+        "w": 30,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "compound-curve",
+          "what": "upward bending curve"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b4",
+      "say": "So the snowball and the bending curve are the same idea. Does the difference between the straight line and the curve make sense so far?",
+      "at": "snowball",
+      "visual": "Highlight the growing snowball, then the compound curve.",
+      "mode": "point",
+      "check": true,
+      "scene": 1,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 85,
+        "h": 65
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "snowball",
+          "word": "snowball"
+        },
+        {
+          "id": "compound-curve",
+          "word": "curve"
+        }
+      ]
+    },
+    {
+      "id": "b5",
+      "say": "Here's the mechanism. You start with the principal, the money you put in. At the end of each period, the bank multiplies it by one plus the interest rate.",
+      "at": "principal",
+      "visual": "A box labeled 'principal' with an arrow to the right labeled 'times (1 + r)'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 10,
+        "y": 30,
+        "w": 25,
+        "h": 25
+      },
+      "adds": [
+        {
+          "id": "principal",
+          "what": "box labeled principal"
+        },
+        {
+          "id": "multiply",
+          "what": "arrow labeled times one plus r"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b6",
+      "say": "The result becomes the new balance, and that whole balance is what gets multiplied next period. That loop, multiply, add back, repeat, is what compounding means.",
+      "at": "balance",
+      "visual": "A box labeled 'new balance' at the end of the multiply arrow, with a curved cycle arrow looping back to the multiply arrow.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 40,
+        "y": 25,
+        "w": 35,
+        "h": 35
+      },
+      "adds": [
+        {
+          "id": "balance",
+          "what": "box labeled new balance"
+        },
+        {
+          "id": "loop",
+          "what": "cycle arrow back to multiply"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b7",
+      "say": "Repeat that for a number of periods and you get the formula: final amount equals principal times one plus the rate, raised to the number of periods.",
+      "at": "formula",
+      "visual": "Equation 'A = P (1 + r)^n' beneath the loop, with P under principal.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 15,
+        "y": 65,
+        "w": 60,
+        "h": 20
+      },
+      "adds": [
+        {
+          "id": "formula",
+          "what": "equation A equals P times (1+r) to the n"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b8",
+      "say": "Let's use real numbers. Put one thousand dollars in at ten percent a year. After year one you have eleven hundred dollars.",
+      "at": "thousand",
+      "visual": "Bar chart with bars for year zero at 1000 and year one at 1100, labeled 'dollars'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "bars",
+          "what": "bar chart of yearly balances"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b9",
+      "say": "Year two, you earn ten percent of eleven hundred, which is one hundred ten, giving twelve hundred ten. That extra ten dollars is interest earned on interest.",
+      "at": "ten",
+      "visual": "Add a year-two bar at 1210 and a callout label 'extra $10' with an arrow to its top slice.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 65,
+        "y": 15,
+        "w": 30,
+        "h": 25
+      },
+      "adds": [
+        {
+          "id": "extra",
+          "what": "label extra ten dollars"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b10",
+      "say": "Keep going and after thirty years you have about seventeen thousand five hundred dollars. Simple interest would give you only four thousand.",
+      "at": "thirty",
+      "visual": "Two side-by-side bars: tall one labeled 'compound 17,450', short one labeled 'simple 4,000'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 65,
+        "y": 45,
+        "w": 30,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "compare",
+          "what": "two bars 17,450 vs 4,000"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b11",
+      "say": "The surprising part is that most of that growth happens near the end, not the start. Starting ten years earlier matters far more than people expect. Do you see why time is the big lever?",
+      "at": "growth",
+      "visual": "Highlight the tall compound bar to emphasize late growth.",
+      "mode": "point",
+      "check": true,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 85,
+        "h": 60
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "compare",
+          "word": "growth"
+        }
+      ]
+    },
+    {
+      "id": "b12",
+      "say": "And it works against you too. Credit card debt compounds the same way, so an unpaid balance snowballs just like savings do, only in the wrong direction.",
+      "at": "works",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    },
+    {
+      "id": "b13",
+      "say": "So, compound interest is interest earned on a growing balance. Each period multiplies the whole pile, the curve bends upward, and time is what turns small amounts into large ones.",
+      "at": "compound",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    }
+  ],
+  "board": [
+    {
+      "id": "hill",
+      "kind": "element",
+      "label": "sloped hill line",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "snowball",
+      "kind": "element",
+      "label": "circles growing down hill",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "simple-line",
+      "kind": "element",
+      "label": "straight rising line",
+      "scene": 1,
+      "beat": "b2"
+    },
+    {
+      "id": "compound-curve",
+      "kind": "element",
+      "label": "upward bending curve",
+      "scene": 1,
+      "beat": "b3"
+    },
+    {
+      "id": "principal",
+      "kind": "element",
+      "label": "box labeled principal",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "multiply",
+      "kind": "element",
+      "label": "arrow labeled times one plus r",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "balance",
+      "kind": "element",
+      "label": "box labeled new balance",
+      "scene": 2,
+      "beat": "b6"
+    },
+    {
+      "id": "loop",
+      "kind": "element",
+      "label": "cycle arrow back to multiply",
+      "scene": 2,
+      "beat": "b6"
+    },
+    {
+      "id": "formula",
+      "kind": "element",
+      "label": "equation A equals P times (1+r) to the n",
+      "scene": 2,
+      "beat": "b7"
+    },
+    {
+      "id": "bars",
+      "kind": "element",
+      "label": "bar chart of yearly balances",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "extra",
+      "kind": "element",
+      "label": "label extra ten dollars",
+      "scene": 3,
+      "beat": "b9"
+    },
+    {
+      "id": "compare",
+      "kind": "element",
+      "label": "two bars 17,450 vs 4,000",
+      "scene": 3,
+      "beat": "b10"
+    }
+  ]
+}

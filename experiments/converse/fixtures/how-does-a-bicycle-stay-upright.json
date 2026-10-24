@@ -1,0 +1,398 @@
+{
+  "question": "How does a bicycle stay upright?",
+  "title": "Why Bicycles Stay Upright",
+  "capturedAt": "2026-10-24T19:36:34.820Z",
+  "planMs": 23028,
+  "beats": [
+    {
+      "id": "b1",
+      "say": "Here's the big idea: a moving bicycle stays up because it keeps steering its wheels back underneath itself. It's always starting to fall, and always catching the fall by turning into it.",
+      "at": "bicycle",
+      "visual": "Draw a side-view bicycle with two wheel circles, frame and handlebars, with a stick-figure rider on top, labeled 'moving bike'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "bike",
+          "what": "side view of bicycle"
+        },
+        {
+          "id": "rider",
+          "what": "simple rider figure"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b2",
+      "say": "Think of balancing a broomstick on your palm. When it tips left, you move your hand left to get under it. A bicycle does the same thing, but the wheels play the part of your hand.",
+      "at": "broomstick",
+      "visual": "Draw a tilted vertical stick on an open hand, with a short horizontal arrow under the hand pointing toward the tilt, labeled 'move under it'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 65,
+        "y": 15,
+        "w": 28,
+        "h": 40
+      },
+      "adds": [
+        {
+          "id": "broom",
+          "what": "broom balanced on a hand"
+        },
+        {
+          "id": "hand-arrow",
+          "what": "arrow showing hand moving"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b3",
+      "say": "The key point is where the bike touches the ground. Balance means keeping your center of mass above the line between the two tire contact patches. Fall sideways and that point drifts off the line.",
+      "at": "ground",
+      "visual": "Under the bike, draw a ground line with two dots at the tire contacts joined by a bold line labeled 'support line', and a dot for the center of mass above it labeled 'center of mass'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 10,
+        "y": 72,
+        "w": 50,
+        "h": 20
+      },
+      "adds": [
+        {
+          "id": "contact-line",
+          "what": "line between tire contact points"
+        },
+        {
+          "id": "com",
+          "what": "center of mass dot"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b4",
+      "say": "So staying upright just means moving that support line back under the center of mass, exactly like the hand under the broom. Does the broom idea make sense so far?",
+      "at": "support",
+      "visual": "Highlight the support line, then the center of mass dot, then the broom on the hand to connect the two.",
+      "mode": "point",
+      "check": true,
+      "scene": 1,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 83,
+        "h": 77
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "contact-line",
+          "word": "support"
+        },
+        {
+          "id": "com",
+          "word": "center"
+        },
+        {
+          "id": "broom",
+          "word": "broom"
+        }
+      ]
+    },
+    {
+      "id": "b5",
+      "say": "Now the mechanism. Seen from behind, the bike leans to the right. Gravity pulls the center of mass further right, and the lean grows unless something corrects it.",
+      "at": "bike",
+      "visual": "Draw a rear-view bike as a tall thin shape tilted to the right on a ground line, with a downward arrow from its center labeled 'gravity' and a curved arrow labeled 'lean grows'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 40,
+        "h": 60
+      },
+      "adds": [
+        {
+          "id": "rear-view",
+          "what": "bike seen from behind, leaning"
+        },
+        {
+          "id": "gravity",
+          "what": "downward gravity arrow"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b6",
+      "say": "The correction is steering into the lean. Turn the front wheel right, and the bike's path curves right, which drives the tires sideways back under the rider.",
+      "at": "steering",
+      "visual": "Draw a top-down bike outline with the front wheel angled right and a curved arrow to the right labeled 'steer into lean'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 55,
+        "y": 15,
+        "w": 38,
+        "h": 35
+      },
+      "adds": [
+        {
+          "id": "top-view",
+          "what": "top view of bike turning right"
+        },
+        {
+          "id": "path",
+          "what": "curved path arrow"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b7",
+      "say": "Turning also produces a sideways push called centrifugal effect, really just inertia in a curve, that tips the bike back upright. The lean causes a turn, and the turn undoes the lean.",
+      "at": "sideways",
+      "visual": "Draw a three-step cycle of arrows connecting labels 'lean', 'steer', 'upright', placed below the top view.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 55,
+        "y": 55,
+        "w": 38,
+        "h": 25
+      },
+      "adds": [
+        {
+          "id": "cycle",
+          "what": "lean to steer to upright cycle"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b8",
+      "say": "What makes the front wheel turn on its own? Two things. The steering axis is tilted so the tire touches the ground behind it, a distance called trail, and the front of the bike is heavy enough to swing into a lean.",
+      "at": "steering",
+      "visual": "Draw a large front wheel with a tilted dashed steering axis line hitting the ground ahead of the contact point; mark the gap labeled 'trail'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "fork",
+          "what": "front fork with tilted axis"
+        },
+        {
+          "id": "trail",
+          "what": "trail distance on ground"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b9",
+      "say": "Because the contact point trails behind, the ground drags the wheel into line, like a shopping cart caster. So a lean automatically swings the wheel the right way, even with no rider.",
+      "at": "contact",
+      "visual": "Highlight the trail gap and then the fork to show the self-steering geometry.",
+      "mode": "point",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "trail",
+          "word": "contact"
+        },
+        {
+          "id": "fork",
+          "word": "wheel"
+        }
+      ]
+    },
+    {
+      "id": "b10",
+      "say": "Real numbers: at walking pace, a few kilometers per hour, corrections come too slowly and you wobble. Above roughly fifteen kilometers per hour, a typical bike steers itself and coasts straight without hands. Ever notice slow riding is hardest?",
+      "at": "pace",
+      "visual": "Draw a small plot, speed on the x axis, stability on the y axis, with a curve that is low then rises past a mark labeled 'about 15 kilometers per hour'.",
+      "mode": "draw",
+      "check": true,
+      "scene": 3,
+      "region": {
+        "x": 65,
+        "y": 20,
+        "w": 28,
+        "h": 45
+      },
+      "adds": [
+        {
+          "id": "speed-plot",
+          "what": "stability versus speed plot"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b11",
+      "say": "A common belief is that spinning wheels act like gyroscopes and hold the bike up. They do help a little, but researchers built a bike with gyroscopic effects cancelled, and it still balanced itself. Steering geometry and mass placement do the real work.",
+      "at": "common",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    },
+    {
+      "id": "b12",
+      "say": "So to recap: a bike is always falling and catching itself. A lean causes steering into the fall, the turn moves the wheels back underneath, and trail plus speed make this happen almost automatically.",
+      "at": "recap",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    }
+  ],
+  "board": [
+    {
+      "id": "bike",
+      "kind": "element",
+      "label": "side view of bicycle",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "rider",
+      "kind": "element",
+      "label": "simple rider figure",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "broom",
+      "kind": "element",
+      "label": "broom balanced on a hand",
+      "scene": 1,
+      "beat": "b2"
+    },
+    {
+      "id": "hand-arrow",
+      "kind": "element",
+      "label": "arrow showing hand moving",
+      "scene": 1,
+      "beat": "b2"
+    },
+    {
+      "id": "contact-line",
+      "kind": "element",
+      "label": "line between tire contact points",
+      "scene": 1,
+      "beat": "b3"
+    },
+    {
+      "id": "com",
+      "kind": "element",
+      "label": "center of mass dot",
+      "scene": 1,
+      "beat": "b3"
+    },
+    {
+      "id": "rear-view",
+      "kind": "element",
+      "label": "bike seen from behind, leaning",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "gravity",
+      "kind": "element",
+      "label": "downward gravity arrow",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "top-view",
+      "kind": "element",
+      "label": "top view of bike turning right",
+      "scene": 2,
+      "beat": "b6"
+    },
+    {
+      "id": "path",
+      "kind": "element",
+      "label": "curved path arrow",
+      "scene": 2,
+      "beat": "b6"
+    },
+    {
+      "id": "cycle",
+      "kind": "element",
+      "label": "lean to steer to upright cycle",
+      "scene": 2,
+      "beat": "b7"
+    },
+    {
+      "id": "fork",
+      "kind": "element",
+      "label": "front fork with tilted axis",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "trail",
+      "kind": "element",
+      "label": "trail distance on ground",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "speed-plot",
+      "kind": "element",
+      "label": "stability versus speed plot",
+      "scene": 3,
+      "beat": "b10"
+    }
+  ]
+}

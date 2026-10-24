@@ -1,0 +1,422 @@
+{
+  "question": "Why is the sky blue?",
+  "title": "Why the Sky Looks Blue",
+  "capturedAt": "2026-10-24T19:36:11.790Z",
+  "planMs": 25179,
+  "beats": [
+    {
+      "id": "b1",
+      "say": "Sunlight looks white, but it's really a mix of every color, from red to violet. The whole story of the blue sky is that air bounces some of those colors around much more than others.",
+      "at": "sunlight",
+      "visual": "A yellow sun circle at left with a thick white arrow heading right labeled 'white light', fanning into thin red, orange, yellow, green, blue, violet bands.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 8,
+        "y": 15,
+        "w": 45,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "sun",
+          "what": "sun circle"
+        },
+        {
+          "id": "beam",
+          "what": "white light beam"
+        },
+        {
+          "id": "rainbow",
+          "what": "beam split into color bands"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b2",
+      "say": "Each color is a wave with its own wavelength. Red light has long, lazy waves, about seven hundred nanometers, while blue and violet have short, choppy waves, around four hundred fifty and four hundred nanometers.",
+      "at": "wavelength",
+      "visual": "Two stacked squiggles: a long-wavelength red wave labeled 'red, 700 nm' on top, and a tight blue wave labeled 'blue, 450 nm' below.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 60,
+        "y": 15,
+        "w": 32,
+        "h": 50
+      },
+      "adds": [
+        {
+          "id": "red-wave",
+          "what": "long red wave"
+        },
+        {
+          "id": "blue-wave",
+          "what": "short blue wave"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b3",
+      "say": "So the real question becomes: what happens when these different waves hit the air on their way down to us? The answer depends on wavelength, and that's where the blue comes from.",
+      "at": "waves",
+      "visual": "Highlight both waves to contrast their lengths.",
+      "mode": "point",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 60,
+        "y": 15,
+        "w": 32,
+        "h": 50
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "red-wave",
+          "word": "waves"
+        },
+        {
+          "id": "blue-wave",
+          "word": "wavelength"
+        }
+      ]
+    },
+    {
+      "id": "b4",
+      "say": "Air is mostly tiny nitrogen and oxygen molecules, far smaller than any light wave. When light hits one, the molecule's electrons jiggle and re-send the light off in new directions. That's called Rayleigh scattering.",
+      "at": "air",
+      "visual": "A small circle labeled 'N2 / O2' in the middle, an arrow coming in from the left, and several short arrows radiating in all directions labeled 'scattered'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "molecule",
+          "what": "small air molecule"
+        },
+        {
+          "id": "incoming",
+          "what": "incoming light arrow"
+        },
+        {
+          "id": "scatter",
+          "what": "arrows spraying outward"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b5",
+      "say": "Here's the key rule: scattering strength goes as one over wavelength to the fourth power. Shorter waves get scattered dramatically more, so the sky is full of redirected blue.",
+      "at": "scattering",
+      "visual": "Equation 'scattering ∝ 1 / λ⁴' with a small arrow back toward the scatter arrows.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 65,
+        "y": 15,
+        "w": 28,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "law",
+          "what": "scattering formula"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b6",
+      "say": "Does it make sense that the tiny molecule shakes harder for short, fast waves and re-throws more of them?",
+      "at": "does",
+      "visual": "",
+      "mode": "talk",
+      "check": true,
+      "scene": 2,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    },
+    {
+      "id": "b7",
+      "say": "Let's put numbers in. Blue at four fifty versus red at seven hundred: the ratio is about one point five six, and to the fourth power that's roughly six. Blue scatters about six times more than red.",
+      "at": "numbers",
+      "visual": "Write '700 / 450 ≈ 1.56, 1.56⁴ ≈ 6' and beside it a tall blue bar and a short red bar labeled 'scattered amount'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 45,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "ratio",
+          "what": "ratio calculation"
+        },
+        {
+          "id": "bars",
+          "what": "bar chart blue vs red"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b8",
+      "say": "Now picture yourself on the ground. Look anywhere away from the sun and you're seeing light that was scattered toward you from the air, and that light is mostly blue, so the whole dome glows blue.",
+      "at": "ground",
+      "visual": "A stick figure at the bottom right with several blue arrows coming down from different parts of the sky toward its eye.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 60,
+        "y": 15,
+        "w": 33,
+        "h": 55
+      },
+      "adds": [
+        {
+          "id": "person",
+          "what": "stick figure"
+        },
+        {
+          "id": "sky-arrows",
+          "what": "blue arrows from sky to eye"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b9",
+      "say": "At sunset the light crosses far more air to reach you. Most blue gets scattered away along the path, so what survives straight from the sun is the red and orange.",
+      "at": "sunset",
+      "visual": "Highlight the short red bar: the less-scattered color survives a long trip.",
+      "mode": "point",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 45,
+        "h": 55
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "bars",
+          "word": "red"
+        }
+      ]
+    },
+    {
+      "id": "b10",
+      "say": "Can you see why the same rule gives both the blue sky and the red sunset?",
+      "at": "same",
+      "visual": "",
+      "mode": "talk",
+      "check": true,
+      "scene": 3,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    },
+    {
+      "id": "b11",
+      "say": "A common puzzle: violet scatters even more than blue, so why isn't the sky violet? Sunlight contains less violet, some is absorbed high up, and our eyes are much less sensitive to it.",
+      "at": "violet",
+      "visual": "A plot with two curves over a color strip: sunlight intensity dropping off in violet, and eye sensitivity peaking in green, low at violet.",
+      "mode": "draw",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 50
+      },
+      "adds": [
+        {
+          "id": "spectrum",
+          "what": "sunlight intensity curve"
+        },
+        {
+          "id": "eye-curve",
+          "what": "eye sensitivity curve"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b12",
+      "say": "And the sky isn't blue because air is a blue substance, or because it reflects the ocean. It's the scattering pattern itself, which is why the sky looks blue even over deserts.",
+      "at": "scattering",
+      "visual": "Point at the spectrum curve to emphasize the color comes from light and scattering, not the air's own color.",
+      "mode": "point",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 10,
+        "y": 15,
+        "w": 50,
+        "h": 50
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "spectrum",
+          "word": "scattering"
+        }
+      ]
+    },
+    {
+      "id": "b13",
+      "say": "So: white sunlight holds all colors, tiny air molecules scatter short waves far more strongly, and our eyes favor blue over violet. Scattered blue fills the sky by day; leftover red reaches us at sunset.",
+      "at": "white",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 4,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    }
+  ],
+  "board": [
+    {
+      "id": "sun",
+      "kind": "element",
+      "label": "sun circle",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "beam",
+      "kind": "element",
+      "label": "white light beam",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "rainbow",
+      "kind": "element",
+      "label": "beam split into color bands",
+      "scene": 1,
+      "beat": "b1"
+    },
+    {
+      "id": "red-wave",
+      "kind": "element",
+      "label": "long red wave",
+      "scene": 1,
+      "beat": "b2"
+    },
+    {
+      "id": "blue-wave",
+      "kind": "element",
+      "label": "short blue wave",
+      "scene": 1,
+      "beat": "b2"
+    },
+    {
+      "id": "molecule",
+      "kind": "element",
+      "label": "small air molecule",
+      "scene": 2,
+      "beat": "b4"
+    },
+    {
+      "id": "incoming",
+      "kind": "element",
+      "label": "incoming light arrow",
+      "scene": 2,
+      "beat": "b4"
+    },
+    {
+      "id": "scatter",
+      "kind": "element",
+      "label": "arrows spraying outward",
+      "scene": 2,
+      "beat": "b4"
+    },
+    {
+      "id": "law",
+      "kind": "element",
+      "label": "scattering formula",
+      "scene": 2,
+      "beat": "b5"
+    },
+    {
+      "id": "ratio",
+      "kind": "element",
+      "label": "ratio calculation",
+      "scene": 3,
+      "beat": "b7"
+    },
+    {
+      "id": "bars",
+      "kind": "element",
+      "label": "bar chart blue vs red",
+      "scene": 3,
+      "beat": "b7"
+    },
+    {
+      "id": "person",
+      "kind": "element",
+      "label": "stick figure",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "sky-arrows",
+      "kind": "element",
+      "label": "blue arrows from sky to eye",
+      "scene": 3,
+      "beat": "b8"
+    },
+    {
+      "id": "spectrum",
+      "kind": "element",
+      "label": "sunlight intensity curve",
+      "scene": 4,
+      "beat": "b11"
+    },
+    {
+      "id": "eye-curve",
+      "kind": "element",
+      "label": "eye sensitivity curve",
+      "scene": 4,
+      "beat": "b11"
+    }
+  ]
+}
