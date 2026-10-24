@@ -56,7 +56,8 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
   const list = Array.isArray((raw as { elements?: unknown })?.elements) ? (raw as { elements: unknown[] }).elements : [];
   const known = new Set<string>([...earlier.flatMap((b) => b.adds.map((a) => a.id)), ...beat.adds.map((a) => a.id)]);
   const parts = new Set<string>();
-  const knows = (id: string) => known.has(id) || parts.has(id.split(".")[0]);
+  // "<id>.<part>": a flow or cycle's numbered step, or a block's part or anchor (lib/blocks).
+  const knows = (id: string) => known.has(id) || parts.has(id.split(".")[0]) || (id.includes(".") && known.has(id.split(".")[0]));
   const out: PresetElement[] = [];
   let dropped = 0;
   for (const item of list) {
@@ -65,7 +66,8 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
     if (!KINDS.has(kind)) continue;
     if (pointOnly && !EDIT_KINDS.has(kind)) continue;
     const id = cleanId(e.id) || `${kind}-${out.length + 1}`;
-    const refs = typeof e.refs === "string" ? e.refs.split(",").map(cleanId).filter(Boolean) : [];
+    // Dots survive cleaning so "leaf.veins" stays a part ref.
+    const refs = typeof e.refs === "string" ? e.refs.split(",").map((r) => r.split(".").map(cleanId).filter(Boolean).join(".")).filter(Boolean) : [];
     const needed = REFS_NEEDED[kind] ?? 0;
     if (needed && (refs.length < needed || refs.slice(0, needed).some((r) => !knows(r)))) {
       dropped++;

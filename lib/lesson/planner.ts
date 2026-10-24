@@ -13,6 +13,7 @@
  * PLANNER_EFFORT overrides the effort level (default low).
  */
 import "server-only";
+import { BLOCKS } from "@/lib/blocks";
 import { anthropic } from "./anthropic";
 import type { BeatMode, PlanEvent, PlannedBeat, Region } from "./types";
 
@@ -44,7 +45,7 @@ The board shows one picture at a time, called a scene. Group beats into scenes: 
 The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than tall). For each beat, also give:
 - "at": one word copied exactly from the beat's text where the drawing (or pointing) should start: the word that names the thing, within the first 10 words, never a number.
 - "region": [x, y, w, h], where this beat's drawing goes (for point: where the things it points at are). Within a scene, draw regions must not overlap each other. The scene's first draw beat is its main picture: give it a big region, about 55 to 65 wide and 60 to 75 tall, usually on the left or in the middle. Later additions take 25 to 40 each side, placed next to the part they relate to so arrows between them are short. Use the whole board over a scene; keep 5 units clear of every edge. [] for talk.
-- "adds": for draw beats, the 1 to 4 things this beat draws, each {"id": short unique name of letters, digits and dashes like "sun" or "leaf", "what": a few words on what it is}. Name the shapes (a box, a circle, a curve, a row of steps), not arrows or labels between them. These ids are how later beats refer to the shapes. Never add something an earlier beat of the scene already drew (a part of its cycle or flow, for instance): point at it or connect to it instead. [] for point and talk.
+- "adds": for draw beats, the 1 to 4 things this beat draws, each {"id": short unique name of letters, digits and dashes like "sun" or "leaf", "what": a few words on what it is}. Name the shapes (a box, a circle, a curve, a row of steps), not arrows or labels between them. These ids are how later beats refer to the shapes. When the board has a ready-made drawing for the thing (${BLOCKS.map((b) => b.id).join(", ")}), use that word as the id or say it in "what", so the drawer uses it. Never add something an earlier beat of the scene already drew (a part of its cycle or flow, for instance): point at it or connect to it instead. [] for point and talk.
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
