@@ -26,3 +26,4 @@ npm-debug.log*
 /experiments/mic-e2e/
 /experiments/voice-e2e/
 /experiments/conversation-e2e/
+/experiments/live-runs/

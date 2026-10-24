@@ -82,7 +82,7 @@ export interface ConverseInput {
 export type ConverseEvent =
   | { type: "start"; model: string; local: boolean; tMs: number }
   | { type: "sentence"; text: string; tMs: number }
-  | { type: "trailer"; trailer: ConverseTrailer; tMs: number }
+  | { type: "trailer"; trailer: ConverseTrailer; tMs: number; modelCues?: unknown[] }
   | { type: "done"; tMs: number; model: string; inputTokens: number; outputTokens: number; fellBack: boolean }
   | { type: "error"; message: string; tMs: number };
 
@@ -354,9 +354,11 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         if (ev) yield ev;
       }
       let trailer: ConverseTrailer;
+      let modelCues: unknown[] = [];
       try {
         const json = trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
         const raw = JSON.parse(json);
+        if (Array.isArray(raw?.cursor)) modelCues = raw.cursor;
         trailer = cleanTrailer(raw, input, spoken);
         const asked = Array.isArray(raw?.cursor) ? raw.cursor.length : 0;
         if (asked !== trailer.cursor.length) console.info(`[converse] kept ${trailer.cursor.length} of ${asked} cursor cues: ${JSON.stringify(raw.cursor)}`);
@@ -364,7 +366,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       } catch {
         trailer = fallbackTrailer(input, spoken);
       }
-      yield { type: "trailer", trailer, tMs: ms() };
+      yield { type: "trailer", trailer, tMs: ms(), modelCues };
       yield { type: "done", tMs: ms(), model, inputTokens: usage.input, outputTokens: usage.output, fellBack };
       return;
     } catch (error) {

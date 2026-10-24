@@ -327,6 +327,10 @@ export default function Lesson() {
   const partialRef = useRef("");
   const draftRef = useRef("");
   const pauseRef = useRef<() => void>(() => {});
+  /** How the learner's latest words arrived, for the transcript. */
+  const inputViaRef = useRef<"voice" | "typed" | "button">("typed");
+  /** Adds an event to the running lesson's transcript; set by the running lesson. */
+  const logRef = useRef<(e: Record<string, unknown>) => void>(() => {});
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
@@ -337,6 +341,7 @@ export default function Lesson() {
     onUtterance: (text) => {
       const said = text.trim();
       if (!said) return;
+      inputViaRef.current = "voice";
       if (turnRef.current) turnRef.current(said);
       else if (lessonBusyRef.current()) {
         queueRef.current.push(said);
@@ -616,6 +621,38 @@ export default function Lesson() {
     const noteLearner = () => setLearnerView({ ...learner, confusions: [...learner.confusions], replies: [...learner.replies] });
     noteLearner();
     setIntakeView(null);
+    // ---------- The lesson's transcript, for reviewing live runs: experiments/live-runs/<id>.json ----------
+    const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "lesson";
+    const transcript = {
+      id: `${new Date().toISOString().slice(0, 19).replace(/[^0-9]/g, "")}-${slug}`,
+      question: q,
+      askedVia: inputViaRef.current,
+      startedAt: new Date().toISOString(),
+      fixture,
+      title: "",
+      /** Everything said, typed and decided, in order; t is ms since the question. */
+      events: [] as Record<string, unknown>[],
+      /** One entry per beat played (a replay is a second entry). */
+      beats: [] as Record<string, unknown>[],
+      learner: null as LearnerRecord | null,
+      prefetch: null as PrefetchStats | null,
+      endedAt: null as string | null,
+      end: null as string | null,
+    };
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushLog = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = null;
+      // Not the lesson's abort signal: the last write must survive Stop.
+      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(transcript), keepalive: true }).catch(() => {});
+    };
+    const logEv = (e: Record<string, unknown>) => {
+      transcript.events.push({ t: since(), ...e });
+      flushTimer ??= setTimeout(flushLog, 2000);
+    };
+    logRef.current = logEv;
+    logEv({ kind: "learner", via: transcript.askedVia, role: "question", text: q });
+
     // One beat of speech ahead: fetched while the beat before plays, dropped on any change of course.
     const prefetches = new Map<BeatState, Prefetch>();
     const stats: PrefetchStats = { ...NO_PREFETCH };
@@ -627,6 +664,7 @@ export default function Lesson() {
         stats.dropped++;
         stats.wastedKB += kb(p.bytes);
         console.info(`[prefetch] dropped ${p.state.beat.id} (${kb(p.bytes)} KB): ${why}`);
+        logEv({ kind: "prefetch-dropped", beatId: p.state.beat.id, kb: kb(p.bytes), why });
       }
       prefetches.clear();
       setPrefetchStats({ ...stats });
@@ -733,12 +771,15 @@ export default function Lesson() {
       for await (const event of ndjson<PlanEvent>(res)) {
         if (event.type === "title") {
           setTitle(event.title);
+          transcript.title = event.title;
+          logEv({ kind: "plan-title", title: event.title });
           voice.setKeyterms([...BASE_KEYTERMS, ...[...event.title.split(/\s+/), ...q.split(/\s+/)].filter((w) => w.length > 4)]);
         } else if (event.type === "error") throw new Error(`planner: ${event.message}`);
         else if (event.type === "beat") {
           if (planReplaced) continue;
           const beat = event.beat;
           const state: BeatState = { beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null) };
+          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say });
           list.push(state);
           if (beat.mode !== "talk") {
             visualBeats.push(state);
@@ -817,6 +858,7 @@ export default function Lesson() {
     const replan = (from: number, note: string, heardText: string, intake = false) => {
       dropDraft();
       dropPrefetches(intake ? "the intake rewrote the plan" : "replan");
+      logEv({ kind: "replan", from, fromBeat: list[from]?.beat.id ?? null, intake, note });
       const before = list.map((s) => s.beat);
       planReplaced = true;
       list.splice(from);
@@ -830,6 +872,7 @@ export default function Lesson() {
           if (ev.type === "error") throw new Error(ev.message);
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
+          logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say });
           list.push(state);
           if (ev.beat.mode !== "talk") state.ready = startDraw(state);
           setBeats([...list]);
@@ -863,6 +906,8 @@ export default function Lesson() {
       let audio: StreamPlayer | null = null;
       let all: WordTimestamps = { words: [], start: [], end: [] };
       let trailer: ConverseTrailer | null = null;
+      let modelCues: unknown[] = [];
+      let firstSoundMs: number | null = null;
       const sentences: { text: string; tts?: Promise<Response> }[] = [];
       // Speech for the sentence playing and one ahead only: Sonic slows down when many streams run at once.
       let playingIndex = 0;
@@ -909,6 +954,7 @@ export default function Lesson() {
               if (sentences.length - 1 <= playingIndex + 1) ensure(sentences.length - 1);
               wake();
             } else if (ev.type === "trailer") {
+              modelCues = ev.modelCues ?? [];
               trailer = ev.trailer;
               cue();
             } else if (ev.type === "error") throw new Error(ev.message);
@@ -949,7 +995,8 @@ export default function Lesson() {
               audio.append(ev.data);
               if (!heard) {
                 heard = true;
-                setLastReplyMs(Math.round(performance.now() - t1));
+                firstSoundMs = Math.round(performance.now() - t1);
+                setLastReplyMs(firstSoundMs);
                 setSpeaking(true);
                 setStatus("speaking");
               }
@@ -964,8 +1011,25 @@ export default function Lesson() {
         while (!signal.aborted && audio && !(audio as StreamPlayer).drained) await sleep(30);
         if (signal.aborted || !trailer) return null;
         setWordIndexNow(all.words.length);
-        return { trailer, said: sentences.map((x) => x.text).join(" ") };
+        const saidText = sentences.map((x) => x.text).join(" ");
+        const t = trailer as ConverseTrailer;
+        logEv({
+          kind: "reply",
+          who: "chalky",
+          text: saidText,
+          level: t.level,
+          resume: t.resume,
+          check: t.check,
+          plannerNote: t.planner_note,
+          escalationBefore: escalation,
+          cuesKept: t.cursor,
+          cuesFromModel: modelCues,
+          firstSoundMs,
+          totalMs: Math.round(performance.now() - t1),
+        });
+        return { trailer: t, said: saidText };
       } catch (e) {
+        logEv({ kind: "reply-failed", aborted: signal.aborted, error: signal.aborted ? null : String((e as Error).message ?? e), firstSoundMs });
         if (!signal.aborted) {
           console.warn("[converse]", e);
           setError(`Chalky couldn't answer: ${String((e as Error).message ?? e)}`);
@@ -997,6 +1061,16 @@ export default function Lesson() {
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
         if (abort.signal.aborted) return -1;
+        logEv({
+          kind: "learner",
+          via: heardText === null ? "button" : inputViaRef.current,
+          role: wordIndex >= 0 ? "cut-in" : bridge ? "check-in" : "between beats",
+          beatId: list[i]?.beat.id ?? null,
+          wordIndex,
+          text: heardText ?? "(Continue)",
+          local: heardText === null || isResume(heardText),
+          escalation,
+        });
         if (heardText !== null) {
           learner.replies = [...learner.replies, heardText].slice(-5);
           noteLearner();
@@ -1008,6 +1082,7 @@ export default function Lesson() {
           setLastLevel(heardText === null ? "continue (button)" : `continue (local, no model call${bridge ? ", bridge" : ""})`);
           // At a check-in, take a breath and say what comes next: written by the planner, no model call.
           if (bridge && !abort.signal.aborted) {
+            logEv({ kind: "say", who: "chalky", role: "bridge", text: bridge });
             setStatus("speaking");
             await playBeat(line(bridge), abort.signal, null).catch(() => {});
           }
@@ -1041,6 +1116,7 @@ export default function Lesson() {
           const detour = await d.beats.catch(() => [] as BeatState[]);
           if (abort.signal.aborted) return -1;
           if (detour.length) {
+            logEv({ kind: "detour", at: resumeAt, beats: detour.map((d) => ({ beatId: d.beat.id, mode: d.beat.mode, say: d.beat.say })) });
             dropPrefetches("detour inserted");
             list.splice(resumeAt, 0, ...detour);
             setBeats([...list]);
@@ -1069,6 +1145,7 @@ export default function Lesson() {
       const iq = await intakeAsk;
       if (iq?.say && !abort.signal.aborted) {
         const tAsk = performance.now();
+        logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms });
         setStatus("speaking");
         await playBeat(line(iq.say), abort.signal, null, onFirstSound);
         setStatus("waiting");
@@ -1088,12 +1165,14 @@ export default function Lesson() {
         })();
         if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
         const waitedMs = Math.round(performance.now() - tAsk);
+        logEv({ kind: "learner", role: "intake answer", via: answer === null ? "silence" : inputViaRef.current, text: answer ?? "(silence)" });
         if (!answer || SKIP_INTAKE.test(answer) || isResume(answer)) {
           setIntakeView(`Asked “${iq.say}” (${iq.kind}, ${iq.model}); ${answer ? `“${answer}”: skipped` : "no answer: went on"}; the intake took ${(waitedMs / 1000).toFixed(1)} s.`);
           if (answer) {
             learner.replies = [answer];
             noteLearner();
           }
+          logEv({ kind: "intake-decision", skipped: true, reason: answer ? "skip phrase" : "silence", intakeMs: waitedMs });
         } else {
           learner.replies = [answer];
           setStatus("replying");
@@ -1110,6 +1189,7 @@ export default function Lesson() {
           Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
           noteLearner();
           const decideMs = Math.round(performance.now() - tDecide);
+          logEv({ kind: "intake-decision", skipped: false, amend: !!decision.amend, note: decision.note ?? "", learner: decision.learner ?? null, error: decision.error ?? null, decideMs, intakeMs: Math.round(performance.now() - tAsk) });
           if (decision.amend && decision.note && !abort.signal.aborted) {
             // Beat 1 plays as planned; everything after it is rewritten for this learner.
             let release: () => void = () => {};
@@ -1165,19 +1245,48 @@ export default function Lesson() {
         prefetches.delete(list[i]);
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
+        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre };
+        const tBeat = performance.now();
         try {
-          await playBeat(list[i], beatAbort.signal, compile, onLessonSound, {
-            prefetch: pre,
-            onStreamed: () => prefetchNext(bi2),
-            onHeld: (ms, fromMemory) => {
-              stats.heldMs += ms;
-              if (fromMemory) stats.fromMemory++;
-              setPrefetchStats({ ...stats });
+          await playBeat(
+            list[i],
+            beatAbort.signal,
+            compile,
+            () => {
+              timing.firstSoundMs ??= Math.round(performance.now() - tBeat);
+              onLessonSound();
             },
-          });
+            {
+              prefetch: pre,
+              onStreamed: () => {
+                timing.streamedMs = Math.round(performance.now() - tBeat);
+                prefetchNext(bi2);
+              },
+              onHeld: (ms, fromMemory) => {
+                timing.heldMs = ms;
+                timing.fromMemory = fromMemory;
+                stats.heldMs += ms;
+                if (fromMemory) stats.fromMemory++;
+                setPrefetchStats({ ...stats });
+              },
+            },
+          );
         } catch (e) {
           if (!interruptedRef.current) throw e;
         }
+        Object.assign(timing, {
+          endMs: since(),
+          playedMs: Math.round(performance.now() - tBeat),
+          interrupted: interruptedRef.current,
+          ...(interruptedRef.current ? { atWord: (resumeRef.current?.wordIndex ?? -1) + 1 } : {}),
+          draw: list[i].draw,
+          drawMs: list[i].drawMs ?? null,
+          drawModel: list[i].model ?? null,
+          drawLateSec: list[i].lateSec ?? null,
+          drawError: list[i].error ?? null,
+        });
+        transcript.beats.push(timing);
+        logEv({ kind: "beat", ...timing });
         if (beatAbortRef.current === beatAbort) beatAbortRef.current = null;
         setBeats([...list]);
         if (abort.signal.aborted) break;
@@ -1204,12 +1313,20 @@ export default function Lesson() {
       }
       if (!abort.signal.aborted) setStatus((s) => (s === "error" ? s : "done"));
       else setStatus("stopped");
+      transcript.end = abort.signal.aborted ? "stopped" : "done";
     } catch (e) {
       if (abort.signal.aborted) setStatus("stopped");
       else {
         setError(String((e as Error).message ?? e));
         setStatus("error");
       }
+      transcript.end = abort.signal.aborted ? "stopped" : `error: ${String((e as Error).message ?? e)}`;
+    } finally {
+      transcript.endedAt = new Date().toISOString();
+      transcript.learner = learner;
+      transcript.prefetch = { ...stats };
+      logEv({ kind: "end", end: transcript.end });
+      flushLog();
     }
   }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking]);
 
@@ -1268,6 +1385,7 @@ export default function Lesson() {
   const submit = () => {
     const text = draft.trim();
     if (!text) return;
+    inputViaRef.current = "typed";
     if (turnRef.current) {
       setDraft("");
       turnRef.current(text);
