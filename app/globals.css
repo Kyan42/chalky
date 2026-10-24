@@ -74,3 +74,20 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .ask button.continue { background: var(--accent); border-color: var(--accent); }
 .mic[data-state="waiting"] .dot { background: #e0b100; }
 .lesson-beats ol { overflow-y: auto; max-height: 82%; }
+
+/* Voice orb (ported from Janani's PR #2). */
+.orb { position: relative; display: grid; place-items: center; flex: none; }
+.orb-glow { position: absolute; inset: 0; border-radius: 50%; opacity: 0.35; filter: blur(18px); animation: orb-breathe 4s ease-in-out infinite; }
+.orb-core { position: absolute; inset: 8%; border-radius: 50%; transition: transform 75ms linear; }
+.orb-ball { width: 100%; height: 100%; border-radius: 50%;
+  box-shadow: inset 0 -12px 36px rgba(0, 0, 0, 0.25), inset 0 12px 24px rgba(255, 255, 255, 0.35); }
+@keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+.stage .welcome { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2em;
+  text-align: center; padding: 0 10%; }
+.stage .welcome h2 { margin: 0; font-size: clamp(16px, 2.2vw, 34px); font-weight: 650; }
+.stage .welcome p { margin: 0; color: var(--muted); font-size: clamp(11px, 1.1vw, 17px); }
+.stage .welcome button { font: inherit; font-size: clamp(12px, 1.2vw, 17px); padding: 0.6em 1.4em; border-radius: 999px; border: 0;
+  background: var(--ink); color: #fff; cursor: pointer; }
+.caption .heard { color: #2E86E4; font-style: italic; }
+.topic .orb { margin-left: 0.6em; }
