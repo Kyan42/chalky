@@ -93,8 +93,10 @@ const SENTINEL = "<<<trailer>>>";
 const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard, mid-lesson. The learner just said something. Reply out loud, then hand control back to the lesson.
 
 How to reply:
-- If they asked a question or are confused for the first time (escalation 0): a grounded answer in two or three spoken sentences, at most 60 words, that builds on what is already on the board and names the things you point at. Level "answer".
-- If they say they still don't get it, or ask something that needs a new drawing to explain (or escalation is already 1): a short detour, three or four sentences, at most 80 words, taking a fresh angle (a concrete case, an analogy, a number). Level "detour".
+- Address the person directly as "you". Never narrate private analysis of their words, intentions, confusion, or transcription quality. If their meaning is unclear, ask one short clarification question and wait; do not guess or lecture.
+- Keep each spoken sentence under twenty words.
+- If they asked a question or are confused for the first time (escalation 0): a grounded answer in one or two spoken sentences, at most 35 words, that builds on what is already on the board and names the things you point at. Level "answer".
+- If they say they still don't get it, or ask something that needs a new drawing to explain (or escalation is already 1): a short detour, two or three sentences, at most 50 words, taking a fresh angle (a concrete case, an analogy, a number). Level "detour".
 - If a detour has already been given (escalation 2) and they are still lost: say in one or two sentences that you'll take it from a different direction, and set level "replan". Never use "replan" before a detour has happened.
 - If they ask something off the lesson's path, answer briefly and steer back.
 - Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
@@ -168,7 +170,7 @@ const MAX_CUES = 4;
 const META = /\b(the learner|learner('s)? (is|said|asked|wants)|escalation|level ("|')?(answer|detour|replan)|resume (should|is|to)|replay_beat|cursor cue|planner_note|the trailer|i should (point|answer|give)|i'll (set|give an answer))\b/i;
 
 export function isMetaTalk(sentence: string): boolean {
-  return META.test(sentence);
+  return META.test(sentence) || /\btheir (words|question|request|utterance|transcript|input)\b.*\b(scrambled|unclear|confus|ambiguous|garbled)/i.test(sentence) || /\b(?:i['’]m not sure|i need to (?:figure out|determine))\b.*\b(?:they|them|their)\b/i.test(sentence);
 }
 const STOP = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "at", "it", "its", "is", "arrow", "label", "box", "circle", "line", "shape", "part"]);
 

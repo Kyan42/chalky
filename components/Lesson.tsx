@@ -40,6 +40,8 @@ import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
 import { unlockAudio } from "@/lib/voice/audio";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
+import { captionWindow } from "@/lib/captions";
+
 const TPS = 240;
 const FRAME_TICKS = 4;
 /** Documents are 20 s long (experiments/visual-flex/doc.ts), enough for any highlight in a beat. */
@@ -1352,10 +1354,10 @@ export default function Lesson() {
         </section>
         <div className="conversation-dock">
           <div className="shared-transcript" data-testid="heard" data-speaker={transcriptSpeaker} aria-live="polite" aria-atomic="true">
-            <p>{lecturePreview ? "Think of the leaf as a tiny kitchen. Sunlight gives it the energy to turn water and carbon dioxide into food." : transcriptSpeaker === "chalky" ? words.slice(0, wordIndexNow + 1).map((word, index) => (
+            <p>{lecturePreview ? "Think of the leaf as a tiny kitchen." : transcriptSpeaker === "chalky" ? captionWindow(words, wordIndexNow).map(({word, index}) => (
               <span key={index} className={index === wordIndexNow ? "transcript-word current chalky-word" : "transcript-word"}>{word}{" "}</span>
-            )) : transcriptSpeaker === "you" ? (voice.partial || lastHeard).split(/\s+/).map((word, index, list) => (
-              <span key={index} className={index === list.length - 1 ? "transcript-word current learner-word" : "transcript-word"}>{word}{" "}</span>
+            )) : transcriptSpeaker === "you" ? captionWindow((voice.partial || lastHeard).trim().split(/\s+/), (voice.partial || lastHeard).trim().split(/\s+/).length - 1).map(({word, index}, visibleIndex, list) => (
+              <span key={index} className={visibleIndex === list.length - 1 ? "transcript-word current learner-word" : "transcript-word"}>{word}{" "}</span>
             )) : ""}</p>
           </div>
           <div className="voice-actions">
