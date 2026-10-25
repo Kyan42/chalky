@@ -21,6 +21,14 @@ explain a concept, so the model names `leaf` instead of drawing one stroke by st
 - `biology/` — 100 blocks by topic (`BY_TOPIC` in `biology/index.ts`): light and water (4), plants and
   fungi (19), cells and microbes (20), molecules (8, each a single coloured circle), organs (18), the body
   (12) and animals (19).
+- `computing/` — 100 blocks in five topics of 20 (`BY_TOPIC` in `computing/index.ts`): devices, software,
+  data and algorithms, AI and neural networks, charts and flow. Each block is a factory with options
+  plus a default instance: `makeNeuralNet({ layers: [2, 3, 1] })`, `makeArray({ n: 8 })`,
+  `makeBarChart({ values: [3, 7, 2] })`, `makeLock({ open: true })`, and every factory takes `color`.
+  Every element is its own part and anchor (`cell-3`, `layer-1-node-2`, `bar-0`), so lessons can
+  point at or circle it. `computing/CONVENTIONS.md` has the rules for adding more.
+  `computing/variants.ts` shows factories at other settings. Big counts (a 6-node layer, a 10-cell
+  array) need the block placed at 250px or more to read in thick chalk.
 - `sheet.ts` — renders any module's blocks as a labelled sheet in any theme.
 
 Sheets and previews (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
@@ -28,5 +36,7 @@ Sheets and previews (labels need `presets/out/fonts/Manrope.ttf`, the app's font
 ```bash
 npx tsx presets/sheet.ts presets/biology/index.ts chalk          # all 100 blocks → presets/out/sheet-index-chalk.png
 npx tsx presets/sheet.ts presets/biology/organs.ts whiteboard    # one topic, another theme
+npx tsx presets/sheet.ts presets/computing/ai.ts chalk           # 20 AI blocks
+npx tsx presets/sheet.ts presets/computing/variants.ts chalk     # factories at other settings
 npx tsx presets/preview.ts chalk                                 # the photosynthesis and respiration lessons
 ```
