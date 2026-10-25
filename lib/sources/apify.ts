@@ -94,7 +94,8 @@ export async function startSources(question: string, title?: string, opts: { fix
     .then(async ({ cards, mode }) => {
       if (!cards.length) throw new Error("the actor returned no pages with text");
       Object.assign(rec, { status: "ready", cards, mode, ms: Date.now() - t0, fetchedAt: new Date().toISOString() });
-      await writeCache(key, rec);
+      // A cache that cannot be written must not turn a good fetch into a failed one.
+      await writeCache(key, rec).catch((e) => console.warn(`[sources] cache write failed: ${String((e as Error)?.message ?? e)}`));
       log({ kind: "sources-ready", id, cards: cards.length, ms: rec.ms, mode, question });
     })
     .catch((e) => {
