@@ -56,7 +56,9 @@ export default function MossBlocksPage() {
     }
   }
 
-  const top = answer?.hits[0]?.score ?? 1;
+  // Moss ranks by its hybrid (semantic + keyword) match but reports the semantic score alone, so
+  // the top hit need not have the highest score; bars scale to the largest.
+  const top = Math.max(0.001, ...(answer?.hits ?? []).map((h) => h.score));
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", fontFamily: "system-ui, sans-serif", color: "#222", background: "#f6f6f3", minHeight: "100vh" }}>
       <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Moss block retrieval</h1>
