@@ -817,7 +817,7 @@ export default function Lesson() {
     };
 
     const planning = (async () => {
-      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
+      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
       for await (const event of ndjson<PlanEvent>(res)) {
         if (event.type === "title") {
