@@ -1,0 +1,50 @@
+# Presets
+
+Small whiteboard drawings ("blocks") that a lesson places on the board and chains together to
+explain a concept, so the model names `leaf` instead of drawing one stroke by stroke.
+
+- `types.ts` — a block: line art in its own box, grouped into named parts (`nucleus`, `roots`), with
+  named anchor points (`surface`, `roots`, `right`) for later steps to aim at.
+- `board.ts` — the board you chain steps on. Steps run one after another unless given `at`
+  (seconds) or `with: true` (alongside the previous one), plus an optional `delay`.
+  - `place(block, { x, y, size })` draws a block stroke by stroke (`enter: "pop"` pops it in)
+  - `arrow(from, to, { bend })` draws a marker arrow
+  - `travel(block, { from, to, size, count, stay })` sends copies (molecules, drops) between points
+  - `highlight(target, { part, at, hold })` draws one chalk loop around a block, one of its parts, or a
+    label (`label` returns its box), on cue; `hold` fades it after that many seconds
+  - `pulse(ref)`, `move(ref, { x, y, size })`, `remove(ref)`, `label(text, { x, y })`, `wait(s)`
+  - `ref.at("anchor")` and `ref.center("part")` give board points to aim at
+  - `build(id, name)` returns the Clayzo document
+- `themes.ts` — how the board looks. `CHALK` (the default): chalk-textured outlines on white, no
+  fills. `CHALKBOARD`: pastel chalk on green slate. `WHITEBOARD`: clean marker lines with pale fills.
+  Pick one with `new Board({ theme })`. The chalk grain is a GPU shader, so render on a machine with a GPU.
+- `biology/` — 100 blocks by topic (`BY_TOPIC` in `biology/index.ts`): light and water (4), plants and
+  fungi (19), cells and microbes (20), molecules (8, each a single coloured circle), organs (18), the body
+  (12) and animals (19).
+- `computing/` — 100 blocks in five topics of 20 (`BY_TOPIC` in `computing/index.ts`): devices, software,
+  data and algorithms, AI and neural networks, charts and flow. Each block is a factory with options
+  plus a default instance: `makeNeuralNet({ layers: [2, 3, 1] })`, `makeArray({ n: 8 })`,
+  `makeBarChart({ values: [3, 7, 2] })`, `makeLock({ open: true })`, and every factory takes `color`.
+  Every element is its own part and anchor (`cell-3`, `layer-1-node-2`, `bar-0`), so lessons can
+  point at or circle it. `computing/CONVENTIONS.md` has the rules for adding more.
+  `computing/variants.ts` shows factories at other settings. Big counts (a 6-node layer, a 10-cell
+  array) need the block placed at 250px or more to read in thick chalk.
+- `chemistry/` — 100 blocks in five topics of 20 (`BY_TOPIC` in `chemistry/index.ts`): atoms and
+  elements, molecules and bonds, matter and reactions, solutions, acids and gases, and lab equipment.
+  Factories as in computing: `makeAtom({ protons: 11 })`, `makeBeaker({ fill: 0.8, liquid: "green" })`,
+  `makeEnergyProfile({ catalyst: true })`, `makePhScale({ value: 2 })`. `makeMolecule({ atoms, bonds })`
+  draws any ball-and-stick molecule; atoms keep one colour per element everywhere (O red, N blue, C ink).
+  Glassware is drawn to one scale, so a test tube placed beside a beaker matches it.
+  `chemistry/CONVENTIONS.md` has the rules and `chemistry/variants.ts` shows options.
+- `sheet.ts` — renders any module's blocks as a labelled sheet in any theme.
+
+Sheets and previews (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
+
+```bash
+npx tsx presets/sheet.ts presets/biology/index.ts chalk          # all 100 blocks → presets/out/sheet-index-chalk.png
+npx tsx presets/sheet.ts presets/biology/organs.ts whiteboard    # one topic, another theme
+npx tsx presets/sheet.ts presets/computing/ai.ts chalk           # 20 AI blocks
+npx tsx presets/sheet.ts presets/computing/variants.ts chalk     # factories at other settings
+npx tsx presets/sheet.ts presets/chemistry/index.ts chalk        # all 100 chemistry blocks
+npx tsx presets/preview.ts chalk                                 # the photosynthesis and respiration lessons
+```
