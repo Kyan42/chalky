@@ -55,6 +55,7 @@ try {
   await page.waitForTimeout(300);
   const p1 = await st();
   check("a Space tap pauses", /^Paused/.test(p1.status ?? ""), p1.status);
+  check("while paused, typing is off (Start or Space goes on)", await page.isDisabled('[data-testid="question"]'));
   await page.waitForTimeout(2500);
   const p2 = await st();
   check("frozen while paused (same word, still paused)", p2.word === p1.word && /^Paused/.test(p2.status ?? ""), `word ${p1.word} -> ${p2.word}`);
@@ -70,10 +71,10 @@ try {
   await page.click('[data-testid="continue"]');
   const r2 = await waitFor((s) => s.status === "Speaking" && s.word >= 0, 3000);
   check("Continue resumes from the pause point", !!r2 && r2.beat === p3.beat && r2.word >= p3.word && r2.word <= p3.word + 2, `paused at ${p3.beat} word ${p3.word}, resumed at ${r2?.beat} word ${r2?.word}`);
-  // 4. Merge: pause, ask, and while the reply is in flight say a two-word aside: the reply must answer the question.
+  // 4. Merge: ask while Chalky talks (a paused Chalky takes no input), and while the reply is in flight
+  // say a two-word aside: the reply must answer the question.
+  await waitFor((s) => s.status === "Speaking", 5000);
   await page.waitForTimeout(800);
-  await tap();
-  await page.waitForTimeout(300);
   await type("wait, why are the red waves longer?");
   await page.waitForTimeout(250);
   await type("oh wait");
