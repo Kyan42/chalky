@@ -475,6 +475,8 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   const cues = groundCues(cursor, spoken, input.board);
   // Shown something elsewhere on the board: they get to look before the lesson moves the camera back.
   let resume: ConverseResume = how ?? (check || goTo ? "wait" : "continue");
+  // Going on at once would glide the camera straight back: after a go_to, always wait.
+  if (goTo) resume = "wait";
   if (check && resume !== "wait") resume = "wait";
   if (escalated && resume === "wait") resume = "replay_beat";
   // The cleaned list, in the model's order, with what the executor will really do.
