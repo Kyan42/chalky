@@ -23,6 +23,20 @@ const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
 // Medium effort thought for about 25 s before the first beat; low takes about 3 s with similar depth.
 const EFFORT = (process.env.PLANNER_EFFORT ?? "low") as "low" | "medium" | "high";
 
+/**
+ * Experiment switches for time to first beat (scripts/planner-bench.ts):
+ * PLANNER_THINKING=off turns thinking off (Sonnet 5.5: between_tools; others: disabled),
+ * PLANNER_TITLE_FIRST=1 tells the model to write the title line at once.
+ */
+function plannerThinking(model: string) {
+  if (process.env.PLANNER_THINKING !== "off") return { type: "adaptive" as const };
+  return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
+}
+const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
+const plannerSystem = () => withVoiceRules(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
+
+${TITLE_FIRST}` : SYSTEM);
+
 const SYSTEM = `You are Chalky, a great teacher who explains things out loud while drawing on a whiteboard. The learner wants to actually understand the answer, not hear a one-liner. Plan a spoken lesson of about three minutes that goes slowly and keeps the learner involved.
 
 Teach it the way a good teacher would at a whiteboard, in this order:
@@ -142,8 +156,8 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
     {
       model: MODEL,
       max_tokens: 14000,
-      system: withVoiceRules(SYSTEM),
-      thinking: { type: "adaptive" },
+      system: plannerSystem(),
+      thinking: plannerThinking(MODEL),
       output_config: { effort },
       messages: [{ role: "user", content: question }],
     },

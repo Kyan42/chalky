@@ -70,7 +70,7 @@ const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|com
 /** Answers to the intake question that mean "just start". */
 const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
-type Status = "idle" | "planning" | "speaking" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
+type Status = "idle" | "planning" | "speaking" | "paused" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
 
 /** none: talk beat. local: a point beat built here from the planner's ids. pending/ready/failed: the drawer. */
 type DrawState = "none" | "pending" | "ready" | "failed" | "local";
@@ -276,7 +276,22 @@ export default function Lesson() {
   const [draft, setDraft] = useState("");
   const [question, setQuestion] = useState("");
   const [title, setTitle] = useState("Ask Chalky anything");
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatusRaw] = useState<Status>("idle");
+  /**
+   * Paused by the learner (a Space tap, or Pause): audio, board and cursor frozen at a point, mic open.
+   * `prev` is the status to go back to; lesson loops wait on `waiters` before starting anything new.
+   */
+  const pausedRef = useRef<{ prev: Status; at: number; beatId: string; wordIndex: number } | null>(null);
+  const unpauseWaiters = useRef<(() => void)[]>([]);
+  /** While paused, talking statuses are remembered for the resume instead of shown. */
+  const setStatus = useCallback((next: Status | ((s: Status) => Status)) => {
+    const p = pausedRef.current;
+    if (p && typeof next === "string" && (next === "speaking" || next === "replying" || next === "planning")) {
+      p.prev = next;
+      return;
+    }
+    setStatusRaw(next);
+  }, []);
   const [beats, setBeats] = useState<BeatState[]>([]);
   const [current, setCurrent] = useState(-1);
   const [words, setWords] = useState<string[]>([]);
@@ -319,6 +334,8 @@ export default function Lesson() {
   /** Chalky's voice is playing (or just stopped: the echo tail). Mirrors speakingRef for the mic. */
   const [speakingAudio, setSpeakingAudio] = useState(false);
   const setSpeaking = useCallback((on: boolean) => {
+    // Paused: the mic stays open; resume() turns speaking back on.
+    if (on && pausedRef.current) return;
     speakingRef.current = on;
     setSpeakingAudio(on);
   }, []);
@@ -341,6 +358,11 @@ export default function Lesson() {
   const partialRef = useRef("");
   const draftRef = useRef("");
   const pauseRef = useRef<() => void>(() => {});
+  const cutInRef = useRef<() => void>(() => {});
+  /** The learner's latest words to the conversation layer, and when (for merging a quick second utterance). */
+  const lastLearnerRef = useRef<{ text: string; at: number } | null>(null);
+  /** Applies the merge rule; returns true when it handled the utterance. */
+  const mergeRef = useRef<(said: string) => boolean>(() => false);
   /** How the learner's latest words arrived, for the transcript. */
   const inputViaRef = useRef<"voice" | "typed" | "button">("typed");
   /** Adds an event to the running lesson's transcript; set by the running lesson. */
@@ -373,8 +395,13 @@ export default function Lesson() {
       const said = text.trim();
       if (!said) return;
       inputViaRef.current = "voice";
+      if (mergeRef.current(said)) return;
       if (turnRef.current) turnRef.current(said);
-      else if (lessonBusyRef.current()) {
+      else if (pausedRef.current) {
+        // Talking while paused: that's a cut-in, about this spot.
+        queueRef.current.push(said);
+        cutInRef.current();
+      } else if (lessonBusyRef.current()) {
         queueRef.current.push(said);
         pauseRef.current();
       } else if (["idle", "done", "stopped", "error"].includes(statusRef.current)) {
@@ -395,6 +422,8 @@ export default function Lesson() {
   draftRef.current = draft;
 
   const stop = useCallback(() => {
+    pausedRef.current = null;
+    unpauseWaiters.current.splice(0).forEach((r) => r());
     queueRef.current = [];
     replyAbortRef.current?.abort();
     abortRef.current?.abort();
@@ -408,6 +437,16 @@ export default function Lesson() {
     stop();
     playerRef.current?.dispose();
   }, [stop]);
+
+  /** Resolves once the learner resumes (or the lesson is stopped). */
+  const waitWhilePaused = useCallback(async (signal?: AbortSignal) => {
+    while (pausedRef.current && !signal?.aborted) {
+      await new Promise<void>((r) => {
+        unpauseWaiters.current.push(r);
+        signal?.addEventListener("abort", () => r(), { once: true });
+      });
+    }
+  }, []);
 
   /** Replaces the board's player with one for `doc` (or clears it). A newer call wins over an older one still creating. */
   const showDocument = useCallback(async (doc: AnimationDocument | null | undefined) => {
@@ -532,6 +571,7 @@ export default function Lesson() {
         if (signal.aborted) break;
         if (event.type === "start") {
           audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
+          if (pausedRef.current) audio.pause();
           audioRef.current = audio;
         } else if (event.type === "audio" && audio) {
           audio.append(event.data);
@@ -573,6 +613,7 @@ export default function Lesson() {
       if (!signal.aborted) {
         setWordIndexNow(timestamps.words.length);
         await new Promise((r) => setTimeout(r, GAP_SECONDS * 1000));
+        await waitWhilePaused(signal);
       }
     } finally {
       lastSpokeRef.current = performance.now();
@@ -584,7 +625,7 @@ export default function Lesson() {
         if (audioRef.current === audio || audio === null) setSpeaking(false);
       }, ECHO_TAIL_MS);
     }
-  }, [showDocument, setSpeaking]);
+  }, [showDocument, setSpeaking, waitWhilePaused]);
 
   /** Waits for the learner: a spoken turn, a typed reply, or Continue (null). */
   const awaitTurn = useCallback((signal: AbortSignal) => {
@@ -1058,6 +1099,7 @@ export default function Lesson() {
             if (signal.aborted) break;
             if (ev.type === "start" && !audio) {
               audio = new StreamPlayer(ctx, ev.sampleRate, ev.encoding);
+              if (pausedRef.current) audio.pause();
               audioRef.current = audio;
               offset = 0;
             } else if (ev.type === "audio" && audio) {
@@ -1169,6 +1211,8 @@ export default function Lesson() {
           return resumeAt;
         }
         history.push({ who: "learner", text: heardText });
+        // A quick second utterance may be merged into this while the reply runs (see mergeRef).
+        lastLearnerRef.current = { text: heardText, at: performance.now() };
         // A detour is decided before the lead-in is spoken: start planning (and drawing) it right away.
         const reply = await speakReply(heardText, i, wordIndex, (level) => {
           if (level === "detour" && !(draft && draft.at === resumeAt)) {
@@ -1340,6 +1384,8 @@ export default function Lesson() {
           continue;
         }
         if (i >= 1) await intakeGate;
+        await waitWhilePaused(abort.signal);
+        if (abort.signal.aborted) break;
         if (i >= list.length) {
           if (planOpen()) continue;
           break;
@@ -1475,14 +1521,51 @@ export default function Lesson() {
       logEv({ kind: "end", end: transcript.end });
       flushLog();
     }
-  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking]);
+  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused]);
 
   useEffect(() => {
     askRef.current = (q) => void ask(q);
   }, [ask]);
 
-  /** Stops Chalky mid-beat to listen. */
+  /** Pauses right where Chalky is: sound, board and cursor freeze (they follow the audio clock); the mic opens. */
+  const pausePlayback = useCallback(() => {
+    const st = statusRef.current;
+    if (pausedRef.current || (st !== "speaking" && st !== "replying")) return;
+    pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
+    audioRef.current?.pause();
+    speakingRef.current = false;
+    setSpeakingAudio(false);
+    setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
+    setStatusRaw("paused");
+    logRef.current({ kind: "pause", beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, during: st });
+  }, []);
+
+  /** Goes on from exactly where the pause was (a second Space tap, or Continue). */
+  const resumePlayback = useCallback(() => {
+    const p = pausedRef.current;
+    if (!p) return;
+    pausedRef.current = null;
+    audioRef.current?.resume();
+    if (audioRef.current && !audioRef.current.drained) {
+      speakingRef.current = true;
+      setSpeakingAudio(true);
+    }
+    setPausedAt(null);
+    setStatusRaw(p.prev);
+    logRef.current({ kind: "resume", beatId: p.beatId, wordIndex: p.wordIndex, pausedMs: Math.round(performance.now() - p.at) });
+    unpauseWaiters.current.splice(0).forEach((r) => r());
+  }, []);
+
+  /** Stops Chalky to listen: the beat (replayed or settled later) or the reply in flight is cut. */
   const interrupt = useCallback(() => {
+    // A cut-in from a pause ends the pause: what is cut is what was paused.
+    const p = pausedRef.current;
+    if (p) {
+      pausedRef.current = null;
+      setStatusRaw(p.prev);
+      statusRef.current = p.prev;
+      unpauseWaiters.current.splice(0).forEach((r) => r());
+    }
     const st = statusRef.current;
     if (st !== "speaking" && st !== "replying") return;
     const reply = replyAbortRef.current;
@@ -1509,10 +1592,41 @@ export default function Lesson() {
     setStatus("waiting");
   }, [setSpeaking]);
   useEffect(() => {
-    pauseRef.current = interrupt;
-    lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && MUTED.has(statusRef.current) && !turnRef.current;
-  }, [interrupt]);
-  // Space is handled by the hybrid mic (hold to barge in); the old Space handler is gone so the two don't fight.
+    // Space down (the hybrid mic's barge-in) pauses at once; holding and talking then cuts in.
+    pauseRef.current = pausePlayback;
+    cutInRef.current = interrupt;
+    lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && (MUTED.has(statusRef.current) || !!pausedRef.current) && !turnRef.current;
+    mergeRef.current = (said) => {
+      // A reply is in flight for the learner's last words: a quick "oh" or "wait" joins that question instead
+      // of replacing it; a longer second utterance re-asks with both, in order.
+      const last = lastLearnerRef.current;
+      if (!replyAbortRef.current || !last) return false;
+      if (said.split(/\s+/).length <= 2 && !isResume(said)) {
+        last.text = `${last.text} ${said}`;
+        logRef.current({ kind: "utterance-merged", text: said, into: last.text, action: "kept the reply" });
+        if (pausedRef.current) resumePlayback();
+        return true;
+      }
+      const both = `${last.text} ${said}`;
+      logRef.current({ kind: "utterance-merged", text: said, into: both, action: "re-asked with both" });
+      queueRef.current.push(both);
+      interrupt();
+      return true;
+    };
+  }, [interrupt, pausePlayback, resumePlayback]);
+
+  // A Space tap while paused resumes. (While Chalky talks, Space is the hybrid mic's: it pauses, and holding it talks.)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || e.defaultPrevented || !pausedRef.current) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
+      e.preventDefault();
+      resumePlayback();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [resumePlayback]);
 
   const startTalking = useCallback(async () => {
     try {
@@ -1533,6 +1647,10 @@ export default function Lesson() {
     const text = draft.trim();
     if (!text) return;
     inputViaRef.current = "typed";
+    if (mergeRef.current(text)) {
+      setDraft("");
+      return;
+    }
     if (turnRef.current) {
       setDraft("");
       turnRef.current(text);
@@ -1544,8 +1662,8 @@ export default function Lesson() {
     } else void ask(text);
   };
 
-  const waitingForLearner = status === "waiting" || status === "listening";
-  const busy = ["planning", "speaking", "waiting", "listening", "replying"].includes(status) && !!question;
+  const waitingForLearner = status === "waiting" || status === "listening" || status === "paused";
+  const busy = ["planning", "speaking", "paused", "waiting", "listening", "replying"].includes(status) && !!question;
   const orbState: OrbState =
     status === "speaking" ? "speaking"
     : status === "planning" || status === "replying" ? "thinking"
@@ -1553,7 +1671,7 @@ export default function Lesson() {
     : "idle";
   const orbLevel = useCallback(() => (speakingRef.current ? (audioRef.current?.level() ?? 0) : voice.level()), [voice]);
   const statusLabel: Record<Status, string> = {
-    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", waiting: "Your turn",
+    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", paused: "Paused · Space to go on", waiting: "Your turn",
     listening: "Listening", replying: "Thinking…", done: voice.started ? "Done · ask another" : "Done", stopped: "Stopped", error: "Error",
   };
   const showWelcome = !question && status !== "speaking";
@@ -1589,10 +1707,10 @@ export default function Lesson() {
             />
             <button type="submit" disabled={!draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
             {status === "speaking" && busy && (
-              <button type="button" onClick={interrupt} data-testid="interrupt" title="Space">Cut in</button>
+              <button type="button" onClick={pausePlayback} data-testid="interrupt" title="Space">Pause</button>
             )}
             {waitingForLearner && (
-              <button type="button" className="continue" onClick={() => turnRef.current?.(null)} data-testid="continue">Continue</button>
+              <button type="button" className="continue" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
             )}
             {busy && <button type="button" onClick={stop} data-testid="stop">Stop</button>}
           </form>
