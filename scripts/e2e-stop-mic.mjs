@@ -73,7 +73,7 @@ const waitFor = async (pred, ms) => {
   return null;
 };
 try {
-  await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=4&intake=0`);
+  await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=4&intake=0&debug=1`);
   await page.click('[data-testid="start-talking"]');
   await waitFor((s) => s.status === "Listening", 20000);
   await page.fill('[data-testid="question"]', "Why is the sky blue?");

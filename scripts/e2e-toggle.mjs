@@ -63,14 +63,14 @@ try {
   await tap();
   const r1 = await waitFor((s) => s.status === "Speaking" && s.word >= 0, 3000);
   check("a second tap resumes from the pause point (not word 0)", !!r1 && r1.beat === "b2" && r1.word >= p1.word && r1.word <= p1.word + 2, `paused at word ${p1.word}, resumed at ${r1?.word}`);
-  // 3. Pause, then Continue resumes from the pause point too.
+  // 3. Pause, then Start (the button a stopped Chalky shows) resumes from the pause point too.
   await page.waitForTimeout(1200);
   await tap();
   await page.waitForTimeout(300);
   const p3 = await st();
-  await page.click('[data-testid="continue"]');
+  await page.click('[data-testid="start"]');
   const r2 = await waitFor((s) => s.status === "Speaking" && s.word >= 0, 3000);
-  check("Continue resumes from the pause point", !!r2 && r2.beat === p3.beat && r2.word >= p3.word && r2.word <= p3.word + 2, `paused at ${p3.beat} word ${p3.word}, resumed at ${r2?.beat} word ${r2?.word}`);
+  check("Start resumes from the pause point", !!r2 && r2.beat === p3.beat && r2.word >= p3.word && r2.word <= p3.word + 2, `paused at ${p3.beat} word ${p3.word}, resumed at ${r2?.beat} word ${r2?.word}`);
   // 4. Merge: ask while Chalky talks (a paused Chalky takes no input), and while the reply is in flight
   // say a two-word aside: the reply must answer the question.
   await waitFor((s) => s.status === "Speaking", 5000);
