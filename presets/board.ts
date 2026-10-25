@@ -141,11 +141,48 @@ function polyline(contours: PathContour[]): PathContour[] {
   });
 }
 
+/** Curves as three straight steps each, keeping closed contours closed: the angular, cut-paper look. */
+function angularize(contours: PathContour[]): PathContour[] {
+  return contours.map((c) => {
+    const vs = c.vertices;
+    const out: PathVertex[] = [vtx(vs[0].point.x, vs[0].point.y)];
+    const n = c.closed ? vs.length : vs.length - 1;
+    for (let i = 0; i < n; i++) {
+      const a = vs[i], b = vs[(i + 1) % vs.length];
+      const curved = a.outTangent.x || a.outTangent.y || b.inTangent.x || b.inTangent.y;
+      if (curved) {
+        const p0 = a.point, p3 = b.point;
+        const p1 = { x: p0.x + a.outTangent.x, y: p0.y + a.outTangent.y }, p2 = { x: p3.x + b.inTangent.x, y: p3.y + b.inTangent.y };
+        for (const t of [1 / 3, 2 / 3]) {
+          const u = 1 - t;
+          out.push(vtx(u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x, u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y));
+        }
+      }
+      if (!(c.closed && i === n - 1)) out.push(vtx(b.point.x, b.point.y));
+    }
+    return { closed: c.closed, vertices: out };
+  });
+}
+
 function outline(shape: Shape): PathContour[] {
+  const c = outlineOf(shape);
+  return theme.angular ? angularize(c) : c;
+}
+
+function outlineOf(shape: Shape): PathContour[] {
   switch (shape.type) {
     case "path":
       return contoursOf(shape.d);
     case "ellipse": {
+      // Angular: a nine-sided cut instead of a smooth round.
+      if (theme.angular) {
+        const vs: PathVertex[] = [];
+        for (let i = 0; i < 9; i++) {
+          const a = -Math.PI / 2 + (i / 9) * Math.PI * 2 + 0.2;
+          vs.push(vtx(shape.cx + Math.cos(a) * shape.rx, shape.cy + Math.sin(a) * shape.ry));
+        }
+        return [{ closed: true, vertices: vs }];
+      }
       const vs: PathVertex[] = [];
       for (let i = 0; i <= 48; i++) {
         const a = -Math.PI / 2 + (i / 48) * Math.PI * 2;
@@ -464,17 +501,28 @@ export class Board {
       },
     };
     const roots = ["board"];
-    for (const instance of this.instances) {
-      compileInstance(instance, end, nodes);
+    const washes: string[] = [];
+    this.instances.forEach((instance, i) => {
+      const { wash } = compileInstance(instance, end, nodes);
       roots.push(instance.id);
-    }
+      if (wash) washes.push(wash);
+      // Doodles go beside things the teacher draws, not beside every travelling copy.
+      if (theme.doodles && instance.enter.kind === "draw") roots.push(...doodleNodes(instance, i, end, nodes));
+    });
     for (const mark of this.marks) mark(end, nodes, roots);
     const size = { width: this.width, height: this.height };
-    if (theme.chalk) {
-      // Everything drawn goes through the chalk shader as one layer.
+    if (theme.chalk || theme.wobble) {
+      // Every line goes through one shader: chalk grain and broken edges, or just a hand's wobble.
       nodes.drawing = { ...base("drawing", { outTick: end }), type: "group", children: roots.splice(1) };
-      nodes.chalk = effect("chalk", "drawing", "custom-sksl", end, [["grain", theme.chalk.grain, 0, 1]], CHALK_SKSL);
+      nodes.chalk = effect("chalk", "drawing", "custom-sksl", end, [["grain", theme.chalk?.grain ?? 0, 0, 1], ["wobble", theme.wobble ?? 2.5, 0, 12]], CHALK_SKSL);
       roots.push("chalk");
+    }
+    if (washes.length && theme.watercolor) {
+      // Watercolour sits under every line, a little off register, through its own shader.
+      const [dx, dy] = theme.watercolor.offset;
+      nodes.wash = { ...base("wash", { outTick: end, x: dx, y: dy }), type: "group", children: washes };
+      nodes["wash-fx"] = effect("wash-fx", "wash", "custom-sksl", end, [["grain", theme.watercolor.grain, 0, 1]], WATERCOLOR_SKSL);
+      roots.splice(1, 0, "wash-fx");
     }
     if (theme.smudges) {
       Object.assign(nodes, smudges(size, end));
@@ -527,7 +575,12 @@ function fadeOut(id: string, at: number): Animatable<number> {
 
 // ---- A placed block as nodes ----
 
-function compileInstance(inst: Instance, end: number, nodes: Record<string, SceneNode>) {
+/**
+ * A placed block as nodes. Returns the id of its watercolour group when the
+ * theme paints fills on their own layer (`pigment`), which the board puts under
+ * every line.
+ */
+function compileInstance(inst: Instance, end: number, nodes: Record<string, SceneNode>): { wash?: string } {
   const { block, first } = inst;
   const [w, h] = block.size;
   const scaleOf = (p: Placement) => p.size / Math.max(w, h);
@@ -573,7 +626,25 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
   });
 
   const markerWidth = (shape: Shape) => ((shape.width ?? 1) * theme.marker) / s0;
+  // A silhouette is one colour: shapes and lines in it, and fine lines that lie on a filled shape
+  // (a leaf's veins, a mitochondrion's folds) cut out of it, so they still show.
+  const solid = theme.fill === "solid";
+  const filled = solid ? block.parts.flatMap((p) => p.shapes).filter((sh) => sh.fill).map((sh) => polyline(outline(sh))[0]?.vertices.map((v) => v.point) ?? []) : [];
+  const onAShape = (shape: Shape) => {
+    const [x0, y0, x1, y1] = shapeBox(shape);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    return filled.some((poly) => {
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        if (poly[i].y > cy !== poly[j].y > cy && cx < ((poly[j].x - poly[i].x) * (cy - poly[i].y)) / (poly[j].y - poly[i].y) + poly[i].x) hit = !hit;
+      }
+      return hit;
+    });
+  };
+  const lineColor = (shape: Shape) => (solid ? (!shape.fill && (shape.width ?? 1) < 1 && onAShape(shape) ? "board" : "shape") : (theme.outline ?? shape.stroke!));
+  const pigment = theme.fill === "pigment";
   const partChildren: Record<string, string[]> = {};
+  const washChildren: Record<string, string[]> = {};
   shapes.forEach(({ part, shape }, i) => {
     const sid = `${inst.id}-${part}-${i}`;
     (partChildren[part] ??= []);
@@ -602,21 +673,34 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
         const blank = theme.fill === "none" && shape.fill.endsWith("-tint");
         const fillOpacity = drawing ? new Keys(0) : new Keys(1);
         if (drawing) fillOpacity.to(tk(blank ? from : at), 1, blank ? 0.1 : 0.3, EASE.out);
+        if (solid) {
+          // A thin gap of board colour round each shape keeps overlapping silhouettes apart.
+          const gid = `${fid}-gap`;
+          nodes[gid] = {
+            ...base(gid, { outTick: end }),
+            type: "path",
+            path: constant({ contours }),
+            style: { stroke: stroke(paint("board"), (theme.marker * 2.2) / s0, { opacity: fillOpacity.track(`${gid}.o`) }) },
+          };
+          partChildren[part].push(gid);
+        }
         nodes[fid] = {
           ...base(fid, { outTick: end }),
           type: "path",
           path: constant({ contours }),
-          style: { fill: fill(paint(blank ? "board" : shape.fill), fillOpacity.track(`${fid}.o`)) },
+          style: { fill: fill(paint(blank ? "board" : solid ? "shape" : shape.fill), fillOpacity.track(`${fid}.o`)) },
         };
       }
-      partChildren[part].push(fid);
+      // Watercolour goes on its own layer; a board-coloured fill (a knockout) stays with the lines.
+      if (pigment && shape.fill.endsWith("-tint")) (washChildren[part] ??= []).push(fid);
+      else partChildren[part].push(fid);
     }
     if (shape.stroke) {
       nodes[sid] = {
         ...base(sid, { outTick: end }),
         type: "path",
         path: constant({ contours: drawing ? polyline(contours) : contours }),
-        style: { stroke: stroke(paint(shape.stroke), markerWidth(shape)) },
+        style: { stroke: stroke(paint(lineColor(shape)), markerWidth(shape), theme.angular ? { cap: "butt", join: "miter" } : {}) },
         ...(drawing ? { operators: [trim(`${sid}.trim`, { end: drawOn(`${sid}.end`, from, to) })] } : {}),
       };
       partChildren[part].push(sid);
@@ -626,21 +710,56 @@ function compileInstance(inst: Instance, end: number, nodes: Record<string, Scen
   for (const part of block.parts) {
     const pid = `${inst.id}-${part.id}`;
     nodes[pid] = { ...base(pid, { outTick: end }), type: "group", children: partChildren[part.id] ?? [] };
+    if (washChildren[part.id]) nodes[`${pid}-wash`] = { ...base(`${pid}-wash`, { outTick: end }), type: "group", children: washChildren[part.id] };
   }
   const fading = opacity.list.length > 1;
-  nodes[inst.id] = {
-    ...base(inst.id, {
+  // The block's group; its watercolour twin moves exactly the same way (the same tracks, their own ids).
+  const group = (id: string, children: string[]): SceneNode => ({
+    ...base(id, {
       outTick: end,
       inTick: tk(enter.start),
-      position: pos.track(`${inst.id}.pos`),
+      position: pos.track(`${id}.pos`),
       anchor: { x: w / 2, y: h / 2 },
-      scale: scale.track(`${inst.id}.scale`),
-      opacity: opacity.track(`${inst.id}.o`),
+      scale: scale.track(`${id}.scale`),
+      opacity: opacity.track(`${id}.o`),
     }),
     type: "group",
-    children: block.parts.map((p) => `${inst.id}-${p.id}`),
+    children,
     ...(fading ? { isolation: true } : {}),
-  };
+  });
+  nodes[inst.id] = group(inst.id, block.parts.map((p) => `${inst.id}-${p.id}`));
+  const washed = block.parts.filter((p) => washChildren[p.id]).map((p) => `${inst.id}-${p.id}-wash`);
+  if (!washed.length) return {};
+  nodes[`${inst.id}-wash`] = group(`${inst.id}-wash`, washed);
+  return { wash: `${inst.id}-wash` };
+}
+
+/** A sparkle and a little circle doodled beside a drawn block, appearing once it is drawn. */
+function doodleNodes(inst: Instance, index: number, end: number, nodes: Record<string, SceneNode>): string[] {
+  const { x, y, size } = inst.first;
+  const [bw, bh] = inst.block.size;
+  const k = size / Math.max(bw, bh);
+  const hw = (bw * k) / 2, hh = (bh * k) / 2;
+  const at = inst.enter.start + inst.enter.seconds;
+  const flip = index % 2 ? -1 : 1;
+  const sx = x + flip * (hw + 14), sy = y - hh + 6, cx = x - flip * (hw + 12), cy = y + hh - 10;
+  const items: [string, PathContour[]][] = [
+    [`${inst.id}-doodle-sparkle`, [
+      { closed: false, vertices: [vtx(sx, sy - 9), vtx(sx, sy + 9)] },
+      { closed: false, vertices: [vtx(sx - 9, sy), vtx(sx + 9, sy)] },
+    ]],
+    [`${inst.id}-doodle-dot`, [{ closed: false, vertices: Array.from({ length: 17 }, (_, i) => vtx(cx + Math.cos((i / 16) * Math.PI * 2) * 4.5, cy + Math.sin((i / 16) * Math.PI * 2) * 4.5)) }]],
+  ];
+  return items.map(([id, contours], i) => {
+    nodes[id] = {
+      ...base(id, { outTick: end }),
+      type: "path",
+      path: constant({ contours }),
+      style: { stroke: stroke(paint(theme.outline ?? "ink"), theme.marker * 0.75) },
+      operators: [trim(`${id}.trim`, { end: drawOn(`${id}.end`, at + i * 0.1, at + i * 0.1 + 0.25) })],
+    };
+    return id;
+  });
 }
 
 // ---- Chalk ----
@@ -676,6 +795,7 @@ function hatch([x0, y0, x1, y1]: [number, number, number, number], spacing: numb
 const CHALK_SKSL = `
 uniform shader inputImage;
 uniform float grain;
+uniform float wobble;
 uniform float2 renderScale;
 float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
 float vnoise(float2 p) {
@@ -686,9 +806,10 @@ float vnoise(float2 p) {
 }
 half4 main(float2 p) {
   float2 q = p / renderScale.x;
-  float2 wobble = (float2(vnoise(q * 0.3), vnoise(q * 0.3 + 17.0)) - 0.5) * 2.5;
-  half4 src = inputImage.eval((q + wobble) * renderScale.x);
+  float2 shift = (float2(vnoise(q * 0.3), vnoise(q * 0.3 + 17.0)) - 0.5) * wobble;
+  half4 src = inputImage.eval((q + shift) * renderScale.x);
   if (src.a < 0.002) { return half4(0.0); }
+  if (grain <= 0.0) { return src; }
   half4 c = unpremul(src);
   float fine = hash(floor(q * 1.3));
   float mid = vnoise(q * 0.55);
@@ -696,6 +817,37 @@ half4 main(float2 p) {
   float keep = smoothstep(0.22, 0.6, fine * 0.5 + mid * 0.3 + streak * 0.2);
   float a = float(c.a) * mix(1.0, keep, grain);
   return half4(c.rgb * half(a), half(a));
+}`;
+
+/**
+ * Watercolour: loose, wandering edges, uneven pigment that pools a little
+ * darker at the rim, like paint drying on paper. Works in board pixels.
+ */
+const WATERCOLOR_SKSL = `
+uniform shader inputImage;
+uniform float grain;
+uniform float2 renderScale;
+float hash(float2 p) { return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); }
+float vnoise(float2 p) {
+  float2 i = floor(p); float2 f = fract(p);
+  float a = hash(i), b = hash(i + float2(1, 0)), c = hash(i + float2(0, 1)), d = hash(i + float2(1, 1));
+  float2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+half4 main(float2 p) {
+  float2 q = p / renderScale.x;
+  float2 at = q + (float2(vnoise(q * 0.06), vnoise(q * 0.06 + 31.0)) - 0.5) * 7.0;
+  half4 src = inputImage.eval(at * renderScale.x);
+  if (src.a < 0.002) { return half4(0.0); }
+  half4 c = unpremul(src);
+  float r = 4.5;
+  float ring = (float(inputImage.eval((at + float2(r, 0.0)) * renderScale.x).a) + float(inputImage.eval((at - float2(r, 0.0)) * renderScale.x).a)
+    + float(inputImage.eval((at + float2(0.0, r)) * renderScale.x).a) + float(inputImage.eval((at - float2(0.0, r)) * renderScale.x).a)) * 0.25;
+  float edge = clamp(float(src.a) - ring, 0.0, 1.0);
+  float pig = mix(1.0, 0.74 + 0.26 * vnoise(q * 0.045) + 0.14 * (vnoise(q * 0.32) - 0.5), grain);
+  half3 rgb = c.rgb * half(mix(1.0, 0.76, clamp(edge * 2.4, 0.0, 1.0)));
+  float a = float(c.a) * clamp(pig, 0.0, 1.0);
+  return half4(rgb * half(a), half(a));
 }`;
 
 function effect(id: string, inputId: string, kind: "custom-sksl" | "blur", end: number, params: [string, number, number, number][], sksl?: string): SceneNode {

@@ -1,14 +1,14 @@
 // Writes preview documents for a theme: every biology block on one board, and two lessons chained
 // from blocks.
-//   npx tsx presets/preview.ts [chalk|whiteboard|chalkboard]
+//   npx tsx presets/preview.ts [chalk|whiteboard|chalkboard|inkwash|doodle|silhouette]
 //   → presets/out/<theme>-gallery.json, -photosynthesis.json, -respiration.json
 // Labels need presets/out/fonts/Manrope.ttf (the font the app ships in public/fonts).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { BIOLOGY, cell, co2, drop, energy, glucose, h2o, mitochondrion, o2, plant, sun } from "./biology";
 import { Board } from "./board";
-import { CHALK, CHALKBOARD, WHITEBOARD } from "./themes";
+import { CHALK, CHALKBOARD, DOODLE, INKWASH, SILHOUETTE, WHITEBOARD } from "./themes";
 
-const theme = [CHALK, WHITEBOARD, CHALKBOARD].find((t) => t.id === process.argv[2]) ?? CHALK;
+const theme = [CHALK, WHITEBOARD, CHALKBOARD, INKWASH, DOODLE, SILHOUETTE].find((t) => t.id === process.argv[2]) ?? CHALK;
 const out = new URL("./out/", import.meta.url);
 mkdirSync(out, { recursive: true });
 const font = { uri: "fonts/Manrope.ttf", family: "Manrope" };
