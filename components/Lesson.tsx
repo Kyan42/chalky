@@ -1736,7 +1736,7 @@ export default function Lesson() {
      * The learner's answer to a quiz. Asking for the question again (or "what do you mean") is not an answer:
      * Chalky asks it again and keeps waiting, with no grade and nothing on the record.
      */
-    const awaitAnswer = async (quiz: string, ask: string, beatId: string | null): Promise<string | null> => {
+    const awaitAnswer = async (quiz: string, ask: string, beatId: string | null, onAsked?: () => void): Promise<string | null> => {
       for (;;) {
         const a = await awaitTurn(abort.signal);
         if (a === null || abort.signal.aborted || !REPEAT_ASK.test(a)) return a;
@@ -1744,6 +1744,7 @@ export default function Lesson() {
         setStatus("speaking");
         await sayLine(ask);
         setStatus("waiting");
+        onAsked?.();
       }
     };
     /** The quiz route, with the wait logged (quiz-grading, quiz-graded with ms). */
@@ -1846,14 +1847,16 @@ export default function Lesson() {
         await sayLine(asking);
         setStatus("waiting");
         // Nothing heard for 40 s (a bad connection, a mic that dropped): don't keep them waiting, show it.
+        // (The clock starts again whenever the question is said again, and while words are being heard.)
         let quiet = false;
-        const askedAt = performance.now();
+        let askedAt = performance.now();
         const clock = setInterval(() => {
-          if (performance.now() - askedAt < QUESTION_WAIT_MS || partialRef.current.trim()) return;
+          if (partialRef.current.trim()) askedAt = performance.now();
+          if (performance.now() - askedAt < QUESTION_WAIT_MS) return;
           quiet = true;
           turnRef.current?.(null);
         }, 1000);
-        const answer = await awaitAnswer("predict", asking, beatId).finally(() => clearInterval(clock));
+        const answer = await awaitAnswer("predict", asking, beatId, () => (askedAt = performance.now())).finally(() => clearInterval(clock));
         if (abort.signal.aborted) return;
         if (quiet) {
           logEv({ kind: "socratic-quiet", beatId, try: k + 1, waitedMs: QUESTION_WAIT_MS });

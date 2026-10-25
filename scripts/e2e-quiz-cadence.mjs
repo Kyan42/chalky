@@ -23,7 +23,7 @@ let openers = 0;
 /** Socratic: per section's question, the answers to give, one per try. */
 const SOCRATIC_PLAN = REAL
   ? [["I think it's because the sky reflects the blue of the ocean.", "@next"], ["Just explain it, stop asking me."]]
-  : [["It's just plain white light, one single color.", "I still think white light is one color.", "Maybe it's white because the sun is really hot?"], ["Just tell me."], ["About six times more, because of the fourth power."]];
+  : [["~Could you clarify the question?", "It's just plain white light, one single color.", "I still think white light is one color."], ["Just tell me."], ["About six times more, because of the fourth power."]];
 const FIXTURE = process.env.FIXTURE ?? "why-is-the-sky-blue-quizzes";
 const OUT = join(process.cwd(), "experiments/quiz", `cadence-${REAL ? "real" : MODE}`);
 mkdirSync(OUT, { recursive: true });
@@ -160,14 +160,26 @@ try {
       const plan = SOCRATIC_PLAN[openers] ?? ["Just explain it, stop asking me."];
       openers++;
       let at = after;
+      // "~..." asks for the question again (not a try): it is asked again, and the next answer follows.
+      let graded = false;
       for (const [n, a] of plan.entries()) {
-        if (n > 0) {
+        if (graded) {
           const rf = await waitEvent("socratic-reframe", at, 60_000);
           console.log(`        reframe: ${JSON.stringify(rf && { verdict: rf.verdict, line: rf.line, ms: rf.ms })}`);
           if (!rf?.line) break;
           at = rf.t;
           await waitFor((s) => s.status === "Your turn", 40_000);
         }
+        if (a.startsWith("~")) {
+          await sayText(`socratic-${openers}-${n}`, a.slice(1));
+          const rep = await waitEvent("quiz-repeat", at, 30_000);
+          console.log(`        repeat: ${JSON.stringify(rep && { said: rep.said })}`);
+          if (rep) at = rep.t;
+          await waitFor((s) => s.status === "Your turn", 40_000);
+          graded = false;
+          continue;
+        }
+        graded = true;
         const next = await page.evaluate((id) => {
           const out = [];
           for (let li = document.querySelector(`[data-testid="beats"] li[data-beat-id="${id}"]`)?.nextElementSibling; li && out.length < 2; li = li.nextElementSibling) out.push((li.innerText ?? "").split("\n")[0]);
@@ -243,7 +255,8 @@ if (SOCRATIC) {
     check("a right answer on the second try shortens the section", adjust[0]?.verdict === "right" && adjust[0].try === 2 && adjust[0].cut.length > 0, JSON.stringify(adjust[0]));
     check("\"just explain\" stops the questions", !!off && !asked.some((e) => e.t > off.t), off ? `off at ${off.t}; later openers skipped: ${ev("socratic-skipped").filter((e) => e.t > off.t).length}` : "no socratic-off");
   } else {
-    check("three misses: two reframes, then the gap named and the section taught", reframes.filter((e) => e.beatId === asked[0]?.beatId).length === 2 && !!gap?.line && adjust[0]?.how?.startsWith("the section teaches"), JSON.stringify({ gap: gap?.line, adjust: adjust[0] }));
+    check("a clarify request is asked again, not graded", ev("quiz-repeat").some((e) => e.beatId === asked[0]?.beatId) && !ev("learner").some((e) => e.role === "socratic answer" && /clarify/i.test(e.text ?? "")));
+    check("two misses: one reframe, then the gap named and the section taught", reframes.filter((e) => e.beatId === asked[0]?.beatId).length === 1 && !!gap?.line && adjust[0]?.try === 2 && adjust[0]?.how?.startsWith("the section teaches"), JSON.stringify({ gap: gap?.line, adjust: adjust[0] }));
     check("\"just tell me\" goes straight to teaching", ev("quiz-skipped").some((e) => e.socratic && e.beatId === asked[1]?.beatId) && !off && asked.length === 3);
     check("a right answer shortens the section", adjust.at(-1)?.verdict === "right" && adjust.at(-1).cut.length > 0, JSON.stringify(adjust.at(-1)));
   }
