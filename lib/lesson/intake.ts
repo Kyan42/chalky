@@ -8,7 +8,8 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
-import { NOTE_RULES, withVoiceRules } from "./voice";
+import { NOTE_RULES } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 import { CONVERSE_MODEL } from "./converse";
 import type { CallLog, LearnerRecord } from "./types";
 
@@ -105,7 +106,7 @@ export async function intakeQuestion(question: string, signal?: AbortSignal, bud
       {
         model: CONVERSE_MODEL,
         max_tokens: 60,
-        system: withVoiceRules(ASK_SYSTEM),
+        system: await withVoiceRules(ASK_SYSTEM),
         thinking: { type: "disabled" },
         output_config: { effort: "low" },
         messages: [{ role: "user", content: `The learner asked: "${question}"` }],

@@ -6,7 +6,7 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
-import { withVoiceRules } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 
 const MODEL = "claude-opus-5-5";
 
@@ -42,7 +42,7 @@ export async function reply(o: { question: string; said: string[]; now?: string;
   const message = await anthropic().messages.create({
     model: MODEL,
     max_tokens: 2000,
-    system: withVoiceRules(SYSTEM),
+    system: await withVoiceRules(SYSTEM),
     thinking: { type: "adaptive" },
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     messages: [{ role: "user", content: context }],

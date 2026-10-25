@@ -7,6 +7,8 @@
  * (`word_timestamps: { words, start, end }` in seconds), `done` and `error`.
  */
 import "server-only";
+import { cookies } from "next/headers";
+import { parsePreferences } from "./preferences";
 
 /**
  * 16-bit PCM at 24 kHz: 48 KB/s of audio, against 176 KB/s for the float32
@@ -68,11 +70,15 @@ function sonicSpeed(): number {
   return Number.isFinite(v) && v >= 0.6 && v <= 1.5 ? v : 1;
 }
 
-export async function* sonicStream(text: string, signal: AbortSignal): AsyncGenerator<BeatAudioEvent> {
+export async function* sonicStream(text: string, signal: AbortSignal, speedOverride?: number): AsyncGenerator<BeatAudioEvent> {
   // Locally the key comes from .env.local. In the cloud environment it is a
   // network secret: the egress proxy adds the Authorization header itself.
   const key = process.env.CARTESIA_API_KEY;
+  let raw: string | undefined;
+  try { raw = (await cookies()).get("chalky-preferences")?.value; } catch {}
+  const preferences = parsePreferences(raw);
 
+  const speed = speedOverride !== undefined && Number.isFinite(speedOverride) && speedOverride >= 0.6 && speedOverride <= 1.5 ? speedOverride : sonicSpeed();
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const stats: SonicStats = { firstAudioMs: null, firstTimestampsMs: null, chunks: 0, bytes: 0, audioSeconds: 0, order: [] };
@@ -89,12 +95,12 @@ export async function* sonicStream(text: string, signal: AbortSignal): AsyncGene
     body: JSON.stringify({
       model_id: process.env.CARTESIA_MODEL_ID || DEFAULT_MODEL,
       transcript: text,
-      voice: { id: process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE },
+      voice: { id: preferences.voice || process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE },
       output_format: { container: "raw", encoding: SONIC_ENCODING, sample_rate: SONIC_SAMPLE_RATE },
-      language: "en",
+      language: preferences.language,
       add_timestamps: true,
       // A touch slower than normal for teaching (Sonic 3 models: 0.6 to 1.5). SONIC_SPEED overrides; 1 turns it off.
-      ...(sonicSpeed() !== 1 ? { generation_config: { speed: sonicSpeed() } } : {}),
+      ...(speed !== 1 ? { generation_config: { speed } } : {}),
     }),
   });
   if (!response.ok || !response.body) {

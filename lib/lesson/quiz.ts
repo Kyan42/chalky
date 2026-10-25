@@ -11,7 +11,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
 import { CONVERSE_MODEL } from "./converse";
 import { DELEGATE_MODEL } from "./delegate";
-import { withVoiceRules } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 import type { CallLog } from "./types";
 
 export interface LabelItem {
@@ -72,7 +72,7 @@ const LABEL_SCHEMA = {
 /** The learner named the numbered parts: which they got, and two or three sentences back. */
 export async function gradeLabel(o: { question: string; items: LabelItem[]; answer: string; inkMarks?: string[] }, signal?: AbortSignal): Promise<QuizGrade> {
   const t0 = performance.now();
-  const system = withVoiceRules(
+  const system = await withVoiceRules(
     `You grade a quick spoken quiz in a lesson. The learner was shown numbered parts of a drawing and asked to name them. Decide for each number whether what they said names it (synonyms, plain-language names and small slips count; a different part does not; a number they skipped is wrong, heard ""). Then write the feedback Chalky, the teacher, says aloud: two or three short sentences, first person, warm, no "good question": say which they got, and name the right answer for each one they missed. Return JSON only.`,
   );
   const user = [
@@ -106,7 +106,7 @@ const SKETCH_SCHEMA = {
 /** The learner drew something from the lesson: graded from the board picture against the lesson's own sentences. */
 export async function gradeSketch(o: { question: string; ask: string; rubric: string[]; image?: string; inkMarks?: string[]; board?: string[]; answer?: string }, signal?: AbortSignal): Promise<QuizGrade> {
   const t0 = performance.now();
-  const system = withVoiceRules(
+  const system = await withVoiceRules(
     `You grade a drawing quiz in a lesson. The learner was asked to draw something on the whiteboard with a pen (their strokes are blue, green, orange or dark; the teacher's own drawing is in chalk). Judge only their drawing, against the rubric: what the drawing must show, taken from what the lesson taught. Rough is fine; what matters is that the idea is there (the right parts, connected the right way, in the right order). Score 0 to 1 (the share of the rubric shown). List what they got right and what is missing, each in a few words. "ids": the ids of board elements your feedback refers to, if any. Then the feedback Chalky, the teacher, says aloud: two or three short sentences, first person, warm and specific: what they got, then what is missing. Return JSON only.`,
   );
   const text = [

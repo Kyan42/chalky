@@ -26,7 +26,8 @@ export async function POST(request: Request) {
     },
     { once: true },
   );
-  const events = sonicStream(text, upstream.signal);
+  const savedSpeed = request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith("chalky-speed="))?.split("=")[1];
+  const events = sonicStream(text, upstream.signal, savedSpeed ? Number(savedSpeed) : undefined);
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({

@@ -16,7 +16,7 @@ import "server-only";
 import { BLOCKS } from "@/lib/blocks";
 import { trackCall } from "./calllog";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
-import { withVoiceRules } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
@@ -34,7 +34,7 @@ function plannerThinking(model: string) {
   return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
 }
 const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
-const plannerSystem = () => withVoiceRules(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
+const plannerSystem = async () => await withVoiceRules(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
 
 ${TITLE_FIRST}` : SYSTEM);
 
@@ -182,7 +182,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
     {
       model: MODEL,
       max_tokens: 14000,
-      system: plannerSystem(),
+      system: await plannerSystem(),
       thinking: plannerThinking(MODEL),
       output_config: { effort },
       messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
@@ -351,7 +351,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
-      system: withVoiceRules(SYSTEM),
+      system: await withVoiceRules(SYSTEM),
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       messages: [{ role: "user", content: amendPrompt(r, newScene) }],

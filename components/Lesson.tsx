@@ -24,6 +24,7 @@
  *   then replays the beat it was on.
  * The mic is half-duplex: it isn't sent while Chalky is speaking.
  */
+import Preferences from "@/components/Preferences";
 import { motion, useReducedMotion } from "framer-motion";
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
@@ -3083,6 +3084,7 @@ export default function Lesson() {
           <img src="/brand/chalk-hand.png" alt="" />
           <span>Chalky</span>
         </a>
+        <Preferences />
         <h1 hidden data-testid="title">{title}</h1>
         {/* Top right, over the stage: the voice switch, the badges and the status with its orb, small and muted. */}
         <div className="tutor-controls">
