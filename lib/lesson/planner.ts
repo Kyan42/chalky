@@ -15,6 +15,7 @@
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
 import { anthropic } from "./anthropic";
+import { withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
@@ -140,7 +141,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
     {
       model: MODEL,
       max_tokens: 14000,
-      system: SYSTEM,
+      system: withVoiceRules(SYSTEM),
       thinking: { type: "adaptive" },
       output_config: { effort },
       messages: [{ role: "user", content: question }],
@@ -262,7 +263,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
-      system: SYSTEM,
+      system: withVoiceRules(SYSTEM),
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       messages: [{ role: "user", content: amendPrompt(r, newScene) }],

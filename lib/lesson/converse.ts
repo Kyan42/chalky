@@ -13,6 +13,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
 import { isResume } from "./resume";
+import { NOTE_RULES, withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
@@ -114,7 +115,7 @@ While you speak, a cursor (a teacher's hand) moves over the board. Add a cue for
 Everything between the first line and the trailer line is spoken aloud to the learner, word for word. Speak to them directly: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there.
 
 Output format, exactly: a first line "level: confirm" | "level: answer" | "level: detour" | "level: replan", then the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"level": "confirm" | "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what the learner needs and which picture or angle would show it"}
+{"level": "confirm" | "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences for the planner, as instructions: what the learner needs and which picture or angle would show it"}
 Nothing else: no code fences, no commentary.`;
 
 const LEVELS = new Set<ConverseLevel>(["confirm", "answer", "detour", "replan"]);
@@ -299,7 +300,7 @@ function params(model: string, input: ConverseInput): Anthropic.MessageStreamPar
   const base: Anthropic.MessageStreamParams = {
     model,
     max_tokens: 700,
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: `${withVoiceRules(SYSTEM)}\n\n${NOTE_RULES}`, cache_control: { type: "ephemeral" } }],
     output_config: { effort: "low" },
     messages: [{ role: "user", content: context(input) }],
   };

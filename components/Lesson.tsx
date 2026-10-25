@@ -37,6 +37,7 @@ import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib
 import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
+import { firstPerson } from "@/lib/lesson/voice";
 import { unlockAudio } from "@/lib/voice/audio";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
@@ -223,7 +224,7 @@ function prefetchSpeech(state: BeatState, parent: AbortSignal): Prefetch {
   parent.addEventListener("abort", () => abort.abort(), { once: true });
   const p: Prefetch = { state, events: [], bytes: 0, done: false, failed: false, abort, settled: Promise.resolve(), wake: () => {} };
   p.settled = (async () => {
-    const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal: abort.signal });
+    const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: firstPerson(state.beat.say).text }), signal: abort.signal });
     if (!r.ok || !r.body) throw new Error(`speech failed (${r.status})`);
     for await (const ev of ndjson<BeatAudioEvent>(r)) {
       p.events.push(ev);
@@ -423,7 +424,11 @@ export default function Lesson() {
    */
   const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void }) => {
     const ctx = await unlockAudio();
-    setWords(state.beat.say.split(/\s+/));
+    // The safety net: Chalky never speaks of itself in the third person ("Chalky's board" -> "my board").
+    const voiced = firstPerson(state.beat.say);
+    if (voiced.rewrites.length) logRef.current({ kind: "self-name-rewrite", role: state.beat.id === "line" ? "line" : "beat", beatId: state.beat.id, from: state.beat.say, to: voiced.text, rewrites: voiced.rewrites });
+    const spokenText = voiced.text;
+    setWords(spokenText.split(/\s+/));
     setWordIndexNow(-1);
     wordIndexRef.current = -1;
     setSpeaking(true);
@@ -486,7 +491,7 @@ export default function Lesson() {
           speech?.onHeld?.(Math.round(performance.now() - t), pre.done && !pre.failed);
           if (!pre.failed) return replayPrefetch(pre);
         }
-        const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: state.beat.say }), signal });
+        const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spokenText }), signal });
         if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
         return ndjson<BeatAudioEvent>(response);
       };
@@ -976,7 +981,9 @@ export default function Lesson() {
         const reading = (async () => {
           for await (const ev of ndjson<ConverseEvent>(res)) {
             if (ev.type === "sentence") {
-              sentences.push({ text: ev.text });
+              const voicedSentence = firstPerson(ev.text);
+              if (voicedSentence.rewrites.length) logEv({ kind: "self-name-rewrite", role: "reply", from: ev.text, to: voicedSentence.text, rewrites: voicedSentence.rewrites });
+              sentences.push({ text: voicedSentence.text });
               if (sentences.length - 1 <= playingIndex + 1) ensure(sentences.length - 1);
               wake();
             } else if (ev.type === "level") {

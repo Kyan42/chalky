@@ -8,6 +8,7 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
+import { NOTE_RULES, withVoiceRules } from "./voice";
 import { CONVERSE_MODEL } from "./converse";
 import type { LearnerRecord } from "./types";
 
@@ -95,7 +96,7 @@ export async function intakeQuestion(question: string, signal?: AbortSignal, bud
       {
         model: CONVERSE_MODEL,
         max_tokens: 60,
-        system: ASK_SYSTEM,
+        system: withVoiceRules(ASK_SYSTEM),
         thinking: { type: "disabled" },
         output_config: { effort: "low" },
         messages: [{ role: "user", content: `The learner asked: "${question}"` }],
@@ -126,7 +127,7 @@ export async function decideIntake(o: { question: string; asked: string; answer:
   ]
     .filter(Boolean)
     .join("\n\n");
-  const r = await json<{ amend: boolean; note: string; level: LearnerRecord["level"]; prior: string; focus: string }>(DECIDE_SYSTEM, user, DECIDE_SCHEMA, 300, signal);
+  const r = await json<{ amend: boolean; note: string; level: LearnerRecord["level"]; prior: string; focus: string }>(`${DECIDE_SYSTEM}\n\n${NOTE_RULES}`, user, DECIDE_SCHEMA, 300, signal);
   return {
     amend: r.amend === true && r.note.trim().length > 0,
     note: r.note.trim(),
