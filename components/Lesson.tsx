@@ -71,27 +71,6 @@ const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
-/**
- * Voice barge-in (experimental): talk over Chalky to interrupt. The "Voice interrupt" switch in the header
- * turns it on or off and is remembered in this browser; until it is touched, NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN=1
- * decides. In development, ?voice=1 or ?voice=0 overrides both. Without headphones the speakers can leak
- * into the mic; Space always works.
- */
-const VOICE_KEY = "chalky.voiceInterrupt";
-function voiceBargeInEnabled(): boolean {
-  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
-    const v = new URLSearchParams(window.location.search).get("voice");
-    if (v === "1") return true;
-    if (v === "0") return false;
-  }
-  try {
-    const saved = typeof window !== "undefined" ? window.localStorage.getItem(VOICE_KEY) : null;
-    if (saved === "1" || saved === "0") return saved === "1";
-  } catch {
-    // Storage blocked (private window): fall back to the build's default.
-  }
-  return process.env.NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN === "1";
-}
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
 const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
@@ -753,9 +732,6 @@ export default function Lesson() {
   /** The learner's live words on the shared transcript line; cleared only once Chalky's audio actually starts. */
   const [learnerCaption, setLearnerCaption] = useState("");
   const captionAwaitingSpeech = useRef(false);
-  // Read after mount so the server render and the first client render agree.
-  const [voiceBargeIn, setVoiceBargeIn] = useState(false);
-  useEffect(() => setVoiceBargeIn(voiceBargeInEnabled()), []);
   /** Paused and not listening (Stop, Pause, a Space tap): nothing the learner says, types or draws is taken. */
   const [halted, setHalted] = useState(false);
   /** A label quiz: numbered markers over the board, each hiding its label until the answers are graded. */
@@ -776,7 +752,7 @@ export default function Lesson() {
     setHalted(on);
   }, []);
   const voice = useHybridMic({
-    voiceBargeIn,
+    voiceBargeIn: true,
     onVoiceBargeIn: (partial) => logRef.current({ kind: "voice-barge", partial, status: statusRef.current }),
     onVoiceIgnored: (text) => logRef.current({ kind: "voice-ignored", text }),
     // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
@@ -3112,14 +3088,10 @@ export default function Lesson() {
   // The start screen stays through the greeting (the tree rises on its first sound); a question ends it.
   const showWelcome = !question;
 
-  // Leo's tutor chrome: the telemetry panel is behind ?debug=1 (its toggle shows only then); the typing box
-  // is open on a desktop and folded on a phone, behind "Type instead" either way. Both read in an effect so
-  // the server and the browser render the same page.
+  // Keep developer telemetry available through ?debug=1 without adding lesson controls.
   const [debug, setDebug] = useState(false);
-  const [typing, setTyping] = useState(true);
   useEffect(() => {
     setDebug(new URLSearchParams(location.search).get("debug") === "1");
-    if (window.matchMedia("(max-width: 600px)").matches) setTyping(false);
   }, []);
   /** The mascot: chalk in hand on the start screen; talking while Chalky's audio plays, thinking otherwise. */
   const mascotState = showWelcome ? "chalk-in-hand" : speakingAudio ? "talking" : "thinking";
@@ -3143,53 +3115,16 @@ export default function Lesson() {
           <span>Chalky</span>
         </a>
         <Preferences />
+            {penReady && (
+              <div className="pen" data-testid="pen">
+                {INK_COLORS.map((c) => (
+                  <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Pen colour ${c}`} aria-pressed={c === inkColor} onClick={() => setInkColor(c)} />
+                ))}
+                <button type="button" onClick={() => showInk(inkRef.current.slice(0, -1))} disabled={!ink.length} data-testid="ink-undo">Undo</button>
+                <button type="button" onClick={() => showInk([])} disabled={!ink.length} data-testid="ink-clear">Clear</button>
+              </div>
+            )}
         <h1 hidden data-testid="title">{title}</h1>
-        {/* Top right, over the stage: the voice switch, the badges and the status with its orb, small and muted. */}
-        <div className="tutor-controls">
-          {researching && (
-            <span className="voice-badge" data-testid="research-badge" title="Looking up recent sources to teach this from">
-              Looking up the latest…
-            </span>
-          )}
-          {delegating && (
-            <span className="voice-badge" data-testid="delegate-badge" title="Chalky handed this to a slower helper that sees the whole board">
-              Looking it up…
-            </span>
-          )}
-          {voiceBargeIn && (
-            <span className="voice-badge" data-testid="voice-barge-badge" title="Talk over Chalky to interrupt. Use headphones: speakers can leak into the mic. Space still pauses.">
-              Voice interrupt on · headphones
-            </span>
-          )}
-          <button
-            type="button"
-            className="debug-toggle"
-            aria-pressed={voiceBargeIn}
-            onClick={() =>
-              setVoiceBargeIn((on) => {
-                try {
-                  window.localStorage.setItem(VOICE_KEY, on ? "0" : "1");
-                } catch {
-                  // Not remembered (storage blocked); it still applies now.
-                }
-                return !on;
-              })
-            }
-            data-testid="voice-toggle"
-            title="Talk over Chalky to interrupt it (best with headphones). Space always works."
-          >
-            Voice interrupt
-          </button>
-          {debug && (
-            <button type="button" className="debug-toggle" aria-pressed={debug} onClick={() => setDebug((v) => !v)} data-testid="debug-toggle" title="Beats, timings, learner record and prefetch stats">
-              Debug
-            </button>
-          )}
-          <div className="mic" data-testid="status" data-state={status}>
-            {statusLabel[status]}
-            <Orb state={orbState} level={orbLevel} size={26} />
-          </div>
-        </div>
         <section className="stage" data-testid="stage">
           {showWelcome && treeRevealed && (
             // The welcome scenery enters on the greeting's first audio chunk, never on mic activation.
@@ -3257,15 +3192,7 @@ export default function Lesson() {
                 })}
               </div>
             )}
-            {penReady && (
-              <div className="pen" data-testid="pen">
-                {INK_COLORS.map((c) => (
-                  <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Pen colour ${c}`} aria-pressed={c === inkColor} onClick={() => setInkColor(c)} />
-                ))}
-                <button type="button" onClick={() => showInk(inkRef.current.slice(0, -1))} disabled={!ink.length} data-testid="ink-undo">Undo</button>
-                <button type="button" onClick={() => showInk([])} disabled={!ink.length} data-testid="ink-clear">Clear</button>
-              </div>
-            )}
+
           </div>
           {/* The mascot: chalk in hand, centred, on the start screen; small at bottom left while teaching. Transparent webm, no blend. */}
           <div className={showWelcome ? "tutor-character" : "tutor-character teaching"} data-testid={showWelcome ? "welcome" : "mascot"} data-mascot={mascotState}>
@@ -3386,46 +3313,10 @@ export default function Lesson() {
                 </span>
               ) : micMuted ? "Unmute" : "Mute"}
             </motion.button>
-            {voice.started && (status === "speaking" || status === "replying") && busy && !halted && (
-              // Freezes Chalky and listens, like holding Space: what the learner says next cuts in.
-              <button className="quiet-action" type="button" onClick={() => pausePlayback(true)} data-testid="interrupt" title="Space">
-                Tap to interrupt
-              </button>
-            )}
-            {(waitingForLearner || paused) && !halted && (
-              <button type="button" className="quiet-action" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
-            )}
             {quizDone && (
               <button type="button" className="quiet-action" onClick={quizDone} data-testid="quiz-done">Done</button>
             )}
-            {busy &&
-              (halted ? (
-                <button type="button" className="quiet-action start" onClick={resumePlayback} data-testid="start">Start</button>
-              ) : (
-                <button type="button" className="quiet-action" onClick={halt} data-testid="stop">Stop</button>
-              ))}
-            <button type="button" className="quiet-action" aria-expanded={typing} onClick={() => setTyping((v) => !v)} data-testid="typing-toggle">
-              {typing ? "Hide typing" : "Type instead"}
-            </button>
           </div>
-          <form
-            className="ask"
-            hidden={!typing}
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={halted ? "Chalky is stopped. Press Start to carry on." : waitingForLearner ? "Answer or ask Chalky…" : "Type a question, or just say it"}
-              disabled={halted}
-              aria-label="Question"
-              data-testid="question"
-            />
-            <button type="submit" disabled={halted || !draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
-          </form>
         </footer>
       </div>
       {(error || voice.error) && <div className="lesson-error" data-testid="error">{error ?? voice.error}</div>}

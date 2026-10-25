@@ -169,12 +169,12 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 
 /* The learner's pen over the board (components/InkLayer.tsx). */
 .stage canvas.ink { position: absolute; inset: 0; touch-action: none; z-index: 2; }
-.stage .pen { position: absolute; right: 0.8em; top: 0.8em; z-index: 3; display: flex; align-items: center; gap: 0.4em;
-  padding: 0.35em 0.5em; border-radius: 999px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
-.stage .pen .swatch { width: 1.3em; height: 1.3em; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
-.stage .pen .swatch[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px #23262f; }
-.stage .pen button:not(.swatch) { font: inherit; font-size: 0.8em; border: 0; background: none; cursor: pointer; padding: 0.2em 0.4em; }
-.stage .pen button:disabled { opacity: 0.4; cursor: default; }
+.tutor-board > .pen { position: absolute; left: 50%; top: 32px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 0.4em;
+  padding: 0.35em 0.5em; border: 1px solid rgba(0, 0, 0, 0.16); border-radius: 999px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+.tutor-board > .pen .swatch { width: 1.3em; height: 1.3em; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.tutor-board > .pen .swatch[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px #23262f; }
+.tutor-board > .pen button:not(.swatch) { font: inherit; font-size: 0.8em; border: 0; background: none; cursor: pointer; padding: 0.2em 0.4em; }
+.tutor-board > .pen button:disabled { opacity: 0.4; cursor: default; }
 
 /* ---- Leo's tutor interface (codex/chalky-tutor-ui-and-icons at bbc2285), re-applied on the action-model page ---- */
 .tutor-wrap { background: var(--paper); }
@@ -195,9 +195,9 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .tutor-controls .mic { white-space: nowrap; font-size: 12px; color: var(--muted); }
 .tutor-controls .mic[data-state="speaking"] .dot { background: var(--ochre); }
 .tutor-controls .voice-badge { margin-right: 0; }
-/* The research source cards start below the top-right controls, so neither covers the other. */
-.tutor-board [data-testid="research"][data-layout="overlay"] { top: 72px; right: 32px; max-height: calc(100% - 84px); }
-@media (max-width: 600px) { .tutor-board [data-testid="research"][data-layout="overlay"] { top: 64px; right: 10px; max-height: calc(100% - 230px); } }
+/* The research source cards start below the preferences gear (top right), so neither covers the other. */
+.tutor-board [data-testid="research"][data-layout="overlay"] { top: 100px; right: 32px; max-height: calc(100% - 112px); }
+@media (max-width: 600px) { .tutor-board [data-testid="research"][data-layout="overlay"] { top: 86px; right: 10px; max-height: calc(100% - 250px); } }
 .debug-toggle { font: 400 12px "Instrument Sans", sans-serif; border: 1px solid var(--rule); border-radius: 999px; background: transparent;
   color: var(--muted); padding: 0.25em 0.7em; cursor: pointer; }
 .debug-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
@@ -331,5 +331,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .preference-field button { border: 0; background: transparent; color: #955339; text-decoration: underline; cursor: pointer; }
 @media (max-width: 600px) { .preferences-grid { grid-template-columns: 1fr; gap: 22px; } }
 
-.tutor-controls { right: 108px; }
-@media (max-width: 600px) { .tutor-controls { right: 84px; } }
+@media (max-width: 640px) {
+  .tutor-board > .pen { top: 94px; white-space: nowrap; }
+}
