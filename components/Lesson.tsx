@@ -1891,6 +1891,14 @@ export default function Lesson() {
         }
         history.push({ who: "chalky", text: reply.said });
         let trailer = reply.trailer;
+        // An ask whose question the reply never got to say (the sentence cap): say it now, so the wait has a question.
+        const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (trailer.check && !norm(reply.said).includes(norm(trailer.check).slice(0, 40))) {
+          logEv({ kind: "say", who: "chalky", role: "ask (unspoken in the reply)", text: trailer.check });
+          setStatus("speaking");
+          await playBeat(line(trailer.check), abort.signal, null).catch(() => {});
+          history.push({ who: "chalky", text: trailer.check });
+        }
         // Over the board: go_to moves the camera, highlight circles; a delegate's actions arrive after it and
         // apply the same way (its amend and resume replace the reply's).
         if (trailer.goTo) await goTo(trailer.goTo, Math.max(i, 0));

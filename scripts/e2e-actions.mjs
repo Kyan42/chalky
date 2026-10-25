@@ -104,17 +104,18 @@ try {
 
   if (SCRIPT === "a") {
     await say("learn");
-    const [r1] = await waitReplies(1, 30000);
+    // The page's status, not the transcript file (saved every 2 s): the intake's silence window is 4 s.
+    await waitFor((s) => s.status === "Your turn", 40000);
+    await say("intake");
+    await waitFor((s) => s.beat === "b1" && s.status === "Speaking", 60000);
+    const [r1] = await waitReplies(1, 5000);
     console.log(`        reply: "${r1?.text}" [${names(r1)}]`);
     check("first words: ask + start_lesson", /ask/.test(names(r1)) && /start_lesson/.test(names(r1)), names(r1));
     check("the planner started from the reply's actions", plans.length === 1, `${plans.length} plan request(s)`);
-    await waitFor((s) => s.status === "Your turn", 20000);
-    await say("intake");
-    await waitFor((s) => s.beat === "b1" && s.status === "Speaking", 60000);
     await page.waitForTimeout(8000);
     const t = transcript();
     const ev = (k) => t?.events.filter((e) => e.kind === k) ?? [];
-    check("the intake was the model's ask, then answered and decided", ev("intake-asked").length === 1 && ev("intake-decision").length === 1, `${JSON.stringify(ev("intake-asked")[0]?.text)}; decision ${JSON.stringify(ev("intake-decision")[0] && { amend: ev("intake-decision")[0].amend, note: ev("intake-decision")[0].note })}`);
+    check("the intake was the model's ask, then answered and decided", ev("intake-asked").length === 1 && ev("intake-decision").length === 1 && !ev("intake-decision")[0].skipped, `${JSON.stringify(ev("intake-asked")[0]?.text)}; decision ${JSON.stringify(ev("intake-decision")[0] && { amend: ev("intake-decision")[0].amend, note: ev("intake-decision")[0].note })}`);
     check("the lesson plays", ev("planned").length > 3 && !!(await st()).beat, `${ev("planned").length} beats planned; now ${(await st()).beat}`);
   } else if (SCRIPT === "b") {
     await say("quick");

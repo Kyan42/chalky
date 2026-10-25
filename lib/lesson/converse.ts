@@ -219,6 +219,8 @@ Nothing else: no code fences, no commentary.`;
 function sentenceBudget(names: string[]): number {
   if (names.some((n) => n === "amend:insert_after" || n === "amend:replace_from" || n === "delegate")) return 1;
   if (names.length && names.every((n) => n === "say" || n === "resume")) return 3;
+  // Room for the question itself after a line or two.
+  if (names.includes("ask")) return 3;
   return 2;
 }
 /** The level an actions line implies, for the early "level" event. */
