@@ -35,11 +35,16 @@ export function cacheKey(question: string): string {
   );
 }
 
-/** The search sent to Google: the learner's question as asked, minus video sites. */
+/**
+ * The search sent to Google: the learner's question as asked. No "-site:" operators: measured on
+ * 2026-10-24 they made Standby time out (40 s) where the plain question came back in 4 to 5 s;
+ * video sites are dropped from the results instead (toCards).
+ */
 export function searchQuery(question: string, title?: string): string {
-  const q = question.trim().replace(/[?!.]+$/, "") || (title ?? "").trim();
-  return `${q} -site:youtube.com -site:tiktok.com`;
+  return question.trim().replace(/[?!.]+$/, "") || (title ?? "").trim();
 }
+
+const VIDEO_SITES = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com)$/;
 
 // ---- runs in flight ----------------------------------------------------------------------
 
@@ -128,7 +133,7 @@ async function fetchPages(query: string, token: string): Promise<{ cards: Source
 async function viaStandby(query: string, token: string): Promise<RagItem[]> {
   const params = new URLSearchParams({
     query,
-    maxResults: String(MAX_RESULTS),
+    maxResults: String(MAX_RESULTS + 2), // two spare: pages often fail or sit behind a cookie wall
     scrapingTool: "raw-http",
     outputFormats: "markdown",
     requestTimeoutSecs: String(REQUEST_TIMEOUT_SECS),
@@ -148,7 +153,7 @@ async function viaStandby(query: string, token: string): Promise<RagItem[]> {
 async function viaRun(query: string, token: string): Promise<RagItem[]> {
   const client = new ApifyClient({ token });
   const run = await client.actor(ACTOR).call(
-    { query, maxResults: MAX_RESULTS, scrapingTool: "raw-http", outputFormats: ["markdown"], requestTimeoutSecs: REQUEST_TIMEOUT_SECS, removeCookieWarnings: false },
+    { query, maxResults: MAX_RESULTS + 2, scrapingTool: "raw-http", outputFormats: ["markdown"], requestTimeoutSecs: REQUEST_TIMEOUT_SECS, removeCookieWarnings: false },
     // 4 GB starts cheaper than the actor's 8 GB default; raw-http needs no browser.
     { memory: 4096, timeout: 120, waitSecs: 150, log: null },
   );
@@ -169,6 +174,7 @@ function toCards(items: RagItem[]): SourceCard[] {
     } catch {
       continue;
     }
+    if (VIDEO_SITES.test(site)) continue;
     const description = clean(it.searchResult?.description || it.metadata?.description || "");
     cards.push({
       title: clean(it.metadata?.title || it.searchResult?.title || site).slice(0, 140),
@@ -185,7 +191,8 @@ function toCards(items: RagItem[]): SourceCard[] {
 export function toParagraphs(md: string): string[] {
   const out: string[] = [];
   let total = 0;
-  for (const block of md.replace(/\r/g, "").split(/\n\s*\n/)) {
+  // Blockquote markers off first, so a page written as one long quote still splits into paragraphs.
+  for (const block of md.replace(/\r/g, "").replace(/^(?:>[ \t]?)+/gm, "").split(/\n\s*\n/)) {
     const raw = block.trim();
     if (!raw || /^(#|\||```|>?\s*!\[)/.test(raw)) continue;
     const text = clean(raw);
@@ -202,6 +209,7 @@ export function toParagraphs(md: string): string[] {
 
 function clean(md: string): string {
   return md
+    .replace(/\\([[\]()*_#>])/g, "$1") // markdown escapes: \[Ref. 1\] → [Ref. 1]
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links keep their words
     .replace(/\[\d+\]|\[citation needed\]|\[edit\]/gi, "") // wiki footnotes
