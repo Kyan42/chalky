@@ -8,8 +8,8 @@
  * Shared by the live /api/draw route and the board-layout experiment.
  */
 import { PALETTE } from "@/experiments/visual-flex/doc";
-import { BLOCKS, type Block } from "@/lib/blocks";
-import { BLOCK_LANGUAGE, blockLanguageFor } from "@/lib/blocks/catalog";
+import type { Block } from "@/lib/blocks";
+import { blockLanguageFor } from "@/lib/blocks/catalog";
 import { PRESET_KINDS } from "@/lib/lesson/presets";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
@@ -17,13 +17,14 @@ const COLORS = Object.keys(PALETTE);
 
 export const DRAW_SYSTEM = `You draw on a teacher's whiteboard, one beat of a spoken lesson at a time. A teacher voice speaks the sentence; your drawing starts the moment the anchor word is spoken, builds while the rest of the sentence plays, then holds still. The board keeps everything from earlier beats, like a real whiteboard. Show the idea with shapes and arrows, not sentences: labels are 1 to 3 words. Answer with the requested output only.`;
 
-export const PRESET_LANGUAGE = `Scene language. The board is a 100x100 grid: x right, y down, (0,0) top left; it is 3:2 on screen, so 1 unit of x is 1.5x as long as 1 unit of y. You choose WHAT to draw and roughly WHERE; the renderer places labels, snaps arrows to shapes and keeps text from overlapping, so prefer the kinds that do that for you.
+/** The scene language, with the block section and the "has a block" list for just these blocks. */
+export const presetLanguage = (blocks: Block[]) => `Scene language. The board is a 100x100 grid: x right, y down, (0,0) top left; it is 3:2 on screen, so 1 unit of x is 1.5x as long as 1 unit of y. You choose WHAT to draw and roughly WHERE; the renderer places labels, snaps arrows to shapes and keeps text from overlapping, so prefer the kinds that do that for you.
 
 Every element has: id (short unique name, e.g. "sun", "leaf", "co2-in"), kind, at (seconds after the anchor word, 0-4.5), dur (seconds to draw, 0.1-3), color, args (numbers in the order below), text ("" if unused), refs (comma-separated ids, "" if unused).
 
-${BLOCK_LANGUAGE}
+${blockLanguageFor(blocks)}
 
-Shapes (give them a text label; the renderer puts it inside or on the free side). Not for anything that has a block: ${BLOCKS.map((b) => b.id).join(", ")} are drawn with block (above), and a circle or box labelled "leaf", "cell" or "sun" is wrong, not a simpler version.
+Shapes (give them a text label; the renderer puts it inside or on the free side). Not for anything that has a block: ${blocks.length ? blocks.map((b) => b.id).join(", ") : "(none this beat)"} are drawn with block (above), and a circle or box labelled "leaf", "cell" or "sun" is wrong, not a simpler version.
 - circle: args cx, cy, r (radius in x units, 3-15 is typical), filled (1 or 0). text = label.
 - box: args x, y, w, h (top-left corner and size), filled (1 or 0). text = label.
 Connections (snap to the shapes they join; never give coordinates for these):
@@ -84,7 +85,7 @@ const span = (r: PlannedBeat["region"]) => `x ${r.x}..${r.x + r.w}, y ${r.y}..${
  * scene: the model sees what they declared (ids, what, region), not what they drew.
  * `blocks` (picked per beat by lib/moss/blocks.ts) narrows the block catalog; null lists them all.
  */
-export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], blocks?: Block[] | null): string {
+export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], blocks: Block[]): string {
   const pointOnly = beat.mode === "point";
   const before = earlier.flatMap((b) => b.adds.map((e) => `- ${e.id}: ${e.what} (somewhere in ${span(b.region)})`));
   const must = beat.adds.length
@@ -104,7 +105,7 @@ export function drawPrompt(question: string, beat: PlannedBeat, earlier: Planned
       : "The board is empty before this beat.",
     "refs may only name ids from the lists above or ids of elements earlier in your own answer; any other ref is dropped.",
     "",
-    blocks ? PRESET_LANGUAGE.replace(BLOCK_LANGUAGE, blockLanguageFor(blocks)) : PRESET_LANGUAGE,
+    presetLanguage(blocks),
     "",
     "Return JSON matching the schema.",
   ]
