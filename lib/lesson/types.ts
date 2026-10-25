@@ -113,7 +113,7 @@ export interface CallLog {
   error: string | null;
   /** For a plan change: what each scene holds once it is in, and what the scene rules fixed (lib/lesson/scenes.ts). */
   layout?: {
-    scenes: { scene: number; kept: number; draws: number; points: number }[];
+    scenes: { scene: number; kept: number; draws: number; points: number; sketches: number }[];
     deduped: string[];
     replaced: number;
     movedOn: number;

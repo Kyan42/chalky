@@ -87,6 +87,12 @@ export interface ConverseTrailer {
   highlights?: { element?: string; region?: { x: number; y: number; w: number; h: number } }[];
   /** delegate's request, if any. */
   delegate?: string | null;
+  /**
+   * After a cut-in mid-beat, where the beat goes on once the lesson continues: "word" from the word they
+   * cut in at, "next" with the next beat (the cut came late, or the reply already said the rest), or
+   * "start" from the beat's beginning (they asked about the beat itself: still lost, or didn't hear it).
+   */
+  cut?: "word" | "next" | "start";
 }
 
 /** A scene of the one board, as the fast model sees it: its number, a title, and the ids drawn there. */
@@ -495,10 +501,12 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   }
   if (check && resume !== "wait") resume = "wait";
   if (escalated && resume === "wait") resume = "replay_beat";
-  // Cut off mid-beat: say the beat again only when the cut came early and they asked about the beat itself.
-  // Late in the beat, or when the reply already said what the rest of it says, the lesson goes on.
+  // Cut off mid-beat: the beat starts over only when they asked about the beat itself (still lost, or didn't
+  // hear it). Late in the beat, or when the reply already said what the rest of it says, the lesson goes on
+  // with the next beat; otherwise it goes on from the word they cut in at.
   let resumeWhy: string | undefined;
-  if (resume === "replay_beat" && input.wordIndex >= 0 && input.beats[input.beatIndex]) {
+  let cut: ConverseTrailer["cut"];
+  if (input.wordIndex >= 0 && input.beats[input.beatIndex]) {
     const said = input.beats[input.beatIndex].say.split(/\s+/);
     const spokenFrac = Math.min(1, (input.wordIndex + 1) / Math.max(1, said.length));
     const KEY_STOP = new Set(["about", "there", "their", "these", "those", "which", "would", "could", "every", "other", "think", "really", "where", "while"]);
@@ -508,11 +516,13 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     const shared = [...rest].filter((w) => reply.has(w) || reply.has(w.replace(/s$/, "")) || reply.has(`${w}s`));
     const covered = rest.size >= 2 && shared.length / rest.size >= 0.5;
     const aboutBeat = isStillLost(input.utterance) || /\b(what did you (just )?say|say that again|repeat that|come again|pardon|didn'?t (hear|catch))\b/i.test(input.utterance);
-    if (!aboutBeat && (spokenFrac > 0.6 || covered)) {
+    cut = aboutBeat ? "start" : spokenFrac > 0.6 || covered ? "next" : "word";
+    const why = `cut at ${Math.round(spokenFrac * 100)}% of the beat${covered ? `, the reply covered the rest (${shared.slice(0, 4).join(", ")})` : ""}${aboutBeat ? ", asked about the beat itself" : ""}: goes on ${cut === "start" ? "from the beat's start" : cut === "next" ? "with the next beat" : "from the word they cut in at"}`;
+    if (resume === "replay_beat" && cut !== "start") {
       resume = "continue";
-      resumeWhy = `replay_beat overridden: cut at ${Math.round(spokenFrac * 100)}% of the beat${covered ? `, and the reply covered the rest (${shared.slice(0, 4).join(", ")})` : ""}`;
-      console.info(`[converse] ${resumeWhy}`);
-    }
+      resumeWhy = `replay_beat overridden; ${why}`;
+    } else resumeWhy = why;
+    console.info(`[converse] ${resumeWhy}`);
   }
   // The cleaned list, in the model's order, with what the executor will really do.
   const actions: ConverseAction[] = [];
@@ -531,7 +541,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (lesson && !actions.some((x) => x.type === "start_lesson")) actions.push({ type: "start_lesson", ...lesson });
   if (amend && !actions.some((x) => x.type === "amend")) actions.push({ type: "amend", ...amend });
   actions.push({ type: "resume", how: resume, ...(resumeWhy ? { why: resumeWhy } : {}) });
-  return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate };
+  return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate, ...(cut ? { cut } : {}) };
 }
 
 /** The trailer used when the model gave none (or unparsable JSON). */

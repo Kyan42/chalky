@@ -31,6 +31,10 @@ export async function POST(request: Request) {
       said: typeof body.said === "string" ? body.said.slice(0, 600) : undefined,
       prefix,
       intake: body.intake === true,
+      sketches: (Array.isArray(body.sketches) ? (body.sketches as PlannedBeat[]) : [])
+        .filter((b) => b && b.region && Array.isArray(b.adds))
+        .slice(0, 30)
+        .map((b) => ({ ...b, mode: "draw" as const, scene: b.scene ?? 1, points: [] })),
       learner: cleanLearner(body.learner),
     },
     upstream.signal,

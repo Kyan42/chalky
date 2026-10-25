@@ -25,6 +25,8 @@ export interface SceneTally {
   kept: number;
   draws: number;
   points: number;
+  /** Sketches answers drew there (they count as drawings too). */
+  sketches: number;
 }
 
 export interface SceneReport {
@@ -80,15 +82,20 @@ export class SceneGuard {
   private drawn = new Map<number, Region[]>();
   private keptCount = new Map<number, number>();
   private points = new Map<number, number>();
+  private sketchCount = new Map<number, number>();
   private elements = new Map<number, Map<string, { id: string; region: Region }>>();
   private report: SceneReport = { scenes: [], deduped: [], replaced: 0, movedOn: 0, notes: [] };
 
-  /** `kept`: the beats before the change that stay (their drawings are on the board, or will be). */
-  constructor(kept: PlannedBeat[]) {
+  /** `kept`: the beats before the change that stay (their drawings are on the board, or will be); `sketches`: answers' sketches. */
+  constructor(kept: PlannedBeat[], sketches: PlannedBeat[] = []) {
     for (const b of kept) {
       if (b.mode !== "draw") continue;
       this.record(b.scene, b.region, b.adds);
       this.keptCount.set(b.scene, (this.keptCount.get(b.scene) ?? 0) + 1);
+    }
+    for (const b of sketches) {
+      this.record(b.scene, b.region, b.adds);
+      this.sketchCount.set(b.scene, (this.sketchCount.get(b.scene) ?? 0) + 1);
     }
   }
 
@@ -171,7 +178,8 @@ export class SceneGuard {
     const scenes = [...new Set([...this.drawn.keys(), ...this.points.keys()])].sort((a, b) => a - b);
     this.report.scenes = scenes.map((scene) => {
       const kept = this.keptCount.get(scene) ?? 0;
-      return { scene, kept, draws: (this.drawn.get(scene)?.length ?? 0) - kept, points: this.points.get(scene) ?? 0 };
+      const sketches = this.sketchCount.get(scene) ?? 0;
+      return { scene, kept, draws: (this.drawn.get(scene)?.length ?? 0) - kept - sketches, points: this.points.get(scene) ?? 0, sketches };
     });
     return this.report;
   }

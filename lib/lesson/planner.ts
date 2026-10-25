@@ -249,6 +249,8 @@ export interface AmendRequest {
   /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
   intake?: boolean;
   learner?: LearnerRecord;
+  /** Sketches answers drew on the board so far (scene, scene-local region, adds): drawings like any other. */
+  sketches?: PlannedBeat[];
 }
 
 /**
@@ -257,7 +259,7 @@ export interface AmendRequest {
  */
 function detourScene(r: AmendRequest, maxScene: number): { scene: number; drawn: PlannedBeat[]; stay: boolean } {
   const scene = r.beats[r.index]?.scene ?? 0;
-  const drawn = r.beats.slice(0, r.index + 1).filter((b) => b.scene === scene && b.mode === "draw");
+  const drawn = [...r.beats.slice(0, r.index + 1), ...(r.sketches ?? [])].filter((b) => b.scene === scene && b.mode === "draw");
   const stay = r.op === "insert_after" && !r.intake && scene > 0 && scene === maxScene && !r.beats.slice(r.index + 1).some((b) => b.scene === scene);
   return { scene, drawn, stay };
 }
@@ -276,7 +278,7 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     : `It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}.`;
   // A new ending continues on the kept beat's board: say what is on it, so nothing is drawn twice.
   const keptBeats = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : [];
-  const onBoard = keptBeats.filter((b) => b.scene === newScene && b.mode === "draw");
+  const onBoard = [...keptBeats, ...(r.sketches ?? [])].filter((b) => b.scene === newScene && b.mode === "draw");
   const holds = onBoard.length
     ? `Already drawn on the board the learner is looking at (scene ${newScene}): ${onBoard.map((b) => `${b.adds.map((a) => `${a.id} (${a.what})`).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]`).join("; ")}. Never add any of these again, under any id or name: refer to them by id (a point beat) instead. Scene ${newScene} has room for ${Math.max(0, MAX_DRAWS_PER_SCENE - onBoard.length)} more drawing(s).`
     : "";
@@ -344,7 +346,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   let detourAt: number | null = null;
   const notes: string[] = [];
   // The scene rules the first plan's layout pass keeps, applied to each changed beat as it arrives.
-  const guard = new SceneGuard(kept);
+  const guard = new SceneGuard(kept, r.sketches ?? []);
   let n = 0;
   const parse = function* (line: string): Generator<PlanEvent> {
     const trimmed = line.trim();

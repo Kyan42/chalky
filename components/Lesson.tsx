@@ -111,6 +111,48 @@ interface BeatState {
   sketches?: PresetElement[];
   /** The elements those sketches introduced, for the board's names. */
   sketchAdds?: { id: string; what: string }[];
+  /** The sketches as beats (scene, scene-local region, adds), so a plan change knows what they hold. */
+  sketchBeats?: PlannedBeat[];
+  /** The beat's speech as it played (events in order), so it can go on from a word after a cut-in. */
+  speech?: { events: BeatAudioEvent[]; done: boolean };
+}
+
+/**
+ * A beat's recorded speech from `sec` on: audio before it is cut away (whole samples) and every timestamp
+ * moves back by `sec`, so the words before it are already in the past and the board, the cursor and the
+ * captions all pick up exactly there.
+ */
+function* speechFrom(events: BeatAudioEvent[], sec: number): Generator<BeatAudioEvent> {
+  let skip = 0;
+  let bytesPerSample = 2;
+  for (const e of events) {
+    if (e.type === "start") {
+      bytesPerSample = e.encoding === "pcm_f32le" ? 4 : 2;
+      skip = Math.round(sec * e.sampleRate) * bytesPerSample;
+      yield e;
+    } else if (e.type === "audio") {
+      if (skip <= 0) {
+        yield e;
+        continue;
+      }
+      const bin = atob(e.data);
+      if (bin.length <= skip) {
+        skip -= bin.length;
+        continue;
+      }
+      const rest = bin.slice(skip);
+      skip = 0;
+      yield { ...e, data: btoa(rest), bytes: rest.length };
+    } else if (e.type === "timestamps") yield { ...e, start: e.start.map((t) => t - sec), end: e.end.map((t) => t - sec) };
+    else yield e;
+  }
+}
+
+/** When word `w` of a beat's recorded speech starts (seconds), or null when it wasn't heard yet. */
+function wordStart(speech: BeatState["speech"], w: number): number | null {
+  let ts: WordTimestamps = { words: [], start: [], end: [] };
+  for (const e of speech?.events ?? []) if (e.type === "timestamps") ts = mergeTimestamps(ts, e);
+  return w >= 0 && w < ts.start.length ? ts.start[w] : null;
 }
 
 type Compile = (current: PresetElement[]) => AnimationDocument | null;
@@ -689,7 +731,10 @@ export default function Lesson() {
       }
     },
     // A press with no words is a tap: Chalky stays paused, now not listening, until Space, Start or Continue.
-    onBargeInCancelled: () => haltRef.current(),
+    // (Only when that press did pause Chalky: a tap in the echo tail, with Chalky already waiting, does nothing.)
+    onBargeInCancelled: () => {
+      if (pausedRef.current?.listening) haltRef.current();
+    },
   });
 
   partialRef.current = voice.partial;
@@ -751,7 +796,7 @@ export default function Lesson() {
    * the scene's document around this beat's elements (null: leave the board).
    * Resolves when the speech has played.
    */
-  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void; onSpeechDone?: (sonic: { firstAudioMs: number | null; totalMs: number; kb: number; audioSeconds: number }) => void }) => {
+  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void; onSpeechDone?: (sonic: { firstAudioMs: number | null; totalMs: number; kb: number; audioSeconds: number }) => void; fromSec?: number }) => {
     const ctx = await unlockAudio();
     // The safety net: Chalky never speaks of itself in the third person ("Chalky's board" -> "my board").
     const voiced = firstPerson(state.beat.say);
@@ -819,7 +864,20 @@ export default function Lesson() {
       // Speech: from memory when the beat before fetched it (waiting for the download to finish, so it
       // never streams while it plays), else streamed as it arrives (the first beat, replies, a miss).
       const pre = speech?.prefetch && speech.prefetch.state === state && !speech.prefetch.failed ? speech.prefetch : null;
-      const openStream = async (): Promise<AsyncGenerator<BeatAudioEvent>> => {
+      // Going on from a word: the speech it already had (fetched whole again if the cut came mid-download).
+      const fromSec = speech?.fromSec;
+      const replaying = fromSec !== undefined;
+      const openStream = async (): Promise<AsyncGenerator<BeatAudioEvent> | Generator<BeatAudioEvent>> => {
+        if (replaying) {
+          if (!state.speech?.done) {
+            const r = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spokenText }), signal });
+            if (!r.ok || !r.body) throw new Error(`speech failed (${r.status})`);
+            const events: BeatAudioEvent[] = [];
+            for await (const e of ndjson<BeatAudioEvent>(r)) events.push(e);
+            state.speech = { events, done: true };
+          }
+          return speechFrom(state.speech!.events, fromSec);
+        }
         if (pre) {
           const t = performance.now();
           if (!pre.done) await Promise.race([pre.settled, sleep(HOLD_MAX_MS), new Promise((r) => signal.addEventListener("abort", r, { once: true }))]);
@@ -846,6 +904,12 @@ export default function Lesson() {
       raf = requestAnimationFrame(frame);
       for await (const event of events) {
         if (signal.aborted) break;
+        // Keep the speech as it plays (not a replay of it), for going on from a word later.
+        if (!replaying) {
+          if (event.type === "start") state.speech = { events: [], done: false };
+          state.speech?.events.push(event);
+          if (event.type === "done" && state.speech) state.speech.done = true;
+        }
         if (event.type === "start") {
           audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
           audioRef.current = audio;
@@ -945,6 +1009,8 @@ export default function Lesson() {
       setLessonSoundMs(since());
     };
     const said: string[] = [];
+    /** After a cut-in: this beat goes on from `sec` (the word they cut in at) rather than from its start. */
+    let resumeFrom = null as { state: BeatState; sec: number; word: number } | null;
 
     setQuestion(q);
     setDraft("");
@@ -1448,7 +1514,7 @@ export default function Lesson() {
       const scene = list[at - 1]?.beat.scene;
       const onBoard = list.slice(0, at).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
       const beats = (async () => {
-        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
+        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
@@ -1481,7 +1547,7 @@ export default function Lesson() {
       amending++;
       const prefix = `r${++amendCount}`;
       void (async () => {
-        const res = await post("/api/amend", { question: q, beats: before, op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
+        const res = await post("/api/amend", { question: q, beats: before, sketches: list.slice(0, from).flatMap((s) => s.sketchBeats ?? []), op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
@@ -1595,6 +1661,7 @@ export default function Lesson() {
             // Marked solid: a later beat planned onto this spot is moved off the sketch, not drawn over it.
             owner.sketches = [...(owner.sketches ?? []), ...els.map((e) => ({ ...e, solid: true }))];
             owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
+            owner.sketchBeats = [...(owner.sketchBeats ?? []), beat];
             views.set(scene, view);
             if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
             const compiled = compileScene([...base, els], { view, from: before }, scene, otherScenes(scene, i + 1));
@@ -1816,6 +1883,25 @@ export default function Lesson() {
       converseTurns(i, wordIndex, resumeAt, bridge).finally(() => showInk([]));
     const converseTurns = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
       setStatus("waiting");
+      /**
+       * Cut off mid-beat, the lesson goes on from the word they cut in at, unless the last reply said
+       * otherwise: "next" (the cut came late, or the reply covered the rest) or "start" (they asked about
+       * the beat itself). A plain "ok, go on" goes on from the word.
+       */
+      let cut: NonNullable<ConverseTrailer["cut"]> = "word";
+      const settleCut = () => {
+        if (wordIndex < 0 || resumeAt !== i || !list[i]) return;
+        if (cut === "next") {
+          resumeAt = i + 1;
+          logEv({ kind: "resume-after-cut", beatId: list[i].beat.id, wordIndex, how: "next beat" });
+          return;
+        }
+        const sec = cut === "word" ? wordStart(list[i].speech, wordIndex) : null;
+        if (sec !== null && sec > 0.3) {
+          resumeFrom = { state: list[i], sec, word: wordIndex };
+          logEv({ kind: "resume-after-cut", beatId: list[i].beat.id, wordIndex, how: "from the word", sec: +sec.toFixed(2) });
+        } else logEv({ kind: "resume-after-cut", beatId: list[i].beat.id, wordIndex, how: "from the start", ...(cut === "word" ? { why: "no timing for that word" } : {}) });
+      };
       // Cut off during a check-in beat: whatever the learner says next settles that check, so going on
       // continues after it instead of replaying it and asking the same question again.
       if (wordIndex >= 0 && list[i]?.beat.check && resumeAt === i) {
@@ -1844,6 +1930,7 @@ export default function Lesson() {
           dropDraft();
           setPausedAt(null);
           setLastLevel(heardText === null ? "continue (button)" : `continue (local, no model call${bridge ? ", bridge" : ""})`);
+          settleCut();
           await backToLesson(resumeAt);
           // At a check-in, take a breath and say what comes next: written by the planner, no model call.
           if (bridge && !abort.signal.aborted) {
@@ -1891,6 +1978,7 @@ export default function Lesson() {
         }
         history.push({ who: "chalky", text: reply.said });
         let trailer = reply.trailer;
+        if (trailer.cut) cut = trailer.cut;
         // An ask whose question the reply never got to say (the sentence cap): say it now, so the wait has a question.
         const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         if (trailer.check && !norm(reply.said).includes(norm(trailer.check).slice(0, 40))) {
@@ -1926,6 +2014,7 @@ export default function Lesson() {
           escalation = 0;
           dropDraft();
           setPausedAt(null);
+          settleCut();
           // Either the reply or the bridge carries the lesson forward, not both.
           await backToLesson(resumeAt);
           if (bridge && spoken && LOOKS_AHEAD.test(spoken)) logEv({ kind: "bridge-skipped", reason: "the reply already looked ahead", bridge });
@@ -2208,6 +2297,11 @@ export default function Lesson() {
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
         const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre };
+        if (resumeFrom && resumeFrom.state !== list[i]) resumeFrom = null;
+        if (resumeFrom) {
+          timing.fromWord = resumeFrom.word;
+          timing.fromSec = +resumeFrom.sec.toFixed(2);
+        }
         const tBeat = performance.now();
         try {
           await playBeat(
@@ -2220,6 +2314,7 @@ export default function Lesson() {
             },
             {
               prefetch: pre,
+              ...(resumeFrom?.state === list[i] ? { fromSec: resumeFrom.sec } : {}),
               onSpeechDone: (sonic) => {
                 timing.sonic = sonic;
               },
@@ -2239,6 +2334,7 @@ export default function Lesson() {
         } catch (e) {
           if (!interruptedRef.current) throw e;
         }
+        resumeFrom = null;
         Object.assign(timing, {
           endMs: since(),
           playedMs: Math.round(performance.now() - tBeat),
