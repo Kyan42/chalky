@@ -1,7 +1,7 @@
 /**
- * GET /api/research/<id>  →  ResearchRecord (running | ready | failed). 404 for an unknown id.
+ * GET /api/research/<id>  →  ResearchRecord (running | ready | none). 404 for an unknown id.
  */
-import { getResearch } from "@/lib/research/papers";
+import { getResearch } from "@/lib/research/web";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

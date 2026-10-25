@@ -1,27 +1,22 @@
 /**
- * POST /api/research  { topic, days? }  →  ResearchRecord, at once (lib/research/CONTRACT.md).
- * Ready straight away from experiments/research-cache; otherwise "running", poll GET /api/research/<id>.
- * Development only: `fresh` skips the cache, `fixture` loads the hand-written set, `only` forces one path.
+ * POST /api/research  { question, wait? }  →  ResearchRecord (lib/research/CONTRACT.md).
+ * Ready at once from experiments/research-cache; otherwise "running", settling as "ready" or
+ * "none" within 8 s. `wait: true` holds the response until it settles; without it, poll
+ * GET /api/research/<id>. Development only: `fresh` skips the cache, `budgetMs` lengthens the wait (pre-warming).
  */
-import { startResearch } from "@/lib/research/papers";
-import type { ResearchVia } from "@/lib/research/types";
+import { settled, startResearch } from "@/lib/research/web";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PATHS: ResearchVia[] = ["apify-arxiv", "apify-rag", "arxiv-api"];
-
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { topic?: unknown; days?: unknown; fresh?: unknown; fixture?: unknown; only?: unknown };
-  const topic = typeof body.topic === "string" ? body.topic.trim() : "";
-  if (!topic || topic.length > 200) return Response.json({ error: "topic is required (max 200 chars)" }, { status: 400 });
-  const days = typeof body.days === "number" && body.days >= 1 && body.days <= 90 ? body.days : 14;
+  const body = (await request.json().catch(() => ({}))) as { question?: unknown; topic?: unknown; wait?: unknown; fresh?: unknown; budgetMs?: unknown };
+  const raw = typeof body.question === "string" ? body.question : typeof body.topic === "string" ? body.topic : "";
+  const question = raw.trim();
+  if (!question || question.length > 300) return Response.json({ error: "question is required (max 300 chars)" }, { status: 400 });
   const dev = process.env.NODE_ENV !== "production";
-  const only = dev && PATHS.includes(body.only as ResearchVia) ? (body.only as ResearchVia) : undefined;
-  try {
-    const rec = await startResearch(topic, days, { fresh: dev && (body.fresh === true || !!only), fixture: dev && body.fixture === true, only });
-    return Response.json(rec, { headers: { "Cache-Control": "no-store" } });
-  } catch (e) {
-    return Response.json({ error: String((e as Error)?.message ?? e) }, { status: 500 });
-  }
+  const budgetMs = dev && typeof body.budgetMs === "number" && body.budgetMs > 0 && body.budgetMs <= 60_000 ? body.budgetMs : undefined;
+  let rec = await startResearch(question, { fresh: dev && body.fresh === true, budgetMs });
+  if (body.wait === true && rec.status === "running") rec = (await settled(rec.id)) ?? rec;
+  return Response.json(rec, { headers: { "Cache-Control": "no-store" } });
 }
