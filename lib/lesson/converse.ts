@@ -331,6 +331,8 @@ const HANDOFF: Partial<Record<ConverseLevel, string>> = { detour: "Let me draw t
  * a detour: only "still lost" builds on what came before (isStillLost).
  */
 export function forcedLevel(input: Pick<ConverseInput, "escalation" | "utterance">): ConverseLevel | null {
+  // Asking to be quizzed ("give me a drawing quiz") is not asking for a drawing, nor being lost.
+  if (/\b(quiz|test me)\b/i.test(input.utterance)) return null;
   const lost = isStillLost(input.utterance);
   if (lost && input.escalation >= 2) return "replan";
   if ((lost && input.escalation >= 1) || WANTS_DRAWING.test(input.utterance)) return "detour";

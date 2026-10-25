@@ -1524,13 +1524,16 @@ export default function Lesson() {
       const items = v.list
         .filter((e) => v.boxes[e.id] && v.labels?.[e.id] && e.label && e.label !== e.kind && e.label.length <= 40)
         .slice(0, 4)
-        .map((e, k) => ({ n: k + 1, id: e.id, answer: e.label, box: v.boxes[e.id], cover: v.labels![e.id] }));
+        // The answer is the label as a word or two, not an id ("sine-wave" -> "sine wave").
+        .map((e, k) => ({ n: k + 1, id: e.id, answer: e.label.replace(/[-_]+/g, " ").trim(), box: v.boxes[e.id], cover: v.labels![e.id] }));
       if (kind === "label" && items.length < 2) {
         // Nothing labelled to number here: draw it instead.
         logEv({ kind: "quiz-fallback", from: "label", to: "sketch", why: `${items.length} labelled part(s) in view` });
         kind = "sketch";
         ask = "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
       }
+      // A label quiz's question is always ours: a question written elsewhere may name the hidden answers.
+      if (kind === "label") ask = `Quick quiz: name the parts I've numbered, one to ${["", "one", "two", "three", "four"][items.length] ?? items.length}.`;
       logEv({ kind: "quiz-start", quiz: kind, ask, beatId, ...(kind === "label" ? { items: items.map(({ n, id, answer }) => ({ n, id, answer })) } : {}) });
       if (kind === "label") {
         setQuizMarks(items.map(({ n, box, cover }) => ({ n, box, cover })));
