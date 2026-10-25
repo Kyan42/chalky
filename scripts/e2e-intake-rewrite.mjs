@@ -82,7 +82,8 @@ try {
       lastScene = s.scene;
     }
     if (frame++ % 20 === 0) await page.screenshot({ path: join(OUT, `f${String(frame).padStart(4, "0")}.png`) }).catch(() => {});
-    if (s.status === "Your turn") await page.click('[data-testid="continue"]').catch(() => {});
+    // Check-ins only: the intake's own wait (before beat 1 plays) is answered above, never skipped.
+    if (s.status === "Your turn" && s.beat) await page.click('[data-testid="continue"]').catch(() => {});
     if (/^(Done|Ready)/.test(s.status)) break;
     await page.waitForTimeout(250);
   }
