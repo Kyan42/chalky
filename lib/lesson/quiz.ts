@@ -4,7 +4,9 @@
  *            (Haiku, thinking off, JSON out), from their words and whatever their ink marked. Under a second.
  *   sketch — the learner draws something from the lesson; graded from the board picture with their ink by
  *            the slow model (Sonnet 5.5, vision, JSON out) against a rubric made of the lesson's own sentences.
- * Both answer with a score 0..1, what was right and what was missing, and two or three spoken sentences.
+ *   predict — before a section, the learner guesses what comes next; graded as text by the fast model against
+ *            the next section's own sentences: right, partly or wrong, and one spoken sentence.
+ * All answer with a score 0..1, what was right and what was missing, and two or three spoken sentences.
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -134,6 +136,58 @@ export async function gradeSketch(o: { question: string; ask: string; rubric: st
     feedback: out.feedback.trim(),
     ms: Math.round(performance.now() - t0),
     model: DELEGATE_MODEL,
+    call,
+  };
+}
+
+/**
+ * Predict: the rubric is what the lesson says next. From the beats after the quiz, the next section's own
+ * sentences (its first beat up to the next section's start), at most six. The server cuts it, so the page
+ * only sends the beats it has.
+ */
+export function predictRubric(after: { say: string; section?: string; quiz?: string }[]): string[] {
+  const out: string[] = [];
+  for (const [k, b] of after.entries()) {
+    if (k > 0 && b.section) break;
+    if (!b.quiz && b.say.trim()) out.push(b.say.trim());
+  }
+  return out.slice(0, 6);
+}
+
+const PREDICT_SCHEMA = {
+  type: "object",
+  properties: {
+    verdict: { type: "string", enum: ["right", "partly", "wrong"] },
+    right: { type: "array", items: { type: "string" } },
+    missing: { type: "array", items: { type: "string" } },
+    feedback: { type: "string" },
+  },
+  required: ["verdict", "right", "missing", "feedback"],
+  additionalProperties: false,
+};
+
+/** The learner guessed what comes next; graded against what the next section actually says. */
+export async function gradePredict(o: { question: string; ask: string; answer: string; rubric: string[] }, signal?: AbortSignal): Promise<QuizGrade & { verdict: "right" | "partly" | "wrong" }> {
+  const t0 = performance.now();
+  const system = withVoiceRules(
+    `You grade a prediction in a lesson. Before the next part of the lesson, the learner was asked to predict what comes next. The answer key is what the next part actually says. Verdict: "right" when their prediction has the key idea (their own words, rough is fine), "partly" when it has part of it or the right direction without the reason, "wrong" when it misses it or says the opposite. "right" and "missing": the key ideas they got and missed, each in a few words. Then ONE short sentence Chalky, the teacher, says aloud: first person, warm, specific about their guess, and it must not give away the rest of the answer (the lesson is about to show it). Return JSON only.`,
+  );
+  const user = [
+    `The lesson: ${o.question}`,
+    `The prediction asked: ${o.ask}`,
+    `What the next part of the lesson says (the answer key):\n${o.rubric.map((r) => `- ${r}`).join("\n")}`,
+    `What the learner predicted: "${o.answer}"`,
+  ].join("\n");
+  const { out, call } = await json<{ verdict: "right" | "partly" | "wrong"; right: string[]; missing: string[]; feedback: string }>(CONVERSE_MODEL, "quiz-predict", system, user, PREDICT_SCHEMA, 400, signal);
+  const verdict = out.verdict === "right" || out.verdict === "partly" ? out.verdict : "wrong";
+  return {
+    verdict,
+    score: verdict === "right" ? 1 : verdict === "partly" ? 0.5 : 0,
+    right: out.right.slice(0, 4),
+    missing: out.missing.slice(0, 4),
+    feedback: out.feedback.trim(),
+    ms: Math.round(performance.now() - t0),
+    model: CONVERSE_MODEL,
     call,
   };
 }
