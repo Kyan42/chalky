@@ -605,6 +605,35 @@ async function* replayPrefetch(p: Prefetch): AsyncGenerator<BeatAudioEvent> {
   }
 }
 
+/** Sonic on bad wifi: no first audio this long after asking, or a gap this long mid-beat, is a stall. */
+const FIRST_AUDIO_MS = 6000;
+const MID_STALL_MS = 8000;
+class SpeechStall extends Error {}
+
+/**
+ * A beat's speech, guarded against a stalled stream: no audio within FIRST_AUDIO_MS of opening throws
+ * SpeechStall (the caller retries once, then goes on without audio); a gap of MID_STALL_MS once audio has
+ * come ends the stream there (the beat ends after what it already has). `onStall` cancels the request.
+ */
+async function* guardSpeech(source: AsyncIterator<BeatAudioEvent>, onStall: (where: "first" | "mid") => void): AsyncGenerator<BeatAudioEvent> {
+  const t0 = performance.now();
+  let heard = false;
+  for (;;) {
+    const wait = heard ? MID_STALL_MS : Math.max(0, FIRST_AUDIO_MS - (performance.now() - t0));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const next = await Promise.race([source.next(), new Promise<"stall">((r) => (timer = setTimeout(() => r("stall"), wait)))]);
+    clearTimeout(timer);
+    if (next === "stall") {
+      onStall(heard ? "mid" : "first");
+      if (!heard) throw new SpeechStall("no first audio");
+      return;
+    }
+    if (next.done) return;
+    if (next.value.type === "audio") heard = true;
+    yield next.value;
+  }
+}
+
 /** Speech prefetch bookkeeping for the stats line. */
 interface PrefetchStats {
   fetched: number;
@@ -1000,11 +1029,37 @@ export default function Lesson() {
           const t = performance.now();
           if (!pre.done) await Promise.race([pre.settled, sleep(HOLD_MAX_MS), new Promise((r) => signal.addEventListener("abort", r, { once: true }))]);
           speech?.onHeld?.(Math.round(performance.now() - t), pre.done && !pre.failed);
-          if (!pre.failed) return replayPrefetch(pre);
         }
-        const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spokenText }), signal });
-        if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
-        return ndjson<BeatAudioEvent>(response);
+        // A stalled stream (bad wifi): asked again once; a second stall goes on without the audio.
+        const stalled = (attempt: number, from: string) => (where: "first" | "mid") =>
+          logRef.current({ kind: "tts-stall", beatId: state.beat.id, where, attempt, from, waitedMs: where === "first" ? FIRST_AUDIO_MS : MID_STALL_MS });
+        const fetched = (attempt: number) => {
+          const ctl = new AbortController();
+          signal.addEventListener("abort", () => ctl.abort(), { once: true });
+          const events = (async function* () {
+            const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spokenText }), signal: ctl.signal });
+            if (!response.ok || !response.body) throw new Error(`speech failed (${response.status})`);
+            yield* ndjson<BeatAudioEvent>(response);
+          })();
+          return guardSpeech(events, (where) => {
+            ctl.abort();
+            stalled(attempt, "stream")(where);
+          });
+        };
+        const first = pre && !pre.failed ? guardSpeech(replayPrefetch(pre), stalled(1, "prefetch")) : fetched(1);
+        return (async function* () {
+          try {
+            yield* first;
+          } catch (e) {
+            if (!(e instanceof SpeechStall) || signal.aborted) throw e;
+            try {
+              yield* fetched(2);
+            } catch (e2) {
+              if (!(e2 instanceof SpeechStall) || signal.aborted) throw e2;
+              logRef.current({ kind: "tts-stall", beatId: state.beat.id, where: "gave up", attempt: 2, from: "stream", waitedMs: FIRST_AUDIO_MS });
+            }
+          }
+        })();
       };
       const [events] = await Promise.all([openStream(), compile ? show(initial) : Promise.resolve()]);
       if (compile && state.draw === "pending") {
@@ -1067,6 +1122,17 @@ export default function Lesson() {
       }
       // If the anchor word never showed up, the visual's clock starts with the speech.
       if (anchorStart === null) anchorStart = 0;
+      // A stream that ended without "done" (a stall) still plays out what it already has, and the next beat's
+      // speech may download now.
+      if (!signal.aborted && !streamDone) {
+        streamDone = true;
+        speech?.onStreamed?.();
+      }
+      // No speech at all (it stalled twice): the drawing still shows, finished, for a moment; then on.
+      if (!audio && !signal.aborted && compile && playerRef.current) {
+        await playerRef.current.seek(DOC_END - FRAME_TICKS).catch(() => {});
+        await sleep(2500);
+      }
       while (!signal.aborted && streamDone && audio && !audio.drained) await new Promise((r) => setTimeout(r, 30));
       if (!signal.aborted) {
         // The audio clock stops writing first, so the last word stays highlighted through the gap.
