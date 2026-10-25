@@ -45,6 +45,7 @@ export default function MicPage() {
 
   const label: Record<MicMode, string> = {
     off: "mic off",
+    paused: "paused: hearing nothing",
     open: "open mic: just talk",
     muted: `muted while Chalky speaks: hold ${key} to barge in`,
     held: "listening (key held)",

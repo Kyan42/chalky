@@ -77,11 +77,15 @@ function textSize(str: string, size: number) {
   return { w: Math.max(size, str.length * size * 0.56), h: size * 1.25 };
 }
 
-function outside(b: Box) {
-  return area(b) - overlap(b, STAGE);
+function outside(b: Box, stage: Box = STAGE) {
+  return area(b) - overlap(b, stage);
 }
 
-export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, theme?: Theme): { doc: AnimationDocument; report: LayoutReport } {
+/**
+ * `stage` (board pixels) is the area labels must stay inside: the whole board
+ * by default, or more of it when the lesson has zoomed out to make room.
+ */
+export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, theme?: Theme, stage: Box = STAGE): { doc: AnimationDocument; report: LayoutReport } {
   const s = new Scene(theme);
   const placed = new Map<string, Placed>();
   const occupied: { id: string; box: Box; text: boolean }[] = [];
@@ -94,7 +98,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     report.shapes.push({ id: p.id, box: p.box });
   };
   // Janani's blocks (lib/blocks): `block` and `travel` register their boxes, parts and anchors here.
-  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b) * 4;
+  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b, stage) * 4;
 
   /**
    * Moves a later arrival off what is already there, the way free text is nudged: a shape off
@@ -103,7 +107,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
    * the stage offset [dx, dy] is [0, 0] when the spot was free. Counted in `report.nudged`.
    */
   const nudge = (b: Box, o: { shapes: boolean }): [number, number] => {
-    const price = (box: Box) => occupied.reduce((sum, c) => sum + (c.text ? 3 : o.shapes ? 1 : 0) * overlap(grow(box, 6), c.box), 0) + outside(box) * 4;
+    const price = (box: Box) => occupied.reduce((sum, c) => sum + (c.text ? 3 : o.shapes ? 1 : 0) * overlap(grow(box, 6), c.box), 0) + outside(box, stage) * 4;
     const here = price(b);
     if (here === 0) return [0, 0];
     // Up to 144 px (12 grid units) away, nearer spots first; a longer move costs a little extra.

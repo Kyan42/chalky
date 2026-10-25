@@ -13,6 +13,7 @@
     "@clayzo/animation": "^0.3.18",
     "@clayzo/webgl-player": "^0.3.18",
     "next": "^15.5.28",
+    "perfect-freehand": "^1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "server-only": "^0.0.1"
