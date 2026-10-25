@@ -27,8 +27,12 @@ function stem(w: string): string {
   return w.replace(/e$/, "");
 }
 
+/** Splits at . ! ? followed by a space and a capital, digit or quote; not inside "0.5", "e.g." or "et al.". */
 export function sentences(paragraph: string): string[] {
-  return paragraph.match(/[^.!?]+(?:[.!?]+["')\]]*|$)\s*/g)?.map((s) => s.trim()).filter(Boolean) ?? [paragraph];
+  return paragraph
+    .split(/(?<=[.!?]["')\]]?)(?<!\b(?:e\.g|i\.e|et al|vs|Fig|Eq|Dr|Mr|Ms|St|approx|cf)\.)\s+(?=["'(\[]?[A-Z0-9])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export interface PassageMatch {
