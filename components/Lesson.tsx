@@ -1257,6 +1257,23 @@ export default function Lesson() {
     const showSceneBoard = (v: BoardView) => {
       sceneBoards.set(v.scene, v);
       showBoard(v);
+      indexBoard(v);
+    };
+    /**
+     * The lesson's board index (Moss, server side): one document per element, with the sentence that
+     * introduced it, sent as each scene's board changes; /api/converse searches it with every utterance.
+     */
+    const indexBoard = (v: BoardView) => {
+      const said = (id: string) => {
+        const b = list.find((x) => x.beat.scene === v.scene && (x.beat.adds.some((a) => a.id === id) || x.sketchAdds?.some((a) => a.id === id)));
+        return b?.beat.say ?? "";
+      };
+      const docs = v.list.filter((e) => !e.id.includes(".")).map((e) => ({ id: e.id, label: e.label, scene: v.scene, said: said(e.id) }));
+      if (!docs.length) return;
+      void post("/api/board-index", { lesson: transcript.id, docs })
+        .then((r) => r.json())
+        .then((r: { added?: number; ms?: number; status?: string }) => r.added && logEv({ kind: "board-index", scene: v.scene, docs: docs.length, added: r.added, ms: r.ms, status: r.status }))
+        .catch(() => {});
     };
     const sceneTitle = (scene: number) => {
       const b = list.find((x) => x.beat.scene === scene && x.beat.section) ?? list.find((x) => x.beat.scene === scene);
@@ -1631,6 +1648,7 @@ export default function Lesson() {
             board: boardRef.current.list.map((e) => ({ ...e, ...(boardRef.current.boxes[e.id] ? { box: localBox(boardRef.current.boxes[e.id], boardRef.current.scene) } : {}) })),
             scene: boardRef.current.scene,
             scenes: sceneRefs(),
+            lesson: transcript.id,
             history: history.slice(-6),
             escalation,
             learner,
@@ -1649,6 +1667,8 @@ export default function Lesson() {
               wake();
             } else if (ev.type === "done") {
               replyCalls = ev.calls ?? [];
+            } else if (ev.type === "retrieval") {
+              logEv({ kind: "retrieval", board: ev.board, memory: ev.memory, ms: ev.tMs });
             } else if (ev.type === "level") {
               onLevel?.(ev.level);
             } else if (ev.type === "trailer") {

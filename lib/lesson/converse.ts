@@ -168,6 +168,8 @@ export type ConverseEvent =
   | { type: "start"; model: string; local: boolean; tMs: number }
   /** The level the actions line implies, sent before it speaks, so a detour can start planning at once. */
   | { type: "level"; level: ConverseLevel; tMs: number }
+  /** What retrieval put in the prompt (the route's, before the model is asked). */
+  | { type: "retrieval"; board: { status: string; ms: number; hits: string[] } | null; memory: { status: string; ms: number; lines: string[]; docs?: number }; tMs: number }
   /** The action names from the reply's first line, before it speaks. */
   | { type: "actions"; names: string[]; tMs: number }
   | { type: "sentence"; text: string; tMs: number }

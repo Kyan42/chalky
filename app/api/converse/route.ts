@@ -8,6 +8,9 @@
 import { converse, type ConverseEvent, type ConverseInput } from "@/lib/lesson/converse";
 import { decideIntake, intakeQuestion } from "@/lib/lesson/intake";
 import { cleanLearner, type BeatMode } from "@/lib/lesson/types";
+import { learnerIdFrom } from "@/lib/convexMirror";
+import { learnerMemory } from "@/lib/moss/memory";
+import { searchDocs } from "@/lib/moss/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,6 +102,19 @@ export async function POST(request: Request) {
   }
   const input = parse(body);
   if (typeof input === "string") return Response.json({ error: input }, { status: 400 });
+  // Retrieval before the call: the board elements (any scene) and the learner's earlier lines that best
+  // match what they said, both from Moss session indexes (lib/moss); neither is a tool the model calls.
+  const lesson = typeof body.lesson === "string" && /^[a-z0-9-]{8,100}$/.test(body.lesson) ? body.lesson : null;
+  const tr = performance.now();
+  const [boardHits, memory] = await Promise.all([lesson ? searchDocs(`board-${lesson}`, input.utterance, 3) : Promise.resolve(null), learnerMemory(learnerIdFrom(request, body), `${input.utterance} ${input.question}`.trim(), lesson)]);
+  if (boardHits?.hits.length) input.candidates = boardHits.hits.map((h) => ({ id: h.id, label: h.meta.label ?? h.id, scene: Number(h.meta.scene) || 1, said: h.meta.said ?? "" }));
+  if (memory.lines.length) input.memory = memory.lines;
+  const retrieval: ConverseEvent = {
+    type: "retrieval",
+    board: boardHits ? { status: boardHits.status, ms: boardHits.ms, hits: boardHits.hits.map((h) => `${h.id}@${h.meta.scene}:${h.score}`) } : null,
+    memory: { status: memory.status, ms: memory.ms, lines: memory.lines, ...(memory.docs !== undefined ? { docs: memory.docs } : {}) },
+    tMs: Math.round(performance.now() - tr),
+  };
 
   const upstream = new AbortController();
   const t0 = performance.now();
@@ -112,8 +128,13 @@ export async function POST(request: Request) {
   );
   const events = converse(input, upstream.signal);
   const encoder = new TextEncoder();
+  let sentRetrieval = false;
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
+      if (!sentRetrieval) {
+        sentRetrieval = true;
+        controller.enqueue(encoder.encode(JSON.stringify(retrieval) + "\n"));
+      }
       try {
         const { value, done } = await events.next();
         if (done) return controller.close();
