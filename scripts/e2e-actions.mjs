@@ -175,10 +175,11 @@ try {
   } else if (SCRIPT === "e") {
     // Lesson 1: stuck on violet.
     await say("learn");
-    await waitReplies(1, 30000);
-    await waitFor((s) => s.status === "Your turn", 20000);
+    // The page, not the transcript file (saved every 2 s): the intake's silence window is 4 s.
+    await waitFor((s) => s.status === "Your turn", 40000);
     await say("intake");
     await waitFor((s) => s.beat === "b2" && s.status === "Speaking" && s.word >= 3, 90000);
+    await page.waitForTimeout(1500); // key-term changes reconnect Ink between turns; let that settle
     await page.keyboard.down("Space");
     const sec = await say("lost");
     await page.waitForTimeout(sec * 1000 + 150);
