@@ -214,6 +214,24 @@ export function useHybridMic(options: HybridMicOptions) {
     }
   }, [mergeMs, endTail, refreshMode, gateOpen]);
 
+  /** Turns the mic off and closes Ink: nothing is heard until start() is called again (a click). */
+  const stop = useCallback(() => {
+    endTail();
+    held.current = null;
+    merger.current?.discard();
+    merger.current = null;
+    mic.current?.stop();
+    mic.current = null;
+    ink.current?.close();
+    ink.current = null;
+    turnWhileSpeaking.current = false;
+    voiceBarged.current = false;
+    lastPartial.current = "";
+    setPartial("");
+    setStarted(false);
+    refreshMode();
+  }, [endTail, refreshMode]);
+
   // Chalky starting to speak closes the open mic; a turn caught half-way is dropped (it was never going to end).
   // With voice barge-in the mic stays open, and a turn in progress is left to finish.
   useEffect(() => {
@@ -343,5 +361,5 @@ export function useHybridMic(options: HybridMicOptions) {
   );
   const level = useCallback(() => (gateOpen() ? (mic.current?.level() ?? 0) : 0), [gateOpen]);
 
-  return { start, started, mode, partial, error, level, setKeyterms };
+  return { start, stop, started, mode, partial, error, level, setKeyterms };
 }
