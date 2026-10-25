@@ -2498,6 +2498,19 @@ export default function Lesson() {
   };
   const showWelcome = !question && status !== "speaking";
 
+  // Leo's tutor chrome: the telemetry panel is behind ?debug=1 (or the Debug toggle); the typing box
+  // is open on a desktop and folded on a phone, with a toggle either way. Both read in an effect so
+  // the server and the browser render the same page.
+  const [debug, setDebug] = useState(false);
+  const [typing, setTyping] = useState(true);
+  useEffect(() => {
+    setDebug(new URLSearchParams(location.search).get("debug") === "1");
+    if (window.matchMedia("(max-width: 600px)").matches) setTyping(false);
+  }, []);
+  /** The small character while teaching: talking while Chalky's audio plays, thinking otherwise. */
+  const mascotSource = speakingAudio ? "/mascot/talking.mp4" : "/mascot/thinking.mp4";
+  const learnerTurn = !!voice.partial;
+
   const drawLabel = (b: BeatState) => {
     switch (b.draw) {
       case "none": return "no drawing";
@@ -2509,53 +2522,32 @@ export default function Lesson() {
   };
 
   return (
-    <div className="board-wrap">
-      <div className="board" data-status={status} data-mic={voice.mode} data-scene={board.scene} data-view={`${Math.round(board.view.x)},${Math.round(board.view.y)},${Math.round(board.view.w)}`}>
+    <div className="board-wrap tutor-wrap">
+      <div className="board tutor-board" data-status={status} data-mic={voice.mode} data-debug={debug ? "1" : "0"} data-scene={board.scene} data-view={`${Math.round(board.view.x)},${Math.round(board.view.y)},${Math.round(board.view.w)}`}>
         <header className="topic">
           <h1 data-testid="title">{title}</h1>
-          <form
-            className="ask"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={halted ? "Chalky is stopped. Press Start to carry on." : waitingForLearner ? "Answer or ask Chalky…" : "Type a question, or just say it"}
-              disabled={halted}
-              aria-label="Question"
-              data-testid="question"
-            />
-            <button type="submit" disabled={halted || !draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
-            {(waitingForLearner || paused) && (
-              <button type="button" className="continue" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
+          <div className="topic-right">
+            {delegating && (
+              <span className="voice-badge" data-testid="delegate-badge" title="Chalky handed this to a slower helper that sees the whole board">
+                Looking it up…
+              </span>
             )}
-            {busy &&
-              (halted ? (
-                <button type="button" className="start" onClick={resumePlayback} data-testid="start">Start</button>
-              ) : (
-                <button type="button" onClick={halt} data-testid="stop">Stop</button>
-              ))}
-          </form>
-          {delegating && (
-            <span className="voice-badge" data-testid="delegate-badge" title="Chalky handed this to a slower helper that sees the whole board">
-              Looking it up…
-            </span>
-          )}
-          {voiceBargeIn && (
-            <span className="voice-badge" data-testid="voice-barge-badge" title="Talk over Chalky to interrupt. Use headphones: speakers can leak into the mic. Space still pauses.">
-              Voice interrupt on · headphones
-            </span>
-          )}
-          <div className="mic" data-testid="status">
-            {statusLabel[status]}
-            <Orb state={orbState} level={orbLevel} size={34} />
+            {voiceBargeIn && (
+              <span className="voice-badge" data-testid="voice-barge-badge" title="Talk over Chalky to interrupt. Use headphones: speakers can leak into the mic. Space still pauses.">
+                Voice interrupt on · headphones
+              </span>
+            )}
+            <div className="mic" data-testid="status" data-state={status}>
+              {statusLabel[status]}
+              <Orb state={orbState} level={orbLevel} size={30} />
+            </div>
+            <button type="button" className="debug-toggle" aria-pressed={debug} onClick={() => setDebug((v) => !v)} data-testid="debug-toggle" title="Beats, timings, learner record and prefetch stats">
+              Debug
+            </button>
           </div>
         </header>
         <section className="stage" data-testid="stage">
-          <div className="visual" style={{ position: "relative" }}>
+          <div className="visual" style={{ position: "relative", visibility: showWelcome ? "hidden" : "visible" }}>
             <canvas ref={canvasRef} aria-label="The whiteboard" />
             {question && current < 0 && (
               // Before the first beat draws: the topic in chalk, so the board is never blank while Chalky plans.
@@ -2587,17 +2579,23 @@ export default function Lesson() {
               </div>
             )}
           </div>
-          {showWelcome && (
-            <div className="welcome" data-testid="welcome">
-              <Orb state={orbState} level={orbLevel} size={150} />
-              <h2>What do you want to learn?</h2>
-              {voice.started ? <p>I&apos;m listening. Just say it, or type it at the top.</p> : <p>Talk to Chalky, or type a question at the top.</p>}
-              {!voice.started && <button type="button" onClick={startTalking} data-testid="start-talking">Start talking</button>}
+          {showWelcome ? (
+            // Chalky seated, centred, with what it wants to know in a speech bubble.
+            <div className="welcome tutor-character" data-testid="welcome">
+              <div className="tutor-bubble">
+                <h2>What do you want to learn?</h2>
+                {voice.started ? <p>I&apos;m listening. Just say it, or type it below.</p> : <p>Talk to Chalky, or type a question below.</p>}
+              </div>
+              <img className="tutor-mascot" src="/mascot/seated-cutout.png" alt="Chalky sitting cross-legged" />
+            </div>
+          ) : (
+            // The small character at bottom left: talking while Chalky's audio plays, thinking otherwise.
+            <div className="tutor-character teaching" data-testid="mascot" data-mascot={speakingAudio ? "talking" : "thinking"}>
+              <video key={mascotSource} className="tutor-mascot" src={mascotSource} autoPlay muted loop playsInline aria-label={speakingAudio ? "Chalky talking" : "Chalky thinking"} />
             </div>
           )}
         </section>
-        <aside className="evidence lesson-beats">
-          <div className="empty">Sources will appear here (not wired up yet).</div>
+        <aside className="evidence lesson-beats" data-testid="telemetry" aria-hidden={!debug}>
           {beats.length > 0 && (
             <ol data-testid="beats">
               {beats.map((b, i) => (
@@ -2631,20 +2629,75 @@ export default function Lesson() {
           )}
           {pausedAt && <p className="beat-meta" data-testid="paused-at">Paused at {pausedAt.beatId}, word {pausedAt.wordIndex + 1}.</p>}
         </aside>
-        <footer className="caption" data-testid="caption">
-          {voice.partial ? (
-            <p className="heard" data-testid="heard">“{voice.partial}”</p>
-          ) : heardNote && !question ? (
-            <p className="heard" data-testid="heard-note">{heardNote}</p>
-          ) : (
-            <p>
-              {words.map((w, i) => (
-                <span key={i} className="word" data-state={i < wordIndexNow ? "spoken" : i === wordIndexNow ? "now" : "pending"}>
-                  {w}{" "}
+        <footer className="conversation-dock">
+          {/* One shared transcript line: whoever is speaking. The learner's live words take it over the moment they cut in. */}
+          <div className="shared-transcript" aria-live="polite">
+            {(voice.partial || words.length > 0 || (heardNote && !question)) && <span className="transcript-speaker" data-testid="speaker">{learnerTurn ? "You" : "Chalky"}</span>}
+            {voice.partial ? (
+              <p className="heard" data-testid="caption">
+                <span data-testid="heard">
+                  {voice.partial.split(/\s+/).map((w, i, all) => (
+                    <span key={i} className={i === all.length - 1 ? "learner-word" : undefined}>{w} </span>
+                  ))}
                 </span>
+              </p>
+            ) : heardNote && !question ? (
+              <p className="heard" data-testid="caption"><span data-testid="heard-note">{heardNote}</span></p>
+            ) : (
+              <p data-testid="caption">
+                {words.map((w, i) => (
+                  <span key={i} className="word" data-state={i < wordIndexNow ? "spoken" : i === wordIndexNow ? "now" : "pending"}>
+                    {w}{" "}
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+          <div className="voice-actions">
+            {!voice.started && (
+              <button className="start-voice" type="button" onClick={startTalking} data-testid="start-talking">
+                <svg width="18" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></svg>
+                Start talking
+              </button>
+            )}
+            {voice.started && (status === "speaking" || status === "replying") && busy && !halted && (
+              // Freezes Chalky and listens, like holding Space: what the learner says next cuts in.
+              <button className="start-voice listening" type="button" onClick={() => pausePlayback(true)} data-testid="interrupt" title="Space">
+                <span className="listening-dot" aria-hidden="true" />
+                Tap to interrupt
+              </button>
+            )}
+            {(waitingForLearner || paused) && !halted && (
+              <button type="button" className="start-voice continue" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
+            )}
+            {busy &&
+              (halted ? (
+                <button type="button" className="start-voice start" onClick={resumePlayback} data-testid="start">Start</button>
+              ) : (
+                <button type="button" className="quiet-action" onClick={halt} data-testid="stop">Stop</button>
               ))}
-            </p>
-          )}
+            <button type="button" className="quiet-action" aria-expanded={typing} onClick={() => setTyping((v) => !v)} data-testid="typing-toggle">
+              {typing ? "Hide typing" : "Type instead"}
+            </button>
+          </div>
+          <form
+            className="ask"
+            hidden={!typing}
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={halted ? "Chalky is stopped. Press Start to carry on." : waitingForLearner ? "Answer or ask Chalky…" : "Type a question, or just say it"}
+              disabled={halted}
+              aria-label="Question"
+              data-testid="question"
+            />
+            <button type="submit" disabled={halted || !draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
+          </form>
         </footer>
       </div>
       {(error || voice.error) && <div className="lesson-error" data-testid="error">{error ?? voice.error}</div>}

@@ -1,41 +1,73 @@
+@font-face { font-family: "Instrument Serif"; src: url("/fonts/InstrumentSerif-Regular.ttf") format("truetype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Instrument Serif"; src: url("/fonts/InstrumentSerif-Italic.ttf") format("truetype"); font-style: italic; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/InstrumentSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/InstrumentSans-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+
 /*
  * The page follows the board's theme (lib/board/theme.ts), set on <html data-theme> by
  * app/layout.tsx from NEXT_PUBLIC_CHALKY_THEME and by ?theme= in the browser. Each theme gives the
- * same roles: the board colour (--paper), the chalk (--ink), a quieter chalk (--muted), rules, the
- * red chalk (--accent), the blue, the yellow, and the frame around the board.
+ * same roles: the board colour (--paper, the Clayzo canvas's own paper, so the board has no edge),
+ * the chalk (--ink), a quieter chalk (--muted), rules, the red chalk (--accent), the blue, the
+ * yellow, and the frame around the board. Leo's tutor interface adds the warm ochre and charcoal
+ * (--ochre, --charcoal and the two caption washes) and the speech bubble's colours, folded in per
+ * theme so the chalkboard and whiteboard variants keep working.
  */
 :root, :root[data-theme="chalk"] {
   --paper: #FBFAF7;
-  --ink: #23262F;
-  --muted: #8A8F9C;
-  --rule: #E2E3E8;
+  --ink: #302B24;
+  --charcoal: #302B24;
+  --muted: #81796B;
+  --rule: #DED7C8;
   --accent: #E0474C;
   --blue: #2F6FDB;
   --yellow: #F5C518;
+  --ochre: #BC870B;
+  --ochre-ink: #805B08;
+  --ochre-wash: #F0DFAE;
+  --learner-ink: #3E5846;
+  --learner-wash: #DCE7D8;
+  --bubble: #FFFDF8;
+  --bubble-rule: #E4DFD3;
   --field: #FFFFFF;
-  --on-ink: #FBFAF7;
+  --on-ink: #FFFAF0;
   --frame: #2B2B2B;
 }
 :root[data-theme="whiteboard"] {
   --paper: #FBFAF7;
-  --ink: #23262F;
-  --muted: #8A8F9C;
-  --rule: #E2E3E8;
+  --ink: #302B24;
+  --charcoal: #302B24;
+  --muted: #81796B;
+  --rule: #DED7C8;
   --accent: #E0474C;
   --blue: #2F6FDB;
   --yellow: #F5C518;
+  --ochre: #BC870B;
+  --ochre-ink: #805B08;
+  --ochre-wash: #F0DFAE;
+  --learner-ink: #3E5846;
+  --learner-wash: #DCE7D8;
+  --bubble: #FFFDF8;
+  --bubble-rule: #E4DFD3;
   --field: #FFFFFF;
-  --on-ink: #FBFAF7;
+  --on-ink: #FFFAF0;
   --frame: #2B2B2B;
 }
 :root[data-theme="chalkboard"] {
   --paper: #25332D;
   --ink: #F1EEE4;
+  --charcoal: #1B2622;
   --muted: #AEB5AE;
   --rule: #3C4C44;
   --accent: #F28C82;
   --blue: #8EC5EE;
   --yellow: #F7DC6F;
+  --ochre: #DFB54F;
+  --ochre-ink: #F3DC9A;
+  --ochre-wash: #4A4328;
+  --learner-ink: #CFE6D4;
+  --learner-wash: #2F4A3B;
+  --bubble: #2F3F38;
+  --bubble-rule: #4A5C53;
   --field: #1C2824;
   --on-ink: #25332D;
   --frame: #151D19;
@@ -43,7 +75,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
 /* The board is always 16:9 and as large as the window allows. */
 .board-wrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
@@ -143,3 +175,101 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .stage .pen .swatch[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px #23262f; }
 .stage .pen button:not(.swatch) { font: inherit; font-size: 0.8em; border: 0; background: none; cursor: pointer; padding: 0.2em 0.4em; }
 .stage .pen button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- Leo's tutor interface (codex/chalky-tutor-ui-and-icons), re-applied on the action-model page ---- */
+.tutor-wrap { background: var(--paper); }
+.board.tutor-board {
+  position: relative; width: 100%; height: 100dvh; aspect-ratio: auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "topic" "stage";
+}
+.tutor-board .topic { gap: 14px; padding: 12px 2.5%; border-bottom: 1px solid var(--rule); position: relative; z-index: 4; }
+.tutor-board .topic h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(22px, 2.4vw, 36px); letter-spacing: 0;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-right { display: flex; align-items: center; gap: 12px; margin-left: auto; flex: none; }
+.tutor-board .mic { white-space: nowrap; font-size: clamp(12px, 1vw, 15px); }
+.tutor-board .mic[data-state="speaking"] .dot { background: var(--ochre); }
+.debug-toggle { font: 400 12px "Instrument Sans", sans-serif; border: 1px solid var(--rule); border-radius: 999px; background: transparent;
+  color: var(--muted); padding: 0.25em 0.7em; cursor: pointer; }
+.debug-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+
+/* The stage holds the board; the dock and the mascot sit over it. */
+.tutor-board .stage { min-height: 0; min-width: 0; container-type: size; padding: 2% 10% 180px; }
+.tutor-board .stage .visual { width: min(100%, calc((100cqh - 190px) * 1.5)); max-height: calc(100cqh - 190px); aspect-ratio: 3 / 2; }
+.tutor-board .stage[data-dimmed="true"] { opacity: 1; filter: none; }
+
+/* The mascot: seated on the welcome screen, with a speech bubble; small at bottom left while teaching. */
+.tutor-character, .stage .welcome.tutor-character { position: absolute; left: 50%; top: 50%; inset: auto; transform: translate(-50%, -50%); width: min(336px, 60cqh); height: min(336px, 60cqh);
+  display: block; padding: 0; gap: 0; pointer-events: none; background: var(--paper); }
+.tutor-character .tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* The welcome PNG is a cutout (public/mascot/seated-cutout.png, keyed from his seated.png); the videos keep a white backdrop, so they multiply onto the paper. */
+.tutor-character video.tutor-mascot { mix-blend-mode: multiply; }
+:root[data-theme="chalkboard"] .tutor-character video.tutor-mascot { mix-blend-mode: normal; background: #FBFAF7; border-radius: 24px; }
+.tutor-bubble { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(460px, 86vw);
+  padding: 18px 26px; border: 1px solid var(--bubble-rule); border-radius: 18px; background: var(--bubble); box-shadow: 0 4px 12px #46351a09;
+  font-family: "Instrument Serif", Georgia, serif; text-align: center; pointer-events: auto; }
+.tutor-bubble::after { content: ""; position: absolute; bottom: -7px; left: calc(50% - 7px); width: 12px; height: 12px; transform: rotate(45deg);
+  background: var(--bubble); border-right: 1px solid var(--bubble-rule); border-bottom: 1px solid var(--bubble-rule); }
+.tutor-bubble h2, .stage .welcome .tutor-bubble h2 { margin: 0; font-weight: 400; font-size: clamp(24px, 2.4vw, 34px); line-height: 1.2; color: var(--ink); }
+.tutor-bubble p, .stage .welcome .tutor-bubble p { margin: 8px 0 0; font-family: "Instrument Sans", sans-serif; font-size: clamp(13px, 1.1vw, 16px); color: var(--muted); }
+.tutor-character.teaching { width: 200px; height: 200px; top: auto; bottom: 24px; left: 20px; right: auto; transform: none; z-index: 2; }
+.tutor-character.teaching .tutor-mascot { background: transparent; }
+
+/* The conversation dock: one shared transcript line, the voice actions, the hint, and the typing box. */
+.conversation-dock { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(680px, 88%); text-align: center; z-index: 3; }
+.shared-transcript { min-height: 58px; max-height: 120px; overflow-y: auto; margin: 0 0 12px; color: var(--ink); }
+.transcript-speaker { display: block; font: 500 11px "Instrument Sans", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.shared-transcript p { margin: 4px 0 0; font: 400 clamp(17px, 1.6vw, 23px)/1.45 "Instrument Sans", sans-serif; }
+.shared-transcript .word { color: var(--muted); opacity: 0.55; transition: color 60ms linear, opacity 60ms linear; }
+.shared-transcript .word[data-state="spoken"], .shared-transcript .word[data-state="now"] { opacity: 1; }
+.shared-transcript .word[data-state="spoken"] { color: var(--ink); }
+.shared-transcript .word[data-state="now"] { color: var(--ochre-ink); background: var(--ochre-wash); border-radius: 4px; padding: 1px 2px; }
+.shared-transcript .heard { color: var(--ink); font-style: normal; }
+.shared-transcript .heard .learner-word { color: var(--learner-ink); background: var(--learner-wash); border-radius: 4px; padding: 1px 2px; }
+.voice-actions { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.start-voice { display: inline-flex; align-items: center; justify-content: center; gap: 12px; font: 500 16px "Instrument Sans", sans-serif;
+  padding: 16px 28px; border: 1px solid var(--charcoal); border-radius: 0; color: var(--on-ink); background: var(--charcoal); cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease; }
+.start-voice svg { color: var(--ochre); }
+.start-voice:hover:not(:disabled) { background: #443a2b; border-color: #443a2b; }
+.start-voice:active:not(:disabled) { transform: translateY(1px); }
+.start-voice:disabled { cursor: default; opacity: .8; }
+.start-voice.listening { background: var(--ochre-wash); border-color: var(--ochre); color: var(--ochre-ink); opacity: 1; }
+.listening-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ochre); }
+.quiet-action { font: 400 14px "Instrument Sans", sans-serif; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 6px 4px; }
+.quiet-action:hover { color: var(--ink); }
+.quiet-action[aria-expanded="true"] { color: var(--ink); }
+.voice-hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.start-voice:focus-visible, .quiet-action:focus-visible, .debug-toggle:focus-visible { outline: 2px solid var(--ochre); outline-offset: 4px; }
+.conversation-dock .ask { margin-top: 10px; padding: 0; flex: initial; justify-content: center; }
+.conversation-dock .ask input { font-family: "Instrument Sans", sans-serif; font-size: 15px; padding: 0.55em 0.9em; border-radius: 8px; }
+.conversation-dock .ask button { font-family: "Instrument Sans", sans-serif; font-size: 14px; padding: 0.55em 1em; border-radius: 8px; background: var(--charcoal); border-color: var(--charcoal); }
+.conversation-dock .ask[hidden] { display: none; }
+
+/* Telemetry: the beat list, timings, learner record and prefetch stats, behind ?debug=1 (or the Debug toggle). */
+.tutor-board .evidence { display: none; }
+.tutor-board[data-debug="1"] .evidence { display: block; position: absolute; right: 12px; top: 64px; bottom: 12px; width: min(380px, 40%); z-index: 5;
+  padding: 12px 14px; border: 1px solid var(--rule); border-left: 1px solid var(--rule); border-radius: 10px; background: var(--bubble);
+  overflow-y: auto; font-size: 12px; box-shadow: 0 8px 28px #1f2a4418; }
+.tutor-board[data-debug="1"] .lesson-beats ol { max-height: none; overflow: visible; }
+
+/* Phone and short windows: a smaller mascot, a tighter dock, the orb hidden. */
+@media (max-width: 600px), (max-height: 600px) {
+  .tutor-board .topic { gap: 6px; padding: 8px 3%; }
+  .tutor-board .topic h1 { font-size: 19px; }
+  .tutor-board .mic .orb { display: none; }
+  .tutor-board .stage { padding: 4% 3% 150px; }
+  .tutor-board .stage .visual { width: min(100%, calc((100cqh - 150px) * 1.5)); max-height: calc(100cqh - 150px); }
+  .tutor-character { width: min(240px, 50cqh); height: min(240px, 50cqh); }
+  .tutor-bubble { padding: 12px 16px; max-width: 90vw; }
+  .tutor-bubble h2 { font-size: 20px; }
+  .tutor-character.teaching { width: 110px; height: 110px; left: 8px; bottom: 150px; }
+  .conversation-dock { bottom: 10px; width: 94%; }
+  .shared-transcript { min-height: 40px; max-height: 72px; margin-bottom: 8px; }
+  .shared-transcript p { font-size: 15px; }
+  .start-voice { padding: 12px 20px; font-size: 14px; }
+  .voice-actions { gap: 8px; }
+  .conversation-dock .ask input { width: 100%; }
+  .tutor-board[data-debug="1"] .evidence { left: 8px; right: 8px; width: auto; top: 52px; bottom: 170px; }
+}
