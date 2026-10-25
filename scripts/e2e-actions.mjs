@@ -192,6 +192,7 @@ try {
     await page.goto(url);
     await page.click('[data-testid="start-talking"]');
     await waitFor((s) => s.status === "Listening", 20000);
+    await page.waitForTimeout(3000); // lesson 1's closing save reaches Convex
     const t2 = Date.now();
     await say("next");
     let r2 = null;
@@ -208,7 +209,7 @@ try {
     console.log(`        lesson 2 first reply: "${r2?.reply?.text}" [${names(r2?.reply)}]`);
     console.log(`        lesson 2 memory: ${JSON.stringify(r2?.retrieval?.memory ?? null)}`);
     check("lesson 2 had the learner's earlier lines in its prompt", (r2?.retrieval?.memory?.lines?.length ?? 0) > 0, r2?.retrieval?.memory?.status ?? "no retrieval");
-    check("and its intake reply brings up what lesson 1 got stuck on", /violet|last time|before|earlier/i.test(r2?.reply?.text ?? ""), r2?.reply?.text ?? "");
+    check("and its intake reply brings up what lesson 1 got stuck on", /violet|last time|earlier lesson|you (said|got stuck|mentioned)/i.test(r2?.reply?.text ?? ""), r2?.reply?.text ?? "");
   } else {
     await page.fill('[data-testid="question"]', "Why is the sky blue?");
     await page.click('[data-testid="ask"]');

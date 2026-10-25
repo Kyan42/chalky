@@ -3,15 +3,15 @@
  * as one Moss session document per line: each confusion, what they already knew, what they wanted, and
  * each earlier lesson with what it got stuck on. Queried with the utterance (and the lesson's question)
  * before every reply; the best lines go into the fast model's prompt as "what this learner has said
- * before". Records are fetched once a minute at most, never on a reply's critical path for longer than
- * MEMORY_BUDGET_MS: a slow fetch just means no memory this turn.
+ * before". Records are fetched at a lesson's first reply and then once a minute at most, never on a
+ * reply's critical path for longer than MEMORY_BUDGET_MS: a slow fetch just means no memory this turn.
  */
 import "server-only";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { searchDocs, upsertDocs, warmSession } from "./session";
 
-const MEMORY_BUDGET_MS = 400;
+const MEMORY_BUDGET_MS = 600;
 const TTL_MS = 60_000;
 let client: ConvexHttpClient | null = null;
 const fetched = new Map<string, { at: number; pending: Promise<number> | null }>();
@@ -50,11 +50,13 @@ export type MemoryLookup = { lines: string[]; ms: number; status: string; docs?:
 export async function learnerMemory(learnerId: string | null, query: string, lessonId: string | null, k = 3): Promise<MemoryLookup> {
   if (!learnerId || !process.env.NEXT_PUBLIC_CONVEX_URL) return { lines: [], ms: 0, status: learnerId ? "no-convex" : "no-learner" };
   const t0 = performance.now();
-  let f = fetched.get(learnerId);
+  // A new lesson fetches afresh: the last one's record may have landed since.
+  const key = `${learnerId}:${lessonId ?? ""}`;
+  let f = fetched.get(key);
   if (!f || (Date.now() - f.at > TTL_MS && !f.pending)) {
     const entry = { at: Date.now(), pending: null as Promise<number> | null };
     entry.pending = refresh(learnerId, lessonId).finally(() => (entry.pending = null));
-    fetched.set(learnerId, entry);
+    fetched.set(key, entry);
     f = entry;
   }
   let docs: number | undefined;

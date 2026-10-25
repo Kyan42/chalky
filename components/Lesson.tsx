@@ -1018,6 +1018,8 @@ export default function Lesson() {
     const flushLog = (closing = false) => {
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
+      // The learner record rides on every save, so Convex has it before the tab closes.
+      transcript.learner = learner;
       const body = JSON.stringify(transcript);
       if (closing) {
         // The tab is going away: a beacon outlives the page, but browsers cap it at about 64 KB. A longer
