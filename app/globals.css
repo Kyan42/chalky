@@ -1,3 +1,18 @@
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/InstrumentSerif-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/InstrumentSerif-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --paper: #f7f5ef;
   --ink: #1f2a44;
@@ -9,7 +24,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  font-family: "Instrument Serif", Georgia, serif; }
 
 /* The board is always 16:9 and as large as the window allows. */
 .board-wrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
@@ -91,3 +106,87 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   background: var(--ink); color: #fff; cursor: pointer; }
 .caption .heard { color: #2E86E4; font-style: italic; }
 .topic .orb { margin-left: 0.6em; }
+
+/* Voice-first lesson: one uninterrupted, centered whiteboard. */
+.lesson-board {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 8% minmax(0, 1fr);
+  grid-template-areas: "topic" "stage";
+}
+.lesson-board .stage { min-height: 0; min-width: 0; container-type: size; }
+.lesson-board .stage .visual { width: min(100%, 150cqh); max-height: 100%; }
+.lesson-board .topic { gap: 16px; position: relative; z-index: 2; }
+.topic h1 { font-weight: 400; font-size: clamp(22px, 2.5vw, 38px); }
+.stage .welcome h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 56px); }
+.stage .welcome p { font-size: clamp(16px, 1.5vw, 23px); }
+.stage .welcome button { font-size: clamp(18px, 1.5vw, 23px); }
+.lesson-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.text-toggle { font: inherit; font-size: clamp(15px, 1.2vw, 19px); background: transparent; color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 0.4em 0.9em; cursor: pointer; white-space: nowrap; }
+.text-toggle:hover, .text-toggle[aria-expanded="true"] { color: var(--ink); background: #fff8; }
+.lesson-actions .ask { padding: 0; flex: initial; }
+.text-question { position: absolute; right: 2.5%; top: calc(100% + 12px); display: flex; gap: 8px; width: min(480px, 90%); padding: 12px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); box-shadow: 0 8px 28px #1f2a4410; }
+.text-question input { flex: 1; min-width: 0; font-size: 19px; }
+.text-question button { font-size: 18px; }
+.lesson-board .mic { white-space: nowrap; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .lesson-board .topic { gap: 6px; }
+  .lesson-board .topic h1 { font-size: 19px; }
+  .lesson-board .mic .orb { display: none; }
+  .lesson-actions { gap: 4px; }
+  .text-toggle { font-size: 13px; }
+}
+
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/InstrumentSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/InstrumentSans-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+.tutor-wrap { background: var(--paper); }
+.tutor-board { position: relative; width: 100%; height: 100dvh; aspect-ratio: auto; display: block; font-family: "Instrument Sans", sans-serif; }
+.tutor-board .stage { position: absolute; inset: 0; padding: 5% 12% 160px; }
+.tutor-character { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 336px; height: 336px; }
+.tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.tutor-bubble { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(460px, 86vw); padding: 18px 26px; border: 1px solid #e4dfd3; border-radius: 18px; background: #fffdf8; box-shadow: 0 4px 12px #46351a09; font-family: "Instrument Serif", Georgia, serif; font-size: 30px; line-height: 1.25; text-align: center; }
+.tutor-bubble::after { content: ""; position: absolute; bottom: -7px; left: calc(50% - 7px); width: 12px; height: 12px; transform: rotate(45deg); background: #fffdf8; border-right: 1px solid #e4dfd3; border-bottom: 1px solid #e4dfd3; }
+.conversation-dock { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: min(640px, 90%); text-align: center; }
+.learner-transcript { min-height: 28px; max-height: 84px; overflow: auto; margin: 0 0 20px; font-size: 18px; line-height: 1.5; color: #777267; }
+.voice-actions { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.start-voice { display: inline-flex; align-items: center; justify-content: center; gap: 12px; font: 500 16px "Instrument Sans", sans-serif; padding: 18px 30px; border: 0; border-radius: 0; color: #fffdf8; background: var(--ink); cursor: pointer; }
+.start-voice:disabled { cursor: default; opacity: .8; }
+.quiet-action { font: 400 14px "Instrument Sans", sans-serif; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.voice-hint { margin: 14px 0 0; font-size: 12px; color: var(--muted); }
+.listening-dot { width: 8px; height: 8px; border-radius: 50%; background: #d7bd76; }
+.tutor-character.teaching { width: 220px; height: 220px; top: auto; bottom: 32px; left: 28px; right: auto; transform: none; }
+.teaching .tutor-bubble { left: auto; right: 0; transform: none; font-family: "Instrument Sans", sans-serif; font-size: 15px; max-width: min(330px, 70vw); max-height: 160px; overflow: auto; }
+.teaching .tutor-bubble::after { left: auto; right: 40px; }
+@media (max-width: 600px), (max-height: 600px) {
+  .tutor-character { width: 240px; height: 240px; }
+  .tutor-bubble { font-size: 24px; padding: 14px 20px; }
+  .conversation-dock { bottom: 20px; }
+  .tutor-board .stage { padding: 6% 4% 150px; }
+  .tutor-character.teaching { width: 154px; height: 154px; left: 10px; right: auto; bottom: 150px; }
+}
+.tutor-character { background: var(--paper); }
+/* Warm ochre and charcoal controls, matched to Chalky's paper palette. */
+.tutor-board { --ink: #302b24; --accent: #bc870b; --muted: #81796b; --rule: #ded7c8; }
+.start-voice { background: #302b24; color: #fffaf0; border: 1px solid #302b24; box-shadow: none; transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
+.start-voice svg { color: #dfb54f; }
+.start-voice:hover:not(:disabled) { background: #443a2b; border-color: #443a2b; box-shadow: none; }
+.start-voice:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.start-voice:focus-visible, .quiet-action:focus-visible { outline: 2px solid #bc870b; outline-offset: 5px; }
+.start-voice:disabled:has(.listening-dot) { background: #f4ecda; border-color: #c9a657; color: #55401d; opacity: 1; }
+.listening-dot { background: #bc870b; }
+.quiet-action { color: #776443; }
+.quiet-action:hover { color: #302b24; }
+.tutor-bubble { border-color: #ded7c8; }
+.tutor-bubble::after { border-color: #ded7c8; }
+
+.shared-transcript { min-height: 66px; max-height: 150px; overflow-y: auto; margin: 0 0 20px; color: var(--ink); }
+.shared-transcript p { margin: 5px 0 0; font: 400 clamp(18px, 1.7vw, 24px)/1.45 "Instrument Sans", sans-serif; }
+.transcript-speaker { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.preview-lecture { position: absolute; top: 20px; right: 24px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 15px; border: 1px dashed #c8bfae; border-radius: 10px; background: #fffaf0; color: #554733; font: 14px "Instrument Sans", sans-serif; cursor: pointer; }
+.preview-lecture span { font-size: 10px; color: #81796b; }
+.lecture-preview-diagram { position: absolute; width: min(850px, 85%); height: calc(100% - 240px); top: 45px; left: 50%; transform: translateX(-50%); font-family: "Instrument Sans", sans-serif; }
+
+.transcript-word.current { border-radius: 4px; padding: 1px 2px; }
+.chalky-word { color: #805b08; background: #f0dfae; }
+.learner-word { color: #3e5846; background: #dce7d8; }

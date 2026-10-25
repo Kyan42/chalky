@@ -29,6 +29,8 @@ export type MicMode = "off" | "open" | "muted" | "held" | "tail";
 export interface HybridMicOptions {
   /** True while Chalky's voice is playing (plus a short echo tail). */
   speaking: boolean;
+  /** Stream echo-cancelled input during playback and interrupt on recognized speech. */
+  autoInterrupt?: boolean;
   /** KeyboardEvent.code of the barge-in key. */
   key?: string;
   /** Turns ending within this window merge into one utterance. */
@@ -73,14 +75,14 @@ export function useHybridMic(options: HybridMicOptions) {
     if (!ink.current) return "off";
     if (held.current) return "held";
     if (tail.current) return "tail";
-    return speakingRef.current ? "muted" : "open";
+    return speakingRef.current && !opts.current.autoInterrupt ? "muted" : "open";
   }, []);
   const refreshMode = useCallback(() => setMode(modeNow()), [modeNow]);
 
   /** Whether mic audio goes to Ink right now. */
   const gateOpen = useCallback(() => {
     if (held.current || tail.current) return true;
-    return !speakingRef.current;
+    return !!opts.current.autoInterrupt || !speakingRef.current;
   }, []);
 
   const endTail = useCallback(() => {
@@ -106,6 +108,10 @@ export function useHybridMic(options: HybridMicOptions) {
       const session = new InkSession(cartesiaToken, {
         onStart: () => merger.current?.turnStart(),
         onUpdate: (t) => {
+          if (t.trim() && speakingRef.current && opts.current.autoInterrupt) {
+            speakingRef.current = false;
+            opts.current.onBargeIn?.();
+          }
           lastPartial.current = t;
           if (held.current && t.trim()) held.current.words = true;
           setPartial(t);
@@ -141,13 +147,13 @@ export function useHybridMic(options: HybridMicOptions) {
 
   // Chalky starting to speak closes the open mic; a turn caught half-way is dropped (it was never going to end).
   useEffect(() => {
-    if (options.speaking && !held.current && !tail.current) {
+    if (options.speaking && !options.autoInterrupt && !held.current && !tail.current) {
       merger.current?.discard();
       setPartial("");
       lastPartial.current = "";
     }
     refreshMode();
-  }, [options.speaking, refreshMode]);
+  }, [options.speaking, options.autoInterrupt, refreshMode]);
 
   // The barge-in key: down opens the mic and interrupts Chalky; up ends the turn.
   useEffect(() => {
