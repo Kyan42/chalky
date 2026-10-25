@@ -65,15 +65,23 @@ const FRAGMENT_GRACE_MS = 2000;
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
 /**
- * Voice barge-in (experimental): talk over Chalky to interrupt. Off unless
- * NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN=1; in development, ?voice=1 or ?voice=0 overrides.
- * Without headphones the speakers can leak into the mic; Space always works.
+ * Voice barge-in (experimental): talk over Chalky to interrupt. The "Voice interrupt" switch in the header
+ * turns it on or off and is remembered in this browser; until it is touched, NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN=1
+ * decides. In development, ?voice=1 or ?voice=0 overrides both. Without headphones the speakers can leak
+ * into the mic; Space always works.
  */
+const VOICE_KEY = "chalky.voiceInterrupt";
 function voiceBargeInEnabled(): boolean {
   if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
     const v = new URLSearchParams(window.location.search).get("voice");
     if (v === "1") return true;
     if (v === "0") return false;
+  }
+  try {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(VOICE_KEY) : null;
+    if (saved === "1" || saved === "0") return saved === "1";
+  } catch {
+    // Storage blocked (private window): fall back to the build's default.
   }
   return process.env.NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN === "1";
 }
@@ -2830,6 +2838,25 @@ export default function Lesson() {
               {statusLabel[status]}
               <Orb state={orbState} level={orbLevel} size={30} />
             </div>
+            <button
+              type="button"
+              className="debug-toggle"
+              aria-pressed={voiceBargeIn}
+              onClick={() =>
+                setVoiceBargeIn((on) => {
+                  try {
+                    window.localStorage.setItem(VOICE_KEY, on ? "0" : "1");
+                  } catch {
+                    // Not remembered (storage blocked); it still applies now.
+                  }
+                  return !on;
+                })
+              }
+              data-testid="voice-toggle"
+              title="Talk over Chalky to interrupt it (best with headphones). Space always works."
+            >
+              Voice interrupt
+            </button>
             <button type="button" className="debug-toggle" aria-pressed={debug} onClick={() => setDebug((v) => !v)} data-testid="debug-toggle" title="Beats, timings, learner record and prefetch stats">
               Debug
             </button>
