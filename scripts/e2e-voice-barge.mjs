@@ -109,7 +109,7 @@ if (MODE === "latency" || MODE === "echo") {
   const clips = Object.fromEntries(await Promise.all(SAY.map(async (s) => [s.name, await clip(s.name, clipText(s))])));
   const browser = await chromium.launch({ args });
   const rows = [];
-  for (const s of SAY) {
+  for (const s of SAY.filter((x) => !process.env.ONLY || x.name === process.env.ONLY)) {
     const context = await browser.newContext({ viewport: { width: 1400, height: 800 } });
     await context.addInitScript(inkTap);
     await context.addInitScript(() => {
@@ -164,7 +164,21 @@ if (MODE === "latency" || MODE === "echo") {
         const answered = await waitFor(page, (x) => /^Last turn: /.test(x.level ?? ""), 30000);
         console.log(`${answered ? "PASS" : "FAIL"}  the barge-in was answered on the ladder — ${answered?.level ?? "no reply"}`);
         const b = await status(page);
-        console.log(`${b.badge ? "PASS" : "FAIL"}  badge shown with ?voice=1`);
+        console.log(`${b.badge ? "PASS" : "FAIL"}  badge shown`);
+        // A second barge-in in the same lesson.
+        let again = await waitFor(page, (x) => x.status === "Speaking" && x.word >= 2, 15000);
+        if (!again) {
+          await page.click('[data-testid="continue"]').catch(() => {});
+          again = await waitFor(page, (x) => x.status === "Speaking" && x.word >= 2, 20000);
+        }
+        if (!again) console.log("FAIL  playback never came back for a second barge-in");
+        else {
+          const n = await page.evaluate(() => window.__pausedAt.length);
+          const said2 = await page.evaluate((b64) => window.__say(b64), clips["vb-again"]);
+          await page.waitForTimeout(said2.seconds * 1000 + 2500);
+          const p2 = await page.evaluate((n) => window.__pausedAt.slice(n), n);
+          console.log(`${p2.length ? "PASS" : "FAIL"}  a second voice barge-in in the same lesson pauses it${p2.length ? ` (${Math.round(p2[0] - said2.onset)} ms after the first word, at ${again.beat})` : ""}`);
+        }
       }
     } catch (e) {
       console.log("ERROR", s.text, e.message);
