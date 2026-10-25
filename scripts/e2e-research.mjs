@@ -48,8 +48,13 @@ const st = () =>
     status: document.querySelector('[data-testid="status"]')?.textContent?.trim() ?? "",
     beat: document.querySelector('[data-testid="beats"] li[data-state="now"]')?.dataset.beatId ?? null,
     badge: !!document.querySelector('[data-testid="research-badge"]'),
-    cards: document.querySelectorAll('[data-testid^="paper-"]').length,
-    lit: document.querySelector('[data-testid^="paper-"][data-cited="true"]')?.dataset.testid ?? null,
+    cards: document.querySelectorAll('[data-testid="paper-card"]').length,
+    // PaperCards opens the cited paper's card (data-open) and marks its matching key sentence.
+    lit: (() => {
+      const open = document.querySelector('[data-testid="paper-card"][data-open="true"]');
+      return open ? `paper-${open.getAttribute("data-n")}` : null;
+    })(),
+    match: !!document.querySelector('[data-testid="paper-card"][data-open="true"] [data-testid="paper-match"]'),
   }));
 const waitFor = async (pred, ms) => {
   const until = Date.now() + ms;
@@ -61,6 +66,7 @@ const waitFor = async (pred, ms) => {
   return null;
 };
 let sawBadge = false;
+let sawMatch = false;
 const litByBeat = {};
 try {
   await page.goto(`${BASE}/lesson?debug=1`);
@@ -84,6 +90,7 @@ try {
     const s = await st();
     if (s.badge) sawBadge = true;
     if (s.beat && s.status === "Speaking") litByBeat[s.beat] = s.lit;
+    if (s.match) sawMatch = true;
     if (s.status === "Your turn" && s.beat) await page.click('[data-testid="continue"]').catch(() => {});
     if (s.lit && shot < 3 && Object.keys(litByBeat).length > shot * 3) await page.screenshot({ path: join(OUT, `cards-${++shot}.png`) });
     if (Object.keys(litByBeat).length >= 9) break;
@@ -113,4 +120,5 @@ check("the planner taught from the papers: beats carry cite", cited.length >= 3 
 check("no citation tag is spoken", !planned.some((e) => /\[\d+\]/.test(e.say)));
 const followed = Object.entries(litByBeat).filter(([b]) => planned.find((e) => e.beatId === b)?.cite);
 check("the paper list lights the cited paper as each cited beat plays", followed.length >= 2 && followed.every(([b, lit]) => lit === `paper-${planned.find((e) => e.beatId === b).cite}`), JSON.stringify(followed));
+check("the open card highlights a key sentence matching the line", sawMatch);
 console.log(`${results.filter(Boolean).length}/${results.length} checks passed; frames in ${OUT}; transcript ${t?.id}`);

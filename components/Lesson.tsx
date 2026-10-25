@@ -31,6 +31,8 @@ import { readInk, type InkStroke } from "@/lib/lesson/ink";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
+import { PaperCards } from "@/components/PaperCards";
+import type { ResearchEvent, ResearchRecord } from "@/lib/research/types";
 import { END, finishDocument, H, PAPER, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
@@ -125,32 +127,6 @@ interface BeatState {
   sketchBeats?: PlannedBeat[];
   /** The beat's speech as it played (events in order), so it can go on from a word after a cut-in. */
   speech?: { events: BeatAudioEvent[]; done: boolean };
-}
-
-/** One paper of a research record (lib/research/types.ts on the Apify branch; the fields the page uses). */
-interface Paper {
-  n: number;
-  title: string;
-  authors: string[];
-  authorCount: number;
-  published: string;
-  url: string;
-  key: string[];
-}
-
-/** POST /api/research and GET /api/research/<id> (lib/research/CONTRACT.md): the fields the page uses. */
-interface ResearchRecord {
-  id: string;
-  topic: string;
-  days: number;
-  searchedDays: number;
-  status: "running" | "ready" | "failed";
-  papers: Paper[];
-  material: string;
-  via: string | null;
-  cached: boolean;
-  ms?: number;
-  error?: string;
 }
 
 /** A fresh fetch: poll this often, and give up (teach from memory) after this long. */
@@ -745,7 +721,7 @@ export default function Lesson() {
   /** A sketch quiz is waiting for the learner's drawing: Done hands it in. */
   const [quizDone, setQuizDone] = useState<(() => void) | null>(null);
   /** Recent papers the lesson is taught from (research), the "finding papers" state, and the beat's citations. */
-  const [papers, setPapers] = useState<Paper[] | null>(null);
+  const [researchRecord, setResearchRecord] = useState<ResearchRecord | null>(null);
   const [researching, setResearching] = useState(false);
   const [currentCite, setCurrentCite] = useState<number | null>(null);
   /** A request handed to the slow executor is pending (the badge says so). */
@@ -1087,6 +1063,8 @@ export default function Lesson() {
     setLayoutMs(null);
     setLastReplyMs(null);
     setLastLevel(null);
+    setResearchRecord(null);
+    setCurrentCite(null);
     setPausedAt(null);
     showBoard(EMPTY_BOARD);
     setCursorScript([]);
@@ -1390,7 +1368,8 @@ export default function Lesson() {
         if (rec.status === "running") return fail(`still running after ${RESEARCH_BUDGET_MS / 1000} s`, rec.id);
         if (rec.status === "failed") return fail(rec.error ?? "failed", rec.id);
         logEv({ kind: "research", topic: rec.topic, days: rec.days, searchedDays: rec.searchedDays, id: rec.id, papers: rec.papers.length, ms: Math.round(performance.now() - t0r), fetchMs: rec.ms ?? null, cached: rec.cached, via: rec.via, titles: rec.papers.map((x) => `[${x.n}] ${x.title.slice(0, 80)}`) });
-        if (rec.papers.length) setPapers(rec.papers);
+        // The cards get the record the lesson fetched (they don't fetch again).
+        if (rec.papers.length) setResearchRecord(rec);
         return rec;
       })()
         .catch((e) => fail(String((e as Error).message ?? e)))
@@ -2975,28 +2954,6 @@ export default function Lesson() {
               onStroke={(stroke) => showInk([...inkRef.current, stroke])}
             />
             <ChalkyCursor boxes={onScreenBoxes} script={cursorScript} clock={cursorClock} />
-            {papers && papers.length > 0 && (
-              // The papers the lesson is taught from; the one the current beat cites is lit.
-              <div data-testid="research-cards" style={{ position: "absolute", left: 8, bottom: 8, maxWidth: "38%", display: "grid", gap: 4, pointerEvents: "auto" }}>
-                {papers.map((p) => {
-                  const lit = currentCite === p.n;
-                  return (
-                    <a
-                      key={p.n}
-                      href={p.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      data-testid={`paper-${p.n}`}
-                      data-cited={lit ? "true" : "false"}
-                      style={{ display: "block", padding: "4px 8px", borderRadius: 6, font: "500 12px/1.3 Inter, system-ui, sans-serif", color: "#23262f", textDecoration: "none", background: lit ? "#fff4d6" : "rgba(255,255,255,.85)", boxShadow: lit ? "0 0 0 2px #E4572E" : "0 1px 3px rgba(0,0,0,.12)", opacity: lit || currentCite === null ? 1 : 0.6, transition: "all .25s" }}
-                    >
-                      <strong>[{p.n}]</strong> {p.title}
-                      <span style={{ opacity: 0.6 }}> · {p.authors[0] ?? ""}{p.authorCount > 1 ? " et al." : ""}, {p.published}</span>
-                    </a>
-                  );
-                })}
-              </div>
-            )}
             {quizMarks && (
               // A label quiz: each label covered, a numbered marker where it was.
               <div data-testid="quiz-marks" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -3041,6 +2998,10 @@ export default function Lesson() {
             <div className="tutor-character teaching" data-testid="mascot" data-mascot={speakingAudio ? "talking" : "thinking"}>
               <video key={mascotSource} className="tutor-mascot" src={mascotSource} autoPlay muted loop playsInline aria-label={speakingAudio ? "Chalky talking" : "Chalky thinking"} />
             </div>
+          )}
+          {/* The papers a research lesson is taught from (lib/research): the cited paper's card opens as its beat is spoken. */}
+          {researchRecord && (
+            <PaperCards record={researchRecord} currentCite={currentCite ?? undefined} currentLine={beats[current]?.beat.say} onEvent={(e: ResearchEvent) => logRef.current(e)} />
           )}
         </section>
         <aside className="evidence lesson-beats" data-testid="telemetry" aria-hidden={!debug}>
