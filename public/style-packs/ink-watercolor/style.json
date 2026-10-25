@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "id": "ink-watercolor",
+  "name": "Ink + watercolor",
+  "description": "Priority: loose black ink contours and pooled painted fills, inspired by the green chair.",
+  "ink": "#302b24",
+  "paper": "#f7f5ef",
+  "accent": "#c69a34",
+  "width": 1.65,
+  "wobble": 1,
+  "texture": 0.105,
+  "mode": "paint",
+  "palette": "../palette.json",
+  "rendering": {
+    "engine": "svg",
+    "seed": 17,
+    "notes": "Texture and wobble are SVG filters. Clayzo needs a renderer adapter for these effects; geometry, parts and anchors remain compatible."
+  }
+}

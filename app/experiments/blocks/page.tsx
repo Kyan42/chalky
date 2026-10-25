@@ -135,7 +135,7 @@ export default function BlocksPage() {
         </div>
       </header>
       <section style={styles.boards}>
-        <Board doc={gallery} label={overlay ? "All 15 blocks (parts and anchors)" : "All 15 blocks"} register={register} theme={theme} />
+        <Board doc={gallery} label={overlay ? `All ${BLOCKS.length} blocks (parts and anchors)` : `All ${BLOCKS.length} blocks`} register={register} theme={theme} />
         <Board doc={photo.doc} label="Photosynthesis, through the preset compiler" register={register} theme={theme} />
       </section>
       <section style={styles.notes}>

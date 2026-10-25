@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "paper": "#f7f5ef",
+  "colors": {
+    "ink": "#302b24",
+    "green": "#46894b",
+    "blue": "#4f8ba8",
+    "red": "#b7684c",
+    "purple": "#9567a8",
+    "yellow": "#c69a34",
+    "orange": "#bb8144",
+    "brown": "#87644e",
+    "muted": "#8a8577",
+    "white": "#fffdf8"
+  },
+  "tintMix": 0.25,
+  "rule": "Same part, same fill and stroke colors in every style. Texture only modulates luminance."
+}
