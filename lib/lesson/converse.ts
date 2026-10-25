@@ -57,7 +57,9 @@ export type ConverseAction =
   /** The cursor circles an element of the scene in view, or a spot (a rectangle on that scene's grid). */
   | { type: "highlight"; element?: string; region?: { x: number; y: number; w: number; h: number } }
   /** Hand a request the fast model cannot settle from its context to the slow executor. */
-  | { type: "delegate"; request: string };
+  | { type: "delegate"; request: string }
+  /** A quiz on the scene in view: name the numbered parts (label), or draw something (sketch). */
+  | { type: "quiz"; kind: "label" | "sketch"; question: string };
 export type AmendAction = "insert_after" | "replace_from" | "delete";
 
 export interface ConverseTrailer {
@@ -93,6 +95,8 @@ export interface ConverseTrailer {
    * "start" from the beat's beginning (they asked about the beat itself: still lost, or didn't hear it).
    */
   cut?: "word" | "next" | "start";
+  /** quiz's kind and question, if any. */
+  quiz?: { kind: "label" | "sketch"; question: string } | null;
 }
 
 /** A scene of the one board, as the fast model sees it: its number, a title, and the ids drawn there. */
@@ -199,6 +203,7 @@ The actions (several per turn, applied in order):
 - "go_to" {"scene"} or {"element"}: the board is one long board with every scene the lesson drew on it, side by side; this moves the camera back to an earlier scene's place, or frames one element in any scene. For "show me where the diagram for X was": go_to that element or scene, then "highlight" it. The board stays there until the lesson's next beat brings the camera back.
 - "highlight" {"element"} or {"region": {"x", "y", "w", "h"}}: the cursor circles an element of the scene in view, or a spot on that scene's grid (the same coordinates as the element positions) when what they ask about is a place, not an element.
 - "delegate" {"request"}: when you cannot settle the request from what you are given here (they ask about something from another scene and neither the scene list nor the candidates name it, or it needs the whole lesson at once), say ONE short line that covers the wait ("Let me find that.") and hand over the request, in one sentence, to a slower helper who sees the whole board and lesson; its actions arrive a moment later. Never delegate pointing at something in the scene in view, or anything the candidates name.
+- "quiz" {"kind", "question"}: they ask to be quizzed or tested ("quiz me", "test me on this"): say one short line ("Okay, quick quiz.") and give the quiz on the scene in view: "label" (they name parts you number) when it has several labelled parts, "sketch" (they draw it) when it shows a process. "question" is what you ask, said right after your line ("Name the parts I've numbered." / "Draw how the light gets split into colors, then say done.").
 - "resume" {"how"}: how the lesson goes on after your reply: "continue" (go on from where it was), "replay_beat" (say the beat you were cut off in again), or "wait" (wait for them). If you leave it out: "wait" after an "ask", else "continue".
 
 Choosing:
@@ -218,12 +223,12 @@ The learner can draw on the board with a pen (blue, green, orange or dark stroke
 Everything between the first line and the trailer line is spoken aloud to the learner, word for word. Speak to them directly: never describe what you are going to do, never talk about "the learner", actions, levels, resume or cues there.
 
 Output format, exactly: a first line "actions: " with the action names in order (write amend with its op, e.g. "actions: say" or "actions: point, sketch" or "actions: amend:insert_after" or "actions: ask, start_lesson"), then the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"actions": [{"type": "say"} | {"type": "start_lesson", "question": "...", "focus": "...", "level": "..."} | {"type": "ask", "question": "the question you ended with"} | {"type": "point", "cues": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}]} | {"type": "sketch", "visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}], "near": "element-id", "side": "above" | "below" | "left" | "right" | "on"} | {"type": "amend", "op": "insert_after" | "replace_from" | "delete", "index": 3, "note": "...", "count": 2} | {"type": "resume", "how": "continue" | "replay_beat" | "wait"} | {"type": "go_to", "scene": 2} | {"type": "go_to", "element": "element-id"} | {"type": "highlight", "element": "element-id"} | {"type": "highlight", "region": {"x": 10, "y": 20, "w": 30, "h": 20}} | {"type": "delegate", "request": "..."}]}
+{"actions": [{"type": "say"} | {"type": "start_lesson", "question": "...", "focus": "...", "level": "..."} | {"type": "ask", "question": "the question you ended with"} | {"type": "point", "cues": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}]} | {"type": "sketch", "visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}], "near": "element-id", "side": "above" | "below" | "left" | "right" | "on"} | {"type": "amend", "op": "insert_after" | "replace_from" | "delete", "index": 3, "note": "...", "count": 2} | {"type": "resume", "how": "continue" | "replay_beat" | "wait"} | {"type": "go_to", "scene": 2} | {"type": "go_to", "element": "element-id"} | {"type": "highlight", "element": "element-id"} | {"type": "highlight", "region": {"x": 10, "y": 20, "w": 30, "h": 20}} | {"type": "delegate", "request": "..."} | {"type": "quiz", "kind": "label" | "sketch", "question": "..."}]}
 Nothing else: no code fences, no commentary.`;
 
 /** Spoken sentences allowed, by the actions named on the first line; the board does the rest. */
 function sentenceBudget(names: string[]): number {
-  if (names.some((n) => n === "amend:insert_after" || n === "amend:replace_from" || n === "delegate")) return 1;
+  if (names.some((n) => n === "amend:insert_after" || n === "amend:replace_from" || n === "delegate" || n === "quiz")) return 1;
   if (names.length && names.every((n) => n === "say" || n === "resume")) return 3;
   // Room for the question itself after a line or two.
   if (names.includes("ask")) return 3;
@@ -236,7 +241,7 @@ function levelOf(names: string[]): ConverseLevel {
   if (names.some((n) => n === "point" || n === "sketch" || n === "ask" || n === "start_lesson" || n === "go_to" || n === "highlight" || n === "delegate")) return "answer";
   return "confirm";
 }
-const ACTION_NAMES = /\b(say|start_lesson|ask|point|sketch|resume|go_to|highlight|delegate|amend(?::\s*(?:insert_after|replace_from|delete))?)\b/g;
+const ACTION_NAMES = /\b(say|start_lesson|ask|point|sketch|resume|go_to|highlight|delegate|quiz|amend(?::\s*(?:insert_after|replace_from|delete))?)\b/g;
 const RESUMES = new Set<ConverseResume>(["replay_beat", "continue", "wait"]);
 const GESTURES = new Set<CursorGesture>(["point", "circle", "sweep", "underline", "tap"]);
 const SIDES = new Set<SketchSide>(["above", "below", "left", "right", "on"]);
@@ -415,6 +420,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   let goTo: ConverseTrailer["goTo"] = null;
   const highlights: NonNullable<ConverseTrailer["highlights"]> = [];
   let delegate: string | null = null;
+  let quiz: ConverseTrailer["quiz"] = null;
   const sceneNums = new Set((input.scenes ?? []).map((s) => s.scene));
   const anyIds = new Set([...ids, ...(input.scenes ?? []).flatMap((s) => s.ids), ...(input.candidates ?? []).map((c) => c.id)]);
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -431,6 +437,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       if (element && anyIds.has(element)) highlights.push({ element });
       else if (box && box.x > -60 && box.x < 260 && box.y > -60 && box.y < 260) highlights.push({ region: box });
     } else if (a.type === "delegate" && typeof a.request === "string" && a.request.trim()) delegate = a.request.trim().slice(0, 400);
+    else if (a.type === "quiz" && (a.kind === "label" || a.kind === "sketch")) quiz = { kind: a.kind, question: str(a.question, 300) || (a.kind === "label" ? "Can you name the parts I've numbered?" : "Draw it for me, then say done.") };
     else if (a.type === "start_lesson") {
       const question = str(a.question, 300) || input.utterance;
       lesson = { question, focus: str(a.focus, 200), level: str(a.level, 30) || "unknown" };
@@ -541,12 +548,13 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     else if (a.type === "go_to" && goTo && !escalated && !actions.some((x) => x.type === "go_to")) actions.push({ type: "go_to", ...goTo });
     else if (a.type === "highlight" && !escalated && actions.filter((x) => x.type === "highlight").length < highlights.length) actions.push({ type: "highlight", ...highlights[actions.filter((x) => x.type === "highlight").length] });
     else if (a.type === "delegate" && delegate && !escalated && !actions.some((x) => x.type === "delegate")) actions.push({ type: "delegate", request: delegate });
+    else if (a.type === "quiz" && quiz && !escalated && !actions.some((x) => x.type === "quiz")) actions.push({ type: "quiz", ...quiz });
   }
   if (cues.length && !actions.some((x) => x.type === "point")) actions.push({ type: "point", cues });
   if (lesson && !actions.some((x) => x.type === "start_lesson")) actions.push({ type: "start_lesson", ...lesson });
   if (amend && !actions.some((x) => x.type === "amend")) actions.push({ type: "amend", ...amend });
   actions.push({ type: "resume", how: resume, ...(resumeWhy ? { why: resumeWhy } : {}) });
-  return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate, ...(cut ? { cut } : {}) };
+  return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate, ...(cut ? { cut } : {}), quiz: escalated ? null : quiz };
 }
 
 /** The trailer used when the model gave none (or unparsable JSON). */

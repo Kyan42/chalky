@@ -38,6 +38,8 @@ export interface PlannedBeat {
   points: { id: string; word: string }[];
   /** On a section's first beat: the section's one-line goal. */
   section?: string;
+  /** A quiz beat (a talk beat whose "say" is the quiz question): label the numbered parts, or draw something. */
+  quiz?: QuizKind;
   /** On a check-in beat: what Chalky says when the learner answers "got it" (no model call), naming what comes next. */
   bridge?: string;
 }
@@ -47,6 +49,21 @@ export interface PlannedBeat {
  * (no persistence yet) and passed to the planner and the reply route: the
  * intake answer, their check-in replies and what they got stuck on.
  */
+export type QuizKind = "label" | "sketch";
+
+/** One quiz, graded: kept on the learner record (the page's), and summed up in `confusions` for Convex. */
+export interface QuizResult {
+  kind: QuizKind;
+  asked: string;
+  answered: string;
+  /** 0..1 */
+  score: number;
+  right: string[];
+  missing: string[];
+  beatId: string | null;
+  at: string;
+}
+
 export interface LearnerRecord {
   level: "new" | "some" | "strong" | "unknown";
   /** What they already know, in a few words. */
@@ -57,6 +74,8 @@ export interface LearnerRecord {
   confusions: string[];
   /** Their answers at check-ins, newest last. */
   replies: string[];
+  /** Quizzes taken this lesson, graded (the page's record; Convex gets the summary line in `confusions`). */
+  quizzes?: QuizResult[];
 }
 
 export const NEW_LEARNER: LearnerRecord = { level: "unknown", prior: "", focus: "", confusions: [], replies: [] };

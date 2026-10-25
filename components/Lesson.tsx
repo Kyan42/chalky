@@ -28,15 +28,15 @@ import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
 import { INK_COLORS, InkLayer, NO_ZOOM, snapshotBoard, type InkCamera } from "@/components/InkLayer";
 import { readInk, type InkStroke } from "@/lib/lesson/ink";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
-import { END, finishDocument, H, W } from "@/experiments/visual-flex/doc";
+import { END, finishDocument, H, PAPER, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
+import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
@@ -456,6 +456,8 @@ interface BoardView {
   view: Region;
   /** The scene these elements belong to. */
   scene: number;
+  /** Where each element's own label is drawn (world grid), by element id: a label quiz covers these. */
+  labels?: Record<string, GridBox>;
 }
 const EMPTY_BOARD: BoardView = { boxes: {}, list: [], view: FULL_VIEW, scene: 1 };
 
@@ -481,12 +483,17 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
     if (dot > 0) list.push({ id: shape.id, kind: "part", label: `${shape.id.slice(dot + 1).replace(/[-_]/g, " ")} of ${labelOf(shape.id.slice(0, dot))}` });
     else list.push({ id: shape.id, kind: byId.get(shape.id)?.kind ?? "shape", label: labelOf(shape.id) });
   }
+  const labels: Record<string, GridBox> = {};
   for (const t of report.texts) {
-    if (t.owner || boxes[t.id]) continue;
+    if (t.owner) {
+      labels[t.owner] ??= grid(t.box);
+      continue;
+    }
+    if (boxes[t.id]) continue;
     boxes[t.id] = grid(t.box);
     list.push({ id: t.id, kind: "text", label: byId.get(t.id)?.text || t.id });
   }
-  return { boxes, list, view, scene };
+  return { boxes, list, view, scene, labels };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -695,6 +702,10 @@ export default function Lesson() {
   useEffect(() => setVoiceBargeIn(voiceBargeInEnabled()), []);
   /** Paused and not listening (Stop, Pause, a Space tap): nothing the learner says, types or draws is taken. */
   const [halted, setHalted] = useState(false);
+  /** A label quiz: numbered markers over the board, each hiding its label until the answers are graded. */
+  const [quizMarks, setQuizMarks] = useState<{ n: number; box: GridBox; cover?: GridBox }[] | null>(null);
+  /** A sketch quiz is waiting for the learner's drawing: Done hands it in. */
+  const [quizDone, setQuizDone] = useState<(() => void) | null>(null);
   /** A request handed to the slow executor is pending (the badge says so). */
   const [delegating, setDelegating] = useState(false);
   /** Any pause (stopped or listening), for the buttons. */
@@ -1467,6 +1478,150 @@ export default function Lesson() {
       logEv({ kind: "delegated", request, actions: res.actions ?? [], ms: Math.round(performance.now() - t0), model: res.model ?? null, call: res.call ?? null, error: res.error ?? null });
       return res.actions ?? [];
     };
+    // ---------- Quizzes ----------
+    const SKIP_QUIZ = /^\W*(skip( it| this)?|next|pass|no thanks|not now|later)\W*$/i;
+    const DONE = /\b(done|finished|that'?s it|there you go|ok(ay)? done)\b/i;
+    const sayLine = (text: string) => playBeat(line(text), abort.signal, null).catch(() => {});
+    /** The cursor on the wall clock (after a line has started speaking, which resets it). */
+    const cursorNow = (steps: CursorStep[]) => {
+      if (!steps.length) return;
+      const t0 = performance.now();
+      cursorClockRef.current = () => (performance.now() - t0) / 1000;
+      setCursorScript(steps);
+    };
+    /** What the learner's ink marks on the scene in view, in words. */
+    const inkMarks = () => {
+      const strokes = inkRef.current;
+      if (!strokes.length) return [] as string[];
+      const v = boardRef.current;
+      const read = readInk(strokes, v.boxes, Object.fromEntries(v.list.map((e) => [e.id, e.label])), { w: W, h: H });
+      return read.marks.map((m) => `${m.how} ${m.id}`);
+    };
+    /** The lesson's own sentences for the section around beat `i`: what a drawing of it should show. */
+    const sectionRubric = (i: number) => {
+      let from = Math.max(0, Math.min(i, list.length - 1));
+      while (from > 0 && !list[from].beat.section) from--;
+      return list.slice(from, Math.max(from + 1, i + (list[i]?.beat.quiz ? 0 : 1))).filter((b) => !b.beat.quiz).map((b) => b.beat.say).slice(-6);
+    };
+    const record = (r: QuizResult, grade: { ms?: number; model?: string; call?: unknown; feedback?: string }) => {
+      learner.quizzes = [...(learner.quizzes ?? []), r];
+      // The summary rides in `confusions` (what Convex keeps and the next lesson's memory reads).
+      const pct = Math.round(r.score * 100);
+      learner.confusions = [...learner.confusions, `quiz (${r.kind}) "${r.asked.slice(0, 70)}": ${pct}%${r.right.length ? `, got ${r.right.join(", ")}` : ""}${r.missing.length ? `, missed ${r.missing.join(", ")}` : ""}`].slice(-5);
+      noteLearner();
+      const { kind: quiz, ...rest } = r;
+      logEv({ kind: "quiz-result", quiz, ...rest, feedback: grade.feedback ?? "", ms: grade.ms ?? null, model: grade.model ?? null, call: grade.call ?? null });
+    };
+    /**
+     * A quiz on the scene in view. label: numbered markers over its labelled parts (labels covered), the
+     * learner names them (by voice or typing), the fast model grades; feedback with the cursor on each
+     * number, then the labels come back. sketch: the learner draws (Done, or "done"), the slow model grades
+     * the board picture against the section's own sentences. Either can be skipped ("skip", "next").
+     */
+    const runQuiz = async (kind: QuizKind, ask: string, i: number): Promise<void> => {
+      const beatId = list[i]?.beat.id ?? null;
+      const v = boardRef.current;
+      const items = v.list
+        .filter((e) => v.boxes[e.id] && v.labels?.[e.id] && e.label && e.label !== e.kind && e.label.length <= 40)
+        .slice(0, 4)
+        .map((e, k) => ({ n: k + 1, id: e.id, answer: e.label, box: v.boxes[e.id], cover: v.labels![e.id] }));
+      if (kind === "label" && items.length < 2) {
+        // Nothing labelled to number here: draw it instead.
+        logEv({ kind: "quiz-fallback", from: "label", to: "sketch", why: `${items.length} labelled part(s) in view` });
+        kind = "sketch";
+        ask = "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
+      }
+      logEv({ kind: "quiz-start", quiz: kind, ask, beatId, ...(kind === "label" ? { items: items.map(({ n, id, answer }) => ({ n, id, answer })) } : {}) });
+      if (kind === "label") {
+        setQuizMarks(items.map(({ n, box, cover }) => ({ n, box, cover })));
+        setStatus("speaking");
+        await sayLine(ask);
+        setStatus("waiting");
+        const answer = await awaitTurn(abort.signal);
+        if (abort.signal.aborted) return;
+        if (answer === null || SKIP_QUIZ.test(answer)) {
+          setQuizMarks(null);
+          logEv({ kind: "quiz-skipped", quiz: kind, beatId });
+          return;
+        }
+        logEv({ kind: "learner", via: inputViaRef.current, role: "quiz answer", beatId, text: answer });
+        setStatus("replying");
+        const g = await post("/api/quiz", { kind: "label", question: q, items: items.map(({ n, id, answer }) => ({ n, id, answer })), answer, inkMarks: inkMarks() })
+          .then((r) => r.json())
+          .catch((e) => ({ error: String(e) }));
+        if (g.error || typeof g.feedback !== "string") {
+          logEv({ kind: "quiz-error", quiz: kind, error: g.error ?? "no feedback" });
+          setQuizMarks(null);
+          return;
+        }
+        // Feedback, the cursor circling each number as it is judged; then the labels come back.
+        setStatus("speaking");
+        const spoken = sayLine(g.feedback);
+        await sleep(150);
+        cursorNow(items.map((it, k) => ({ t: 0.4 + k * 1.2, target: it.id, gesture: "circle" as const })));
+        await spoken;
+        setQuizMarks(null);
+        record({ kind, asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString() }, g);
+        return;
+      }
+      // sketch
+      showInk([]);
+      setStatus("speaking");
+      await sayLine(ask);
+      setStatus("waiting");
+      let said = "";
+      const handedIn = await new Promise<"done" | "skip">((resolve) => {
+        let over = false;
+        const finish = (how: "done" | "skip") => {
+          if (over) return;
+          over = true;
+          setQuizDone(null);
+          resolve(how);
+        };
+        setQuizDone(() => () => {
+          finish("done");
+          turnRef.current?.(null);
+        });
+        void (async () => {
+          while (!over && !abort.signal.aborted) {
+            const t = await awaitTurn(abort.signal);
+            if (over) return;
+            if (t === null) return finish("done");
+            if (SKIP_QUIZ.test(t)) return finish("skip");
+            said = `${said} ${t}`.trim();
+            if (DONE.test(t)) return finish("done");
+          }
+        })();
+      });
+      if (abort.signal.aborted) return;
+      if (handedIn === "skip") {
+        logEv({ kind: "quiz-skipped", quiz: kind, beatId });
+        return;
+      }
+      const strokes = inkRef.current;
+      const image = strokes.length ? snapshotBoard(canvasRef.current, strokes, W, H, cameraRef.current) : null;
+      const rubric = sectionRubric(i);
+      logEv({ kind: "learner", via: strokes.length ? "ink" : inputViaRef.current, role: "quiz drawing", beatId, text: `${strokes.length} stroke(s)${said ? `; said "${said}"` : ""}` });
+      setStatus("replying");
+      const grading = post("/api/quiz", { kind: "sketch", question: q, ask, rubric, ...(image ? { image } : {}), inkMarks: inkMarks(), board: v.list.map((e) => e.id), answer: said })
+        .then((r) => r.json())
+        .catch((e) => ({ error: String(e) }));
+      setStatus("speaking");
+      await sayLine("Let me look at that.");
+      const g = await grading;
+      if (g.error || typeof g.feedback !== "string") {
+        logEv({ kind: "quiz-error", quiz: kind, error: g.error ?? "no feedback" });
+        return;
+      }
+      setStatus("speaking");
+      const spoken = sayLine(g.feedback);
+      await sleep(150);
+      const there = (g.ids ?? []).filter((id: string) => boardRef.current.boxes[id]);
+      cursorNow(there.map((id: string, k: number) => ({ t: 0.4 + k * 1.4, target: id, gesture: "circle" as const })));
+      await spoken;
+      record({ kind, asked: ask, answered: `${strokes.length} stroke(s)${said ? `; said "${said}"` : ""}`, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString() }, g);
+      showInk([]);
+    };
     /** Every scene drawn so far before list position `upto`, except `scene`, as still documents for the board. */
     const otherScenes = (scene: number, upto: number) => {
       const out: { scene: number; doc: AnimationDocument }[] = [];
@@ -2036,6 +2191,12 @@ export default function Lesson() {
           }
           return resumeAt;
         };
+        // "Quiz me": the quiz on the scene in view, then the lesson goes on from where it was.
+        if (trailer.quiz && lessonStarted) {
+          await runQuiz(trailer.quiz.kind, trailer.quiz.question, i);
+          if (abort.signal.aborted) return -1;
+          return await goOn();
+        }
         // Before a lesson: a short answer or a greeting back waits for more; a started lesson goes on to
         // its beats, with the reply's question (if any) as the intake.
         if (i < 0) {
@@ -2243,6 +2404,14 @@ export default function Lesson() {
         setCurrent(i);
         currentBeatIdRef.current = list[i].beat.id;
         setStatus("speaking");
+        // A quiz beat asks, waits and grades; then the lesson goes on.
+        if (list[i].beat.quiz) {
+          await runQuiz(list[i].beat.quiz!, list[i].beat.say, i);
+          if (abort.signal.aborted) break;
+          said.push(list[i].beat.say);
+          i++;
+          continue;
+        }
         const bi = i;
         // A point beat whose elements are on another scene's place: the camera goes there and the cursor
         // circles them, instead of a drawing that has nothing to point at.
@@ -2686,6 +2855,26 @@ export default function Lesson() {
               onStroke={(stroke) => showInk([...inkRef.current, stroke])}
             />
             <ChalkyCursor boxes={onScreenBoxes} script={cursorScript} clock={cursorClock} />
+            {quizMarks && (
+              // A label quiz: each label covered, a numbered marker where it was.
+              <div data-testid="quiz-marks" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                {quizMarks.map((m) => {
+                  const b = onScreen(m.cover ?? m.box, board.view);
+                  const c = m.cover ? onScreen(m.cover, board.view) : null;
+                  return (
+                    <Fragment key={m.n}>
+                      {c && <div style={{ position: "absolute", left: `${c.x - 0.5}%`, top: `${c.y - 0.5}%`, width: `${c.w + 1}%`, height: `${c.h + 1}%`, background: PAPER, borderRadius: 4 }} />}
+                      <div
+                        data-testid={`quiz-mark-${m.n}`}
+                        style={{ position: "absolute", left: `${b.x + b.w / 2}%`, top: `${b.y + b.h / 2}%`, transform: "translate(-50%, -50%)", width: 30, height: 30, borderRadius: "50%", background: "#E4572E", color: "#fff", font: "600 16px Inter, system-ui, sans-serif", display: "grid", placeItems: "center", boxShadow: "0 1px 4px rgba(0,0,0,.25)" }}
+                      >
+                        {m.n}
+                      </div>
+                    </Fragment>
+                  );
+                })}
+              </div>
+            )}
             {penReady && (
               <div className="pen" data-testid="pen">
                 {INK_COLORS.map((c) => (
@@ -2786,6 +2975,9 @@ export default function Lesson() {
             )}
             {(waitingForLearner || paused) && !halted && (
               <button type="button" className="start-voice continue" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
+            )}
+            {quizDone && (
+              <button type="button" className="start-voice continue" onClick={quizDone} data-testid="quiz-done">Done</button>
             )}
             {busy &&
               (halted ? (

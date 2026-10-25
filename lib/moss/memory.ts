@@ -27,7 +27,8 @@ function refresh(learnerId: string, lessonId: string | null): Promise<number> {
     .then(async ([row, summary]) => {
       const docs: { id: string; text: string; meta: Record<string, string> }[] = [];
       const date = row?.updatedAt ? new Date(row.updatedAt).toISOString().slice(0, 10) : "";
-      (row?.confusions ?? []).forEach((c, k) => docs.push({ id: `confusion-${k}`, text: `got stuck on: ${c}`, meta: { kind: "confusion", date } }));
+      // A quiz's summary line reads as it is ("quiz (label) ...: 50%, got ..., missed ..."); the rest are confusions.
+      (row?.confusions ?? []).forEach((c, k) => docs.push({ id: `confusion-${k}`, text: c.startsWith("quiz ") ? c : `got stuck on: ${c}`, meta: { kind: c.startsWith("quiz ") ? "quiz" : "confusion", date } }));
       if (row?.prior) docs.push({ id: "prior", text: `already knew: ${row.prior}`, meta: { kind: "prior", date } });
       if (row?.focus) docs.push({ id: "focus", text: `wanted: ${row.focus}`, meta: { kind: "focus", date } });
       // The summary's lesson lines carry the lesson titles and what each got stuck on.

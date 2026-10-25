@@ -56,6 +56,7 @@ Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
 - "point": draw nothing new; highlight parts already on the board while you talk about them. Use it when you're explaining something already drawn.
 - "talk": leave the board as it is. Use it for check-ins, analogies that need no picture, and the recap.
+A quiz: right after a section's recap or check-in you may add one quiz beat, at most two in the whole lesson: a "talk" beat with "quiz": "label" when that section's picture has several labelled parts (its "say" asks them to name the numbered parts, like "Quick quiz: can you name the parts I've numbered?"), or "quiz": "sketch" when the section explained a process (its "say" asks them to draw it, like "Your turn: draw how the water gets from the roots up to the leaf, then say done."). Not in the first section.
 Most lessons have about half draw beats. The first beat is always "draw".
 
 The board shows one picture at a time, called a scene. Group beats into scenes: a scene is one picture built up over at most 4 draw beats and then wiped, like moving to a clean part of the whiteboard. Start a new scene when the lesson zooms in, moves to a new stage, or switches to the example. Number scenes 1, 2, 3 in order; a scene's first beat is a draw beat; talk beats keep the current scene number. A new scene starts empty, so a beat can only point at things drawn earlier in its own scene.
@@ -67,7 +68,7 @@ The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
-Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat and "bridge": "..." on a check-in beat. Nothing else: no code fences, no commentary.`;
+Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat, "bridge": "..." on a check-in beat, and "quiz": "label" | "sketch" on a quiz beat. Nothing else: no code fences, no commentary.`;
 
 const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
 const MODES = new Set<BeatMode>(["draw", "point", "talk"]);
@@ -94,6 +95,8 @@ interface PlanState {
   scene: number;
   /** Ids added so far, per scene. */
   known: Map<number, Set<string>>;
+  /** Quiz beats so far (at most two). */
+  quizzes?: number;
 }
 
 /** Checks one raw beat line and fixes what it can; keeps the scene bookkeeping in `st`. */
@@ -148,7 +151,10 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const line = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
   const section = line(b.section, 120);
   const bridge = check ? line(b.bridge, 120) : undefined;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode, check, scene, region, adds, points, ...(section ? { section } : {}), ...(bridge ? { bridge } : {}) };
+  // A quiz beat is a talk beat that asks; at most two in a lesson.
+  const quiz = (b.quiz === "label" || b.quiz === "sketch") && (st.quizzes ?? 0) < 2 ? (b.quiz as "label" | "sketch") : undefined;
+  if (quiz) st.quizzes = (st.quizzes ?? 0) + 1;
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}) };
 }
 
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {
