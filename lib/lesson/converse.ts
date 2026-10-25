@@ -330,6 +330,9 @@ function parseAt(at: unknown): { word: string; occurrence: number } | null {
 const WANTS_DRAWING = /\b(draw|sketch)\b|\b(make|give|show) (me )?(a|an) (picture|diagram|drawing)\b/i;
 
 const RANK: Record<ConverseLevel, number> = { confirm: 0, answer: 1, detour: 2, replan: 3 };
+/** Mid-lesson, narrower than TIME_SENSITIVE ("the new arrow" is not a lookup). */
+const RECENT = /\b(latest|most recent|recently|this (week|month|year)|today|right now|currently|who won|202[5-9]|20[3-9]\d)\b/i;
+const BOARD_WORDS = /\b(board|scene|diagram|drawing|picture|arrow|earlier|before|back there|you (drew|showed|said))\b/i;
 /** A question about something recent: new, latest, this week/month/year, a version number, a year from 2025 on. */
 const TIME_SENSITIVE = /\b(new|newest|latest|recent(ly)?|this (week|month|year)|today|right now|currently|202[5-9]|20[3-9]\d)\b|\b(v(ersion)?\s*)?\d+\.\d+(\.\d+)?\b/i;
 /** Hand-off lines for a reply the server escalated: the drawing that follows does the explaining. */
@@ -514,6 +517,12 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     const days = /\bthis week\b/i.test(input.utterance) ? 7 : /\bthis month\b/i.test(input.utterance) ? 30 : /\bthis year\b/i.test(input.utterance) ? 90 : 14;
     research = { topic: input.utterance.trim().slice(0, 200), days };
   }
+  // Mid-lesson, a question about something recent that the model handed to the board helper (which knows only
+  // the lesson) is a lookup: "who won the 2026 Nobel?" is research, not delegate. Questions about the board stay delegated.
+  if (input.beats.length && !research && delegate && RECENT.test(input.utterance) && !BOARD_WORDS.test(input.utterance)) {
+    research = { topic: input.utterance.trim().slice(0, 200), days: /\bthis week\b/i.test(input.utterance) ? 7 : 30 };
+    delegate = null;
+  }
   // A lookup takes a while: a lesson started on one always asks the intake question meanwhile.
   if (research && lesson && !check && !input.beats.length) check = `While I find those, how much do you already know about ${research.topic}?`;
   // The check is the question the learner actually heard: the reply's own question when it asked one
@@ -575,6 +584,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     else if (a.type === "quiz" && quiz && !escalated && !actions.some((x) => x.type === "quiz")) actions.push({ type: "quiz", ...quiz });
     else if (a.type === "research" && research && !actions.some((x) => x.type === "research")) actions.push({ type: "research", ...research });
   }
+  if (research && !actions.some((x) => x.type === "research")) actions.push({ type: "research", ...research });
   if (cues.length && !actions.some((x) => x.type === "point")) actions.push({ type: "point", cues });
   if (lesson && !actions.some((x) => x.type === "start_lesson")) actions.push({ type: "start_lesson", ...lesson });
   if (amend && !actions.some((x) => x.type === "amend")) actions.push({ type: "amend", ...amend });

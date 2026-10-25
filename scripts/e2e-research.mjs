@@ -12,7 +12,7 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3006";
 const DIR = process.env.LIVE_RUNS ?? join(process.cwd(), "experiments/live-runs");
 const OUT = join(process.cwd(), "experiments/research", process.env.RUN ?? "run");
 const ASK = process.env.ASK ?? "What's new in CRISPR this month?";
-const INTAKE = process.env.INTAKE ?? "I know what a robot arm policy is, but not these new models.";
+const INTAKE = process.env.INTAKE ?? "I know CRISPR cuts DNA, but not the newest results.";
 mkdirSync(OUT, { recursive: true });
 const clipDir = join(process.cwd(), "experiments/conversation-e2e/clips");
 const clip = async (name, text) => readFileSync((await speechWav(join(clipDir, `${name}.wav`), [{ silence: 0.2 }, { say: text }, { silence: 0.4 }])).path).toString("base64");
