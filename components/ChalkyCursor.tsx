@@ -11,6 +11,7 @@
  * one left the hand (or where it was at the moment of the cut-in).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ANGLE, CHEEKS, COLORS, DUST, EYES, INK, SHAPES, SMILE } from "./chalkPointer";
 
 /** An element's box on the board's 100x100 grid (x right, y down). */
 export interface GridBox {
@@ -185,6 +186,8 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
   const glyph = useRef<SVGGElement>(null);
   const trail = useRef<SVGPolylineElement>(null);
   const history = useRef<Pt[]>([]);
+  /** Degrees the chalk leans into its motion, eased frame to frame. */
+  const lean = useRef(0);
 
   // Measure our own box when no size is given (and keep it current on resize).
   useEffect(() => {
@@ -213,7 +216,12 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
       if (!g || !px.w) return;
       const pose = poseAt(Math.max(0, clock()), sorted, pxBoxes, px, idleFadeSeconds);
       const scale = 1 + (pose.pulse ? Math.sin(pose.pulse * Math.PI * 1.6) * 0.06 + 0.03 : 0);
-      g.setAttribute("transform", `translate(${pose.p.x.toFixed(1)} ${pose.p.y.toFixed(1)}) scale(${scale.toFixed(3)})`);
+      // Lean the chalk into the way it is moving (a little), and back upright at rest.
+      const h0 = history.current;
+      const vx = h0.length > 1 ? pose.p.x - h0[h0.length - 1].x : 0;
+      const want = pose.phase === "rest" || pose.phase === "idle" ? 0 : Math.max(-16, Math.min(16, vx * 1.4));
+      lean.current += (want - lean.current) * 0.18;
+      g.setAttribute("transform", `translate(${pose.p.x.toFixed(1)} ${pose.p.y.toFixed(1)}) rotate(${lean.current.toFixed(2)}) scale(${scale.toFixed(3)})`);
       g.setAttribute("opacity", pose.opacity.toFixed(3));
       g.dataset.phase = pose.phase;
       g.dataset.step = String(pose.step);
@@ -244,16 +252,51 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
               <feDropShadow dx="1.5" dy="2.5" stdDeviation="1.6" floodColor="#1F2A44" floodOpacity="0.28" />
             </filter>
           </defs>
-          <polyline ref={trail} fill="none" stroke="#E4572E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0" />
+          <polyline
+            ref={trail}
+            fill="none"
+            stroke={look === "chalk" ? COLORS.worn : "#E4572E"}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={look === "chalk" ? "1 6" : undefined}
+            opacity="0"
+          />
           <g ref={glyph} opacity="0" data-testid="chalky-cursor-glyph">
-            <circle r="22" fill="url(#chalky-cursor-glow)" />
+            {look === "hand" && <circle r="22" fill="url(#chalky-cursor-glow)" />}
             {look === "chalk" ? (
-              // A stub of chalk held at an angle, tip at the origin.
-              <g filter="url(#chalky-cursor-shadow)" transform="rotate(38)">
-                <rect x="-5" y="-54" width="10" height="56" rx="4.5" fill="#F4EFE4" stroke="#C9C1AE" strokeWidth="1" />
-                <rect x="-5" y="-54" width="10" height="9" rx="4" fill="#E8E1D1" />
-                <path d="M -5 -2 Q 0 7 5 -2 Z" fill="#E4572E" />
-              </g>
+              // Chalky's chalk (components/chalkPointer.ts): a stubby stick with a face, tip at the origin.
+              <>
+                {DUST.map((d, i) => (
+                  <circle key={i} cx={d.cx} cy={d.cy} r={d.r} fill={COLORS.dust} stroke="#E9D9A6" strokeWidth="0.6" opacity={d.opacity} />
+                ))}
+                <g filter="url(#chalky-cursor-shadow)" transform={`rotate(${ANGLE})`}>
+                  {SHAPES.map((sh, i) => (
+                    <path
+                      key={i}
+                      d={sh.d}
+                      fill={sh.fill ?? "none"}
+                      stroke={sh.stroke}
+                      strokeWidth={sh.width}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={sh.opacity}
+                    />
+                  ))}
+                  {CHEEKS.map((c, i) => (
+                    <ellipse key={i} cx={c.cx} cy={c.cy} rx={c.rx} ry={c.ry} fill={COLORS.cheek} opacity="0.85" />
+                  ))}
+                  {EYES.map((e, i) => (
+                    <g key={i} transform={`translate(${e.cx} ${e.cy})`}>
+                      <circle r={e.r} fill={INK}>
+                        {/* A blink every few seconds: squash to a line and open again. */}
+                        <animateTransform attributeName="transform" type="scale" values="1 1;1 1;1.1 0.12;1 1" keyTimes="0;0.9;0.94;1" dur="3.8s" repeatCount="indefinite" />
+                      </circle>
+                    </g>
+                  ))}
+                  <path d={SMILE} fill="none" stroke={INK} strokeWidth="1.2" strokeLinecap="round" />
+                </g>
+              </>
             ) : (
               // A soft pointing hand, fingertip at the origin.
               <g filter="url(#chalky-cursor-shadow)" transform="rotate(-20) translate(0 2)">
@@ -261,7 +304,7 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
                 <path d="M 10 4 L 10 14 M 19 10 L 19 16 M 26 16 L 26 20" stroke="#C98B6B" strokeWidth="1.1" strokeLinecap="round" fill="none" />
               </g>
             )}
-            <circle r="3.2" fill="#E4572E" />
+            {look === "hand" && <circle r="3.2" fill="#E4572E" />}
           </g>
         </svg>
       )}
