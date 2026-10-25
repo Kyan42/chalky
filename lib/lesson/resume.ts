@@ -53,3 +53,13 @@ export function isQuestion(text: string): boolean {
 export function isStillLost(text: string): boolean {
   return STILL_LOST.test(text.trim());
 }
+
+/**
+ * The learner wants to stop the whole lesson ("I'm done", "let's end the lesson", "that's enough for
+ * today"), as opposed to finishing a drawing or one part ("I'm done drawing", "done with this bit").
+ */
+const END_LESSON = /\b(end|stop|finish|quit|exit|close|wrap up)\b(\s+\w+){0,2}\s+(lesson|class|session)\b|\b(done|finished|through) with (the|this|my|today'?s) (lesson|class|session)\b|\b(that'?s|that is) (all|enough) for (now|today)\b|\b(i'?m|i am|we'?re|we are) (all )?(done|finished) for (now|today)\b|\bi (have|need|gotta|got) to go\b|^\W*((ok(ay)?|yeah|so|um+|alright)\W+)*(i'?m|i am|we'?re|we are) (all )?(done|finished)\W*$/i;
+
+export function wantsToEnd(text: string): boolean {
+  return END_LESSON.test(text.trim());
+}

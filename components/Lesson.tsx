@@ -57,6 +57,7 @@ const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
 const HIGHLIGHT_SECONDS = 1.8;
 const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
+const GOODBYE = "Okay, let's stop here. Nice work today!";
 /** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
 /** Seconds of silence after the intake question before the lesson just goes on. */
@@ -644,6 +645,8 @@ export default function Lesson() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
   const playerGen = useRef(0);
+  /** Bumped to swap in a fresh canvas (a new lesson starts on a clean board). */
+  const [canvasKey, setCanvasKey] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const beatAbortRef = useRef<AbortController | null>(null);
   /** The reply being spoken (or fetched); a barge-in or a new utterance cancels it. */
@@ -821,8 +824,14 @@ export default function Lesson() {
     const gen = ++playerGen.current;
     playerRef.current?.dispose();
     playerRef.current = null;
+    if (!doc) {
+      // Disposing the player leaves its last frame on the canvas: a fresh canvas is a clean board.
+      setCanvasKey((k) => k + 1);
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return;
+    }
     const canvas = canvasRef.current;
-    if (!doc || !canvas) return;
+    if (!canvas) return;
     const player = await createPlayer({
       canvas, document: doc as never, loaders: fontLoader,
       pauseWhenOffscreen: false, stateMachine: false,
@@ -1086,6 +1095,16 @@ export default function Lesson() {
     showBoard(EMPTY_BOARD);
     setCursorScript([]);
     queueRef.current = [];
+    // Nothing from an earlier lesson carries over: its ink, quiz, camera zoom or cut-in spot.
+    showInk([]);
+    setQuizMarks(null);
+    setQuizDone(null);
+    setDelegating(false);
+    setWordIndexNow(-1);
+    interruptedRef.current = false;
+    resumeRef.current = null as typeof resumeRef.current; // (cast: keeps TS from narrowing it to null below)
+    zoomingRef.current = false;
+    lastLearnerRef.current = null;
     const post = (path: string, body: unknown, signal: AbortSignal = abort.signal) =>
       fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     // Development: /lesson?fixture=<slug>&beats=<n> plays a saved plan instead of calling the planner.
@@ -1099,6 +1118,25 @@ export default function Lesson() {
     const direct = !!fixture && params.get("firstturn") !== "1";
     /** A lesson is running: the planner (or the fixture) has been started. */
     let lessonStarted = false;
+    /** The learner said they were done: the lesson stops and the home screen comes back, with the mic off. */
+    let endedByLearner = false;
+    const goHome = () => {
+      setQuestion("");
+      setTitle("Ask Chalky anything");
+      setBeats([]);
+      setCurrent(-1);
+      setWords([]);
+      setPausedAt(null);
+      setLastLevel(null);
+      setQuizMarks(null);
+      setCursorScript([]);
+      showInk([]);
+      showBoard(EMPTY_BOARD);
+      void showDocument(undefined);
+      setStatus("idle");
+      // The mic goes off too: home stays home until someone clicks Start talking (or types a question).
+      voice.stop();
+    };
     setTitle(direct ? "Planning…" : "");
     setStatus(direct ? "planning" : "replying");
     await showDocument(undefined);
@@ -2196,6 +2234,18 @@ export default function Lesson() {
         }
         history.push({ who: "chalky", text: reply.said });
         let trailer = reply.trailer;
+        // "I'm done": the goodbye (the reply's, or ours when the model missed it), then back to the home screen.
+        if (trailer.end && lessonStarted) {
+          if (trailer.end === "phrase") {
+            logEv({ kind: "say", who: "chalky", role: "goodbye", text: GOODBYE });
+            setStatus("speaking");
+            await playBeat(line(GOODBYE), abort.signal, null).catch(() => {});
+          }
+          logEv({ kind: "lesson-ended", by: trailer.end, text: heardText });
+          endedByLearner = true;
+          stop();
+          return -1;
+        }
         if (trailer.cut) cut = trailer.cut;
         // An ask whose question the reply never got to say (the sentence cap): say it now, so the wait has a question.
         const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -2616,21 +2666,22 @@ export default function Lesson() {
         i++;
       }
       if (!abort.signal.aborted) setStatus((s) => (s === "error" ? s : "done"));
-      else setStatus("stopped");
-      transcript.end = abort.signal.aborted ? "stopped" : "done";
+      else setStatus(endedByLearner ? "idle" : "stopped");
+      transcript.end = endedByLearner ? "ended by learner" : abort.signal.aborted ? "stopped" : "done";
     } catch (e) {
-      if (abort.signal.aborted) setStatus("stopped");
+      if (abort.signal.aborted) setStatus(endedByLearner ? "idle" : "stopped");
       else {
         setError(String((e as Error).message ?? e));
         setStatus("error");
       }
-      transcript.end = abort.signal.aborted ? "stopped" : `error: ${String((e as Error).message ?? e)}`;
+      transcript.end = endedByLearner ? "ended by learner" : abort.signal.aborted ? "stopped" : `error: ${String((e as Error).message ?? e)}`;
     } finally {
       transcript.endedAt = new Date().toISOString();
       transcript.learner = learner;
       transcript.prefetch = { ...stats };
       logEv({ kind: "end", end: transcript.end });
       flushLog();
+      if (endedByLearner) goHome();
     }
   }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused]);
 
@@ -2923,7 +2974,7 @@ export default function Lesson() {
             </>
           )}
           <div className="visual" style={{ position: "relative", visibility: showWelcome ? "hidden" : "visible" }}>
-            <canvas ref={canvasRef} aria-label="The whiteboard" />
+            <canvas key={canvasKey} ref={canvasRef} aria-label="The whiteboard" />
             {question && current < 0 && (
               // Before the first beat draws: the topic in chalk, so the board is never blank while Chalky plans.
               <div className="chalk-title" data-testid="chalk-title">
