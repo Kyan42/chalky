@@ -3,9 +3,10 @@ const text = "Light from the sun is a mix of every color, and the air scatters b
 const prefs = (voice) => `chalky-preferences=${encodeURIComponent(JSON.stringify({ voice }))}`;
 const cases = [
   ["default (no cookie)", ""],
-  ["speed 0.8", "chalky-speed=0.8"],
-  ["speed 1.2", "chalky-speed=1.2"],
-  ["Clive, speed 1.2", `${prefs("b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1")}; chalky-speed=1.2`],
+  ["speed 0.65", "chalky-speed=0.65"],
+  ["speed 0.75", "chalky-speed=0.75"],
+  ["speed 1.1", "chalky-speed=1.1"],
+  ["Clive, speed 1.1", `${prefs("b24f41fd-00a3-4cd8-992a-a0c9f13f3ef1")}; chalky-speed=1.1`],
   ["Archie, default speed", prefs("ef191366-f52f-447a-a398-ed8c0f2943a1")],
 ];
 for (const [name, cookie] of cases) {
