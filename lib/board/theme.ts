@@ -63,7 +63,8 @@ export const WHITEBOARD: Theme = {
 export const CHALK: Theme = {
   id: "chalk",
   colors: { ...WHITEBOARD.colors },
-  marker: 5,
+  // Hers is 6 px on a 1920 board (3.75 here); a touch heavier so lines hold up at lesson size.
+  marker: 4.5,
   fill: "none",
   chalk: { grain: 0.85 },
 };

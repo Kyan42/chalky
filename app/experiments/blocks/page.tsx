@@ -91,11 +91,8 @@ export default function BlocksPage() {
   const dark = theme.id === "chalkboard";
   const ink = theme.colors.ink, muted = theme.colors.grey, board = theme.colors.board;
   const page = dark ? "#1B2622" : "#EFECE4";
-  const themeHref = (id: string) => {
-    const q = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
-    q.set("theme", id);
-    return `?${q.toString()}`;
-  };
+  // Plain links (no other query parameters), so the server and the browser render the same href.
+  const themeHref = (id: string) => `?theme=${id}`;
 
   const register = useCallback((key: string, p: PlayerHandle | null) => {
     if (p) players.current.set(key, p);
