@@ -1748,7 +1748,7 @@ export default function Lesson() {
       learner.quizzes = [...(learner.quizzes ?? []), r];
       // The summary rides in `confusions` (what Convex keeps and the next lesson's memory reads).
       const pct = Math.round(r.score * 100);
-      const how = r.skipped ? "skipped" : r.verdict ? `${r.verdict} (${pct}%)` : `${pct}%`;
+      const how = `${r.skipped ? "skipped" : r.verdict ? `${r.verdict} (${pct}%)` : `${pct}%`}${r.tries && r.tries.length > 1 ? ` after ${r.tries.length} tries` : ""}`;
       learner.confusions = [...learner.confusions, `quiz (${r.kind}) "${r.asked.slice(0, 70)}": ${how}${r.right.length ? `, got ${r.right.join(", ")}` : ""}${r.missing.length ? `, missed ${r.missing.join(", ")}` : ""}`].slice(-5);
       noteLearner();
       const { kind: quiz, ...rest } = r;
@@ -1759,7 +1759,9 @@ export default function Lesson() {
      * question. Off for the rest of the lesson once they say "just explain"; never right after another question.
      */
     let socraticOff = !socratic(readPreferences(document.cookie));
-    const STOP_ASKING = /\b(just (explain|tell me|teach( me)?)|stop asking|don'?t ask|no more questions|tell me the answer|skip the questions)\b/i;
+    const STOP_ASKING = /\b(just explain|just teach( me)?|stop asking|don'?t ask|no more questions|skip the questions)\b/i;
+    /** This question only: tell them, and teach the section as planned (questions stay on). */
+    const TELL_ME = /\b(just tell me|tell me the answer|move on|i (really |honestly )?(don'?t|do not) know)\b/i;
     /** The beats of the section after `i` that teach (no quiz beats), in the order the predict rubric numbers them. */
     const sectionBeats = (i: number) => {
       const out: BeatState[] = [];
@@ -1790,40 +1792,74 @@ export default function Lesson() {
         return;
       }
       logEv({ kind: "quiz-start", quiz: "predict", socratic: true, ask, beatId });
-      setStatus("speaking");
-      await sayLine(ask);
-      setStatus("waiting");
-      const answer = await awaitAnswer("predict", ask, beatId);
-      if (abort.signal.aborted) return;
-      if (answer !== null && STOP_ASKING.test(answer)) {
-        socraticOff = true;
-        logEv({ kind: "socratic-off", beatId, said: answer });
+      const after = beatsAfter(i);
+      /** Every try, for the record: the question as asked that time, their answer and how it was judged. */
+      const tries: { ask: string; answer: string; verdict: string }[] = [];
+      const done = (how: "right" | "partly" | "wrong" | "skipped", g: { score?: number; right?: string[]; missing?: string[]; ms?: number; model?: string; call?: unknown; feedback?: string } = {}) =>
+        record({ kind: "predict", asked: ask, answered: tries.map((t) => t.answer).join(" / "), score: g.score ?? 0, right: g.right ?? [], missing: g.missing ?? [], beatId, at: new Date().toISOString(), ...(how === "skipped" ? { skipped: true } : { verdict: how }), socratic: true, tries }, g);
+      let asking = ask;
+      for (let k = 0; k < 3; k++) {
         setStatus("speaking");
-        await sayLine("Sure, I'll just explain from here.");
-        return;
-      }
-      if (answer === null || SKIP_QUIZ.test(answer)) {
-        logEv({ kind: "quiz-skipped", quiz: "predict", socratic: true, beatId, said: answer ?? "" });
+        await sayLine(asking);
+        setStatus("waiting");
+        const answer = await awaitAnswer("predict", asking, beatId);
+        if (abort.signal.aborted) return;
+        if (answer !== null && STOP_ASKING.test(answer)) {
+          socraticOff = true;
+          logEv({ kind: "socratic-off", beatId, said: answer });
+          setStatus("speaking");
+          await sayLine("Sure, I'll just explain from here.");
+          if (tries.length) done("skipped");
+          return;
+        }
+        // "just tell me", "I don't know", "skip", "move on": straight to the section, as planned.
+        if (answer === null || SKIP_QUIZ.test(answer) || TELL_ME.test(answer)) {
+          logEv({ kind: "quiz-skipped", quiz: "predict", socratic: true, beatId, said: answer ?? "", try: k + 1 });
+          setStatus("speaking");
+          await sayLine("Okay, let's see.");
+          if (tries.length) done("skipped");
+          return;
+        }
+        logEv({ kind: "learner", via: inputViaRef.current, role: "socratic answer", beatId, text: answer, try: k + 1 });
+        setStatus("replying");
+        const g = await gradeQuiz("predict", beatId, { kind: "predict", socratic: true, question: q, ask: asking, answer, after });
+        if (g.error || typeof g.feedback !== "string") {
+          logEv({ kind: "quiz-error", quiz: "predict", socratic: true, error: g.error ?? "no feedback" });
+          return;
+        }
+        tries.push({ ask: asking, answer, verdict: g.verdict });
+        if (g.verdict === "right") {
+          // They have it: one sentence back, and the section's beats that would repeat what they said go.
+          setStatus("speaking");
+          const spoken = sayFeedback("predict", beatId, g.feedback);
+          const section = sectionBeats(i);
+          const drop = ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw");
+          for (const b of drop) list.splice(list.indexOf(b), 1);
+          if (drop.length) setBeats([...list]);
+          await spoken;
+          logEv({ kind: "socratic-adjust", beatId, verdict: g.verdict, try: k + 1, covered: g.covered ?? [], cut: drop.map((b) => b.beat.id), how: drop.length ? "cut what they already said" : "as planned" });
+          done("right", g);
+          return;
+        }
+        // Missed (wrong or partly): no explaining yet. A reaction, then the question again from another side
+        // (twice); after the third miss, one line naming the gap, and the section teaches it.
+        const mode = k < 2 ? "reframe" : "gap";
+        const follow = post("/api/quiz", { kind: mode, question: q, ask, after, answers: tries.map((t) => t.answer), missing: g.missing ?? [] })
+          .then((r) => r.json())
+          .catch((e) => ({ error: String(e) }));
         setStatus("speaking");
-        await sayLine("Okay, let's see.");
-        return;
+        if (mode === "reframe") await sayFeedback("predict", beatId, g.feedback);
+        const f = await follow;
+        const next = typeof f.line === "string" && f.line ? f.line : null;
+        logEv({ kind: mode === "reframe" ? "socratic-reframe" : "socratic-gap", beatId, try: k + 1, verdict: g.verdict, line: next, ms: f.ms ?? null, error: f.error ?? null });
+        if (mode === "gap" || !next) {
+          if (next) await sayLine(next);
+          logEv({ kind: "socratic-adjust", beatId, verdict: g.verdict, try: k + 1, cut: [], how: "the section teaches it, as planned" });
+          done(g.verdict, g);
+          return;
+        }
+        asking = next;
       }
-      logEv({ kind: "learner", via: inputViaRef.current, role: "socratic answer", beatId, text: answer });
-      setStatus("replying");
-      const g = await gradeQuiz("predict", beatId, { kind: "predict", socratic: true, question: q, ask, answer, after: beatsAfter(i) });
-      if (g.error || typeof g.feedback !== "string") {
-        logEv({ kind: "quiz-error", quiz: "predict", socratic: true, error: g.error ?? "no feedback" });
-        return;
-      }
-      setStatus("speaking");
-      const spoken = sayFeedback("predict", beatId, g.feedback);
-      const section = sectionBeats(i);
-      const drop = g.verdict === "right" ? ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw") : [];
-      for (const b of drop) list.splice(list.indexOf(b), 1);
-      if (drop.length) setBeats([...list]);
-      await spoken;
-      logEv({ kind: "socratic-adjust", beatId, verdict: g.verdict, covered: g.covered ?? [], cut: drop.map((b) => b.beat.id), how: drop.length ? "cut what they already said" : "as planned" });
-      record({ kind: "predict", asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString(), verdict: g.verdict, socratic: true }, g);
     };
     /** Skipped ("skip", "I don't know"): the answer in one line, and the record says so. */
     const skipQuiz = async (kind: QuizKind, ask: string, answer: string | null, beatId: string | null, line: string) => {

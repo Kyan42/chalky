@@ -72,6 +72,8 @@ export interface QuizResult {
   skipped?: boolean;
   /** The question that opened a section (Socratic, "Ask me first"): not a quiz; the verdict is never said. */
   socratic?: boolean;
+  /** Socratic: every try, the question as asked that time (the original, then reframes), the answer and the verdict. */
+  tries?: { ask: string; answer: string; verdict: string }[];
 }
 
 export interface LearnerRecord {

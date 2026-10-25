@@ -203,3 +203,34 @@ export async function gradePredict(o: { question: string; ask: string; answer: s
     call,
   };
 }
+
+const LINE_SCHEMA = { type: "object", properties: { line: { type: "string" } }, required: ["line"], additionalProperties: false };
+
+/**
+ * Socratic follow-ups, by the fast model. reframe: the learner's answer to a section's question missed; ask again
+ * from another side, in their own words and framing, a concrete case or a smaller first step toward the same idea,
+ * never stating or half-stating the answer (a different door, not a hint). gap: the third miss; one line that
+ * names what their answers are missing, without explaining it (the section, played next, does that).
+ */
+export async function socraticLine(o: { mode: "reframe" | "gap"; question: string; ask: string; rubric: string[]; answers: string[]; missing: string[] }, signal?: AbortSignal): Promise<{ line: string; ms: number; model: string; call?: CallLog }> {
+  const t0 = performance.now();
+  const task =
+    o.mode === "reframe"
+      ? `The learner's answer to a question in a lesson missed the idea. Ask them again, reframed: use their own words and framing, and pick a concrete case or a smaller first step toward the same idea. Never state or half-state the answer, and never hint at it by naming it: a different door into the question, not a clue. ONE sentence, ending with a question mark.`
+      : `The learner has tried three times to answer a question in a lesson and still missed the idea. Say ONE sentence that names, kindly and specifically, the piece their answers have been missing (what to look at), without explaining it: the next part of the lesson explains it. No score, no "wrong".`;
+  const system = await withVoiceRules(`${task} Chalky, the teacher, says it aloud: first person, warm, plain words, under 30 words. Return JSON only: {"line": "..."}.`);
+  const user = [
+    `The lesson: ${o.question}`,
+    `The question asked: ${o.ask}`,
+    `What the lesson is about to explain (the answer, never to be given away):\n${o.rubric.map((r) => `- ${r}`).join("\n")}`,
+    `Their answers so far: ${o.answers.map((a) => `"${a}"`).join("; ")}`,
+    o.missing.length ? `What their answers are missing: ${o.missing.join("; ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const { out, call } = await json<{ line: string }>(CONVERSE_MODEL, `socratic-${o.mode}`, system, user, LINE_SCHEMA, 120, signal);
+  // One sentence; a reframe ends with its question.
+  let line = out.line.trim().split(/(?<=[.!?])\s+/).slice(0, o.mode === "reframe" ? 2 : 1).join(" ");
+  if (o.mode === "reframe" && !line.endsWith("?")) line = `${line.replace(/[.!]$/, "")}?`;
+  return { line, ms: Math.round(performance.now() - t0), model: CONVERSE_MODEL, call };
+}

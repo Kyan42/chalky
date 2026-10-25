@@ -4,7 +4,7 @@
  *              |  { kind: "predict", question, ask, answer, after: [{ say, section?, quiz? }] }  (rubric: the next section, cut here)
  *   →  QuizGrade (lib/lesson/quiz.ts)
  */
-import { gradeLabel, gradePredict, gradeSketch, predictRubric } from "@/lib/lesson/quiz";
+import { gradeLabel, gradePredict, gradeSketch, predictRubric, socraticLine } from "@/lib/lesson/quiz";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,16 @@ export async function POST(request: Request) {
       if (!rubric.length) return Response.json({ error: "no next section to grade against" }, { status: 400 });
       return Response.json({ ...(await gradePredict({ question: str(b.question, 300), ask: str(b.ask, 300), answer: str(b.answer, 600), rubric, socratic: b.socratic === true }, request.signal)), rubric });
     }
-    return Response.json({ error: "kind must be label, sketch or predict" }, { status: 400 });
+    // Socratic follow-ups: a reframed question, or the line naming the gap after the third miss.
+    if (b.kind === "reframe" || b.kind === "gap") {
+      const after = (Array.isArray(b.after) ? b.after : []).slice(0, 12).flatMap((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        const say = str(o.say, 400);
+        return say ? [{ say, ...(typeof o.section === "string" ? { section: o.section } : {}), ...(typeof o.quiz === "string" ? { quiz: o.quiz } : {}) }] : [];
+      });
+      return Response.json(await socraticLine({ mode: b.kind, question: str(b.question, 300), ask: str(b.ask, 300), rubric: predictRubric(after), answers: strs(b.answers, 3, 600), missing: strs(b.missing, 4, 200) }, request.signal));
+    }
+    return Response.json({ error: "kind must be label, sketch, predict, reframe or gap" }, { status: 400 });
   } catch (error) {
     return Response.json({ error: String((error as Error)?.message ?? error) }, { status: 500 });
   }
