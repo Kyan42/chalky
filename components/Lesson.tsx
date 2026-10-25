@@ -459,15 +459,18 @@ export default function Lesson() {
   const [title, setTitle] = useState("Ask Chalky anything");
   const [status, setStatusRaw] = useState<Status>("idle");
   /**
-   * Paused by the learner (a Space tap, or Pause): audio, board and cursor frozen at a point, mic open.
-   * `prev` is the status to go back to; lesson loops wait on `waiters` before starting anything new.
+   * The one pause. Chalky's audio is held (holdAudio), so voice, board and cursor freeze on the word they
+   * reached and carry on from it. Stop, Pause and a Space tap stop Chalky outright (`listening` false: mic,
+   * typing and pen are off until Start, Continue or Space). A barge-in (Space held with the mic on, voice,
+   * the pen) freezes the same way but keeps listening, and what the learner says then cuts in.
+   * `prev` is the status to go back to; lesson loops wait on `unpauseWaiters` before starting anything new.
    */
-  const pausedRef = useRef<{ prev: Status; at: number; beatId: string; wordIndex: number } | null>(null);
+  const pausedRef = useRef<{ prev: Status; at: number; beatId: string; wordIndex: number; listening: boolean } | null>(null);
   const unpauseWaiters = useRef<(() => void)[]>([]);
-  /** While paused, talking statuses are remembered for the resume instead of shown. */
+  /** While paused, statuses are remembered for the resume instead of shown. */
   const setStatus = useCallback((next: Status | ((s: Status) => Status)) => {
     const p = pausedRef.current;
-    if (p && typeof next === "string" && (next === "speaking" || next === "replying" || next === "planning")) {
+    if (p && typeof next === "string" && next !== "stopped" && next !== "error" && next !== "done") {
       p.prev = next;
       return;
     }
@@ -550,6 +553,7 @@ export default function Lesson() {
   const askRef = useRef<(q: string) => void>(() => {});
   /** Words Ink is hearing right now, and text being typed: the intake's silence timer waits while either is there. */
   const partialRef = useRef("");
+  const haltRef = useRef<() => void>(() => {});
   const draftRef = useRef("");
   const pauseRef = useRef<() => void>(() => {});
   const cutInRef = useRef<() => void>(() => {});
@@ -580,33 +584,14 @@ export default function Lesson() {
   // Read after mount so the server render and the first client render agree.
   const [voiceBargeIn, setVoiceBargeIn] = useState(false);
   useEffect(() => setVoiceBargeIn(voiceBargeInEnabled()), []);
-  /**
-   * The learner pressed Stop: Chalky freezes mid-word (voice, board and cursor
-   * all run on the audio clock, which is suspended), the mic is off, and
-   * nothing they say, type or draw is taken until they press Start, which
-   * carries on from that exact word.
-   */
+  /** Paused and not listening (Stop, Pause, a Space tap): nothing the learner says, types or draws is taken. */
   const [halted, setHalted] = useState(false);
+  /** Any pause (stopped or listening), for the buttons. */
+  const [paused, setPaused] = useState(false);
   const haltedRef = useRef(false);
-  const haltWaitersRef = useRef<(() => void)[]>([]);
-  /** Resolves at once, or when Start is pressed (or the lesson ends) if Chalky is stopped. */
-  const haltGate = useCallback(
-    (signal: AbortSignal) =>
-      new Promise<void>((resolve) => {
-        if (!haltedRef.current || signal.aborted) return resolve();
-        haltWaitersRef.current.push(resolve);
-        signal.addEventListener("abort", () => resolve(), { once: true });
-      }),
-    [],
-  );
   const setHaltedNow = useCallback((on: boolean) => {
     haltedRef.current = on;
     setHalted(on);
-    if (!on) {
-      const waiters = haltWaitersRef.current;
-      haltWaitersRef.current = [];
-      for (const wake of waiters) wake();
-    }
   }, []);
   const voice = useHybridMic({
     voiceBargeIn,
@@ -643,8 +628,8 @@ export default function Lesson() {
         askRef.current(said);
       }
     },
-    // A press with no words leaves Chalky paused in "Your turn": say or type something, or Continue.
-    onBargeInCancelled: () => {},
+    // A press with no words is a tap: Chalky stays paused, now not listening, until Space, Start or Continue.
+    onBargeInCancelled: () => haltRef.current(),
   });
 
   partialRef.current = voice.partial;
@@ -654,6 +639,7 @@ export default function Lesson() {
     pausedRef.current = null;
     unpauseWaiters.current.splice(0).forEach((r) => r());
     setHaltedNow(false);
+    setPaused(false);
     void holdAudio(false);
     queueRef.current = [];
     replyAbortRef.current?.abort();
@@ -802,7 +788,6 @@ export default function Lesson() {
         if (signal.aborted) break;
         if (event.type === "start") {
           audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
-          if (pausedRef.current) audio.pause();
           audioRef.current = audio;
         } else if (event.type === "audio" && audio) {
           audio.append(event.data);
@@ -959,15 +944,24 @@ export default function Lesson() {
       end: null as string | null,
     };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    /** How many events the last full save carried: an end marker sends only the ones after. */
+    let sentEvents = 0;
+    const beacon = (body: string) => body.length < 60_000 && !!navigator.sendBeacon?.("/api/live-log", new Blob([body], { type: "application/json" }));
     const flushLog = (closing = false) => {
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
       const body = JSON.stringify(transcript);
-      // The tab is going away: a beacon outlives the page (browsers cap it at about 64 KB; a longer
-      // transcript keeps what the last regular save sent, at most 2 s old).
-      if (closing && body.length < 60_000 && navigator.sendBeacon?.("/api/live-log", new Blob([body], { type: "application/json" }))) return;
-      // Not the lesson's abort signal, so the final save survives Stop.
-      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => {});
+      if (closing) {
+        // The tab is going away: a beacon outlives the page, but browsers cap it at about 64 KB. A longer
+        // transcript sends a small end marker instead: how it ended and the events since the last full save.
+        if (beacon(body)) return;
+        const tail = transcript.events.slice(sentEvents).slice(-40);
+        const marker = (events: unknown[]) => JSON.stringify({ id: transcript.id, endMarker: true, end: transcript.end, endedAt: transcript.endedAt, fromEvent: transcript.events.length - events.length, events });
+        if (beacon(marker(tail)) || beacon(marker([]))) return;
+      }
+      sentEvents = transcript.events.length;
+      // Not the lesson's abort signal, so the final save survives Stop. keepalive lets a small one outlive the page.
+      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: body.length < 60_000 }).catch(() => {});
     };
     const logEv = (e: Record<string, unknown>) => {
       transcript.events.push({ t: since(), ...e });
@@ -977,6 +971,12 @@ export default function Lesson() {
     flushLogRef.current = () => {
       transcript.learner = learner;
       transcript.prefetch = { ...stats };
+      // Closed mid-lesson: say so, so the file never ends without an end.
+      if (!transcript.end) {
+        transcript.end = "closed";
+        transcript.endedAt = new Date().toISOString();
+        transcript.events.push({ t: since(), kind: "end", end: "closed" });
+      }
       flushLog(true);
     };
     logEv({ kind: "learner", via: transcript.askedVia, role: "question", text: q });
@@ -1161,34 +1161,58 @@ export default function Lesson() {
     const history: Exchange[] = [];
     let amendCount = 0;
     /** A detour planned (and drawn) in the background after a brief answer, in case the learner is still lost. */
-    let draft: { at: number; abort: AbortController; beats: Promise<BeatState[]> } | null = null;
+    type Detour = {
+      at: number;
+      abort: AbortController;
+      /** Every beat, once the amend call is done. */
+      beats: Promise<BeatState[]>;
+      /** The first beat, as soon as it streams in (null if none came). */
+      first: Promise<BeatState | null>;
+      /** The beats so far; `onBeat` hears each one after it is set. */
+      out: BeatState[];
+      onBeat?: (s: BeatState) => void;
+    };
+    let draft: Detour | null = null;
+    /** A detour playing while its later beats still stream in: the loop waits after `last` until the next arrives. */
+    type Growing = { last: BeatState; done: Promise<void> };
+    let growing = null as Growing | null;
     const dropDraft = () => {
       draft?.abort.abort();
       draft = null;
     };
 
     /** Plans a 2-4 beat detour to play at list position `at`, and starts drawing it; nothing is inserted yet. */
-    const planDetour = (at: number, note: string, heardText: string, said?: string) => {
+    const planDetour = (at: number, note: string, heardText: string, said?: string): Detour => {
       const ctl = new AbortController();
       abort.signal.addEventListener("abort", () => ctl.abort(), { once: true });
       const prefix = `d${++amendCount}`;
+      const out: BeatState[] = [];
+      let gotFirst: (s: BeatState | null) => void = () => {};
+      const first = new Promise<BeatState | null>((r) => (gotFirst = r));
+      const d = { at, abort: ctl, first, out } as Detour;
+      // What this scene already shows, so a detour that stays on this board draws around it.
+      const scene = list[at - 1]?.beat.scene;
+      const onBoard = list.slice(0, at).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
       const beats = (async () => {
         const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
-          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
+          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null, ...(ev.notes?.length ? { notes: ev.notes } : {}) });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
-          const earlier = out.filter((b) => b.beat.scene === ev.beat.scene && b.beat.mode === "draw").map((b) => b.beat);
+          const earlier = [...(ev.beat.scene === scene ? onBoard : []), ...out.filter((b) => b.beat.scene === ev.beat.scene && b.beat.mode === "draw").map((b) => b.beat)];
           out.push(state);
           if (ev.beat.mode !== "talk") state.ready = startDraw(state, earlier, ctl.signal);
+          if (out.length === 1) gotFirst(state);
+          else d.onBeat?.(state);
         }
         return out;
       })();
-      beats.catch((e) => console.warn("[detour]", e));
-      return { at, abort: ctl, beats };
+      beats.catch((e) => console.warn("[detour]", e)).finally(() => gotFirst(null));
+      d.beats = beats;
+      return d;
     };
 
     /** Replaces the lesson from list position `from` with a new ending, streamed in as it is planned. */
@@ -1432,8 +1456,7 @@ export default function Lesson() {
             if (signal.aborted) break;
             if (ev.type === "start" && !audio) {
               audio = new StreamPlayer(ctx, ev.sampleRate, ev.encoding);
-              if (pausedRef.current) audio.pause();
-              audioRef.current = audio;
+                  audioRef.current = audio;
               offset = 0;
             } else if (ev.type === "audio" && audio) {
               audio.append(ev.data);
@@ -1614,10 +1637,29 @@ export default function Lesson() {
           const d = draft && draft.at === resumeAt ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText, reply.said));
           draft = null;
           setStatus("planning");
-          const detour = await d.beats.catch(() => [] as BeatState[]);
+          // Start on the first beat as soon as it streams in; the rest join behind it as they arrive.
+          const firstBeat = await d.first;
           if (abort.signal.aborted) return -1;
-          if (detour.length) {
-            logEv({ kind: "detour", at: resumeAt, beats: detour.map((d) => ({ beatId: d.beat.id, mode: d.beat.mode, say: d.beat.say })) });
+          if (firstBeat) {
+            const detour = d.out.slice();
+            const done = d.beats.then(
+              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say })) }),
+              () => {},
+            );
+            const g = { last: detour[detour.length - 1], done };
+            growing = g;
+            d.onBeat = (s) => {
+              const k = list.indexOf(g.last);
+              if (k < 0) return;
+              list.splice(k + 1, 0, s);
+              g.last = s;
+              setBeats([...list]);
+              notify();
+            };
+            void done.finally(() => {
+              if (growing === g) growing = null;
+              notify();
+            });
             dropPrefetches("detour inserted");
             // A talk or check-in beat cut off for this detour is not replayed: the detour's own closing check replaces it.
             const cut = wordIndex >= 0 ? list[i] : undefined;
@@ -1660,7 +1702,7 @@ export default function Lesson() {
           const timer = setInterval(() => {
             // Silence lets the lesson go on, but only if the learner hasn't started answering at all:
             // once they speak or type, the patient turn end decides when they're done. Stopped holds it open.
-            if (haltedRef.current) deadline = performance.now() + INTAKE_SILENCE_MS;
+            if (pausedRef.current) deadline = performance.now() + INTAKE_SILENCE_MS;
             else if (partialRef.current.trim() || draftRef.current.trim()) started = true;
             if (!started && performance.now() > deadline) turnRef.current?.(null);
           }, 200);
@@ -1741,8 +1783,9 @@ export default function Lesson() {
           continue;
         }
         if (i >= 1) await intakeGate;
+        // A detour still streaming in: its next beat goes right here, so wait for it (or for the detour to end).
+        for (let g = growing; g && i > 0 && list[i - 1] === g.last && !abort.signal.aborted; g = growing as Growing | null) await Promise.race([changed(), g.done]);
         await waitWhilePaused(abort.signal);
-        await haltGate(abort.signal);
         if (abort.signal.aborted) break;
         if (i >= list.length) {
           if (planOpen()) continue;
@@ -1880,31 +1923,56 @@ export default function Lesson() {
       logEv({ kind: "end", end: transcript.end });
       flushLog();
     }
-  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused, haltGate]);
+  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused]);
 
   useEffect(() => {
     askRef.current = (q) => void ask(q);
   }, [ask]);
 
-  /** Pauses right where Chalky is: sound, board and cursor freeze (they follow the audio clock); the mic opens. */
-  const pausePlayback = useCallback(() => {
+  /**
+   * Pauses right where Chalky is: its audio is held, so sound, board and cursor freeze (they follow the
+   * audio clock). `listening`: a barge-in, the mic hears the learner; otherwise Chalky is stopped outright.
+   * A barge-in only happens while Chalky talks; a stop works at any point of a running lesson.
+   */
+  const pausePlayback = useCallback((listening = true) => {
     const st = statusRef.current;
-    if (pausedRef.current || (st !== "speaking" && st !== "replying")) return;
-    pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
-    audioRef.current?.pause();
+    const p = pausedRef.current;
+    if (p) {
+      // Already paused to listen, and now a tap or Stop: stop listening too.
+      if (!listening && p.listening) {
+        p.listening = false;
+        setHaltedNow(true);
+        queueRef.current = [];
+        setDraft("");
+        logRef.current({ kind: "pause", beatId: p.beatId, wordIndex: p.wordIndex, during: "paused", listening: false });
+      }
+      return;
+    }
+    if (!abortRef.current || abortRef.current.signal.aborted) return;
+    if (listening ? st !== "speaking" && st !== "replying" : !MUTED.has(st) && st !== "waiting" && st !== "listening") return;
+    pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, listening };
+    void holdAudio(true);
     speakingRef.current = false;
     setSpeakingAudio(false);
-    setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
+    if (st === "speaking" || st === "replying") setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
     setStatusRaw("paused");
-    logRef.current({ kind: "pause", beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, during: st });
-  }, []);
+    setPaused(true);
+    if (!listening) {
+      setHaltedNow(true);
+      queueRef.current = [];
+      setDraft("");
+    }
+    logRef.current({ kind: "pause", beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, during: st, listening });
+  }, [setHaltedNow]);
 
-  /** Goes on from exactly where the pause was (a second Space tap, or Continue). */
+  /** Goes on from exactly where the pause was (Space, Start or Continue). */
   const resumePlayback = useCallback(() => {
     const p = pausedRef.current;
     if (!p) return;
     pausedRef.current = null;
-    audioRef.current?.resume();
+    setHaltedNow(false);
+    setPaused(false);
+    void holdAudio(false);
     if (audioRef.current && !audioRef.current.drained) {
       speakingRef.current = true;
       setSpeakingAudio(true);
@@ -1913,18 +1981,28 @@ export default function Lesson() {
     setStatusRaw(p.prev);
     logRef.current({ kind: "resume", beatId: p.beatId, wordIndex: p.wordIndex, pausedMs: Math.round(performance.now() - p.at) });
     unpauseWaiters.current.splice(0).forEach((r) => r());
-  }, []);
+  }, [setHaltedNow]);
 
   /** Stops Chalky to listen: the beat (replayed or settled later) or the reply in flight is cut. */
   const interrupt = useCallback(() => {
-    // A cut-in from a pause ends the pause: what is cut is what was paused.
+    // A cut-in from a pause ends the pause: what is cut is what was paused. Its audio is stopped first,
+    // then the hold is let go, so not a sample of it plays on.
     const p = pausedRef.current;
     if (p) {
       pausedRef.current = null;
+      setHaltedNow(false);
+      setPaused(false);
       setStatusRaw(p.prev);
       statusRef.current = p.prev;
       unpauseWaiters.current.splice(0).forEach((r) => r());
     }
+    try {
+      cutIn();
+    } finally {
+      if (p) void holdAudio(false);
+    }
+  }, [setHaltedNow]);
+  const cutIn = () => {
     const st = statusRef.current;
     if (st !== "speaking" && st !== "replying") return;
     const reply = replyAbortRef.current;
@@ -1949,25 +2027,14 @@ export default function Lesson() {
     // The audio is cut: open the mic now rather than after the echo tail.
     setSpeaking(false);
     setStatus("waiting");
-  }, [setSpeaking]);
-  /** Stop: Chalky freezes where it is and takes no input until Start. */
-  const halt = useCallback(() => {
-    if (!abortRef.current || abortRef.current.signal.aborted || haltedRef.current) return;
-    setHaltedNow(true);
-    queueRef.current = [];
-    setDraft("");
-    void holdAudio(true);
-  }, [setHaltedNow]);
-  /** Start: carry on from the word where Stop froze it (a turn that was waiting goes on waiting). */
-  const resume = useCallback(() => {
-    if (!haltedRef.current) return;
-    setHaltedNow(false);
-    void holdAudio(false);
-  }, [setHaltedNow]);
+  };
+  /** Stop (and Pause, and a Space tap): Chalky freezes where it is and takes no input until Start. */
+  const halt = useCallback(() => pausePlayback(false), [pausePlayback]);
 
   useEffect(() => {
     // Space down (the hybrid mic's barge-in) pauses at once; holding and talking then cuts in.
-    pauseRef.current = pausePlayback;
+    pauseRef.current = () => pausePlayback(true);
+    haltRef.current = halt;
     cutInRef.current = interrupt;
     lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && (MUTED.has(statusRef.current) || !!pausedRef.current) && !turnRef.current;
     mergeRef.current = (said) => {
@@ -1987,7 +2054,7 @@ export default function Lesson() {
       interrupt();
       return true;
     };
-  }, [interrupt, pausePlayback, resumePlayback]);
+  }, [interrupt, pausePlayback, resumePlayback, halt]);
 
   // Space is a toggle: a tap while Chalky talks pauses, a tap while paused resumes. With the mic on, the
   // hybrid mic sees Space first (it pauses on key down, and holding it talks); without it, this does.
@@ -2001,7 +2068,7 @@ export default function Lesson() {
         resumePlayback();
       } else if (statusRef.current === "speaking" || statusRef.current === "replying") {
         e.preventDefault();
-        pausePlayback();
+        pausePlayback(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -2055,7 +2122,7 @@ export default function Lesson() {
     : "idle";
   const orbLevel = useCallback(() => (speakingRef.current ? (audioRef.current?.level() ?? 0) : voice.level()), [voice]);
   const statusLabel: Record<Status, string> = {
-    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", paused: "Paused · Space to go on", waiting: "Your turn",
+    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", paused: halted ? "Paused · Space or Start to go on" : "Paused · listening", waiting: "Your turn",
     listening: "Listening", replying: "Thinking…", done: voice.started ? "Done · ask another" : "Done", stopped: "Stopped", error: "Error",
   };
   const showWelcome = !question && status !== "speaking";
@@ -2091,15 +2158,12 @@ export default function Lesson() {
               data-testid="question"
             />
             <button type="submit" disabled={halted || !draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
-            {status === "speaking" && busy && !halted && (
-              <button type="button" onClick={pausePlayback} data-testid="interrupt" title="Space">Pause</button>
-            )}
-            {waitingForLearner && !halted && (
+            {(waitingForLearner || paused) && (
               <button type="button" className="continue" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>
             )}
             {busy &&
               (halted ? (
-                <button type="button" className="start" onClick={resume} data-testid="start">Start</button>
+                <button type="button" className="start" onClick={resumePlayback} data-testid="start">Start</button>
               ) : (
                 <button type="button" onClick={halt} data-testid="stop">Stop</button>
               ))}
@@ -2110,7 +2174,7 @@ export default function Lesson() {
             </span>
           )}
           <div className="mic" data-testid="status">
-            {halted ? "Stopped" : statusLabel[status]}
+            {statusLabel[status]}
             <Orb state={orbState} level={orbLevel} size={34} />
           </div>
         </header>

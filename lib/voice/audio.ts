@@ -19,6 +19,8 @@ export const STT_SAMPLE_RATE = 16000;
 const CHUNK_SAMPLES = STT_SAMPLE_RATE / 10;
 
 let context: AudioContext | null = null;
+/** The microphone's own context: `holdAudio` freezes Chalky's clock without cutting off what the learner says. */
+let captureContext: AudioContext | null = null;
 let outputGain: GainNode | null = null;
 let outputAnalyser: AnalyserNode | null = null;
 
@@ -41,9 +43,10 @@ export async function unlockAudio() {
 export const audioUnlocked = () => context?.state === "running";
 
 /**
- * Freezes (or restarts) all audio at once: playback, the clock every player's
- * position() reads, and microphone capture, since they share this context.
- * Whatever is playing stops on the spot and carries on from there.
+ * Freezes (or restarts) Chalky's audio at once: playback and the clock every
+ * player's position() reads (the board and cursor follow it). Whatever is
+ * playing stops on the spot and carries on from there. The microphone runs on
+ * its own context and keeps capturing; whether it is heard is the mic's call.
  */
 export async function holdAudio(on: boolean) {
   held = on;
@@ -81,7 +84,10 @@ export type Microphone = {
 
 /** Starts the mic and calls `onChunk` with 16 kHz s16le PCM chunks. */
 export async function startMicrophone(onChunk: (pcm: ArrayBuffer) => void): Promise<Microphone> {
-  const ctx = await unlockAudio();
+  await unlockAudio();
+  captureContext ??= new AudioContext();
+  const ctx = captureContext;
+  if (ctx.state !== "running") await ctx.resume();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   });
