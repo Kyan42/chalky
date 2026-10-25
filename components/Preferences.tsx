@@ -2,22 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PREFERENCES, LANGUAGES, parsePreferences, type Preferences as Settings } from "@/lib/preferences";
+import { DEFAULT_VOICE_ID, SPEEDS, VOICES } from "@/lib/voices";
 
 export default function Preferences() {
   const dialog = useRef<HTMLDialogElement>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_PREFERENCES);
-  const [voices, setVoices] = useState<{id: string; name: string; language: string}[]>([]);
-  const [voiceError, setVoiceError] = useState("");
-  const [loading, setLoading] = useState(false);
-  async function loadVoices() {
-    setLoading(true); setVoiceError("");
+  const [sampleError, setSampleError] = useState("");
+  const sample = useRef<HTMLAudioElement | null>(null);
+  /** Picking a voice or a speed plays the greeting in it (POST /api/voice-sample), stopping any sample still playing. */
+  async function playSample(voice: string, speedValue: string) {
+    sample.current?.pause();
+    setSampleError("");
     try {
-      const response = await fetch("/api/cartesia/voices");
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setVoices(data.voices);
-    } catch { setVoiceError("Voices couldn’t load. Try again."); }
-    finally { setLoading(false); }
+      const response = await fetch("/api/voice-sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voice: voice || DEFAULT_VOICE_ID, speed: speedValue }) });
+      if (!response.ok) throw new Error(String(response.status));
+      const audio = new Audio(URL.createObjectURL(await response.blob()));
+      sample.current = audio;
+      await audio.play();
+    } catch { setSampleError("The sample couldn’t play."); }
   }
   function update<K extends keyof Settings>(key: K, value: Settings[K]) {
     const next = { ...settings, [key]: value };
@@ -28,10 +30,10 @@ export default function Preferences() {
   useEffect(() => {
     setSettings(parsePreferences(document.cookie.split("; ").find(p => p.startsWith("chalky-preferences="))?.split("=")[1]));
     const saved = document.cookie.split("; ").find((part) => part.startsWith("chalky-speed="))?.split("=")[1];
-    if (saved && ["0.75", "0.92", "1", "1.15", "1.3"].includes(saved)) setSpeed(saved);
+    if (saved && SPEEDS.some((s) => s.value === saved)) setSpeed(saved);
   }, []);
   return <>
-    <button className="preferences-gear" aria-label="Preferences" title="Preferences" onClick={() => { dialog.current?.showModal(); if (!voices.length) void loadVoices(); }}>
+    <button className="preferences-gear" aria-label="Preferences" title="Preferences" onClick={() => dialog.current?.showModal()}>
       <svg width="39.2" height="39.2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
         <path d="m9.5 3-.6 2.4-1.5.9L5 5.6 2.5 10l1.8 1.7v1.7L2.5 15 5 19.4l2.4-.7 1.5.9.6 2.4h5l.6-2.4 1.5-.9 2.4.7 2.5-4.4-1.8-1.6v-1.7l1.8-1.7L19 5.6l-2.4.7-1.5-.9-.6-2.4z" />
         <circle cx="12" cy="12.5" r="3.5" />
@@ -44,23 +46,21 @@ export default function Preferences() {
         <div className="preference-field">
           <label htmlFor="lesson-voice">Voice</label>
           <p>Choose who you learn with.</p>
-          <select id="lesson-voice" value={settings.voice} onChange={e => update("voice", e.target.value)}>
-            <option value="">Chalky · default voice</option>
-            {settings.voice && !voices.some(v => v.id === settings.voice) && <option value={settings.voice}>Saved voice</option>}
-            {voices.map(v => <option key={v.id} value={v.id}>{v.name} · {v.language}</option>)}
+          <select id="lesson-voice" data-testid="pref-voice" value={VOICES.some((v) => v.id === settings.voice) ? settings.voice : DEFAULT_VOICE_ID} onChange={e => { update("voice", e.target.value); void playSample(e.target.value, speed); }}>
+            {VOICES.map(v => <option key={v.id} value={v.id}>{v.name} · {v.tagline}</option>)}
           </select>
-          {loading && <p role="status">Loading voices…</p>}
-          {voiceError && <p role="alert">{voiceError} <button onClick={() => void loadVoices()}>Retry</button></p>}
+          {sampleError && <p role="alert">{sampleError}</p>}
         </div>
         <div className="preference-field">
         <label htmlFor="speaking-speed">Speaking speed</label>
         <p>A pace that feels right for you.</p>
-        <select id="speaking-speed" value={speed} onChange={(event) => {
+        <select id="speaking-speed" data-testid="pref-speed" value={speed} onChange={(event) => {
           const value = event.target.value;
           setSpeed(value);
           document.cookie = value === "default" ? "chalky-speed=; Max-Age=0; Path=/; SameSite=Lax" : `chalky-speed=${value}; Max-Age=31536000; Path=/; SameSite=Lax`;
+          void playSample(settings.voice, value);
         }}>
-          <option value="default">Default</option><option value="0.75">Slow · 0.75×</option><option value="0.92">Relaxed · 0.92×</option><option value="1">Natural · 1×</option><option value="1.15">Quick · 1.15×</option><option value="1.3">Brisk · 1.3×</option>
+          {SPEEDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         </div>
         <div className="preference-field">
