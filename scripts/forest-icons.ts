@@ -1,4 +1,4 @@
-import type { Block, Shape } from '../lib/blocks/types';
+import type { Block, Shape } from '../presets/types';
 const path=(d:string,fill?:string,stroke='green'):Shape=>({type:'path',d,fill,stroke,width:1.4});
 const ellipse=(cx:number,cy:number,rx:number,ry:number,fill:string,stroke='green'):Shape=>({type:'ellipse',cx,cy,rx,ry,fill,stroke,width:1.4});
 const block=(id:string,title:string,shapes:Shape[]):Block=>({id,title,describe:title,tags:['forest','illustration'],size:[100,100],parts:[{id:'illustration',label:title,shapes}],anchors:{center:[50,50]}});

@@ -1,7 +1,10 @@
 // npx tsx --env-file=.env.local scripts/test-moss-blocks.ts
-// Ten beat briefs in the planner's words, each with the block the drawer should get; the
-// expected block must be in Moss's top 3. Exits 2 (not 0) when there are no Moss keys, so a
-// missing key never reads as a pass. Build the index first: scripts/moss-build-blocks.ts.
+// Beat briefs in the planner's words (biology, computing, chemistry), each with the block the
+// drawer should get; the expected block must be in Moss's top 3. The keyword fallback
+// (lib/blocks/catalog.ts, used when Moss is off) is scored on the same briefs at its live size, 5,
+// for comparison. Exits 2 (not 0) when there are no Moss keys, so a missing key never reads as a
+// pass. Build the index first: scripts/moss-build-blocks.ts.
+import { keywordBlocks } from "../lib/blocks/catalog";
 import { beatQuery, hasMossKeys, relevantBlocks } from "../lib/moss/blocks";
 
 type Case = { visual: string; adds?: { id: string; what: string }[]; want: string };
@@ -19,7 +22,34 @@ const cases: Case[] = [
   { visual: "The powerhouse organelle that burns sugar with oxygen to release usable energy, with its folded inner membrane.", want: "mitochondrion" },
   { visual: "The twisted ladder that carries genes, with base pairs as its rungs.", want: "dna" },
   { visual: "A nerve cell passing a signal: dendrites on the left, a long axon, terminals on the right.", want: "neuron" },
+  // Computing
+  { visual: "Columns of nodes joined by weighted connections: an input layer, one hidden layer and an output.", adds: [{ id: "net", what: "a small neural network" }], want: "neural-net" },
+  { visual: "The loss dropping as the model trains, step after step, flattening out.", want: "loss-curve" },
+  { visual: "Each word looks back at the other words and weighs how much each one matters to it.", adds: [{ id: "focus", what: "words attending to each other" }], want: "attention" },
+  { visual: "A row of numbered boxes in memory, index 0 on the left.", want: "array" },
+  { visual: "Plates piled up: you push onto the top and pop from the top, last in first out.", want: "stack" },
+  { visual: "The brain of the computer, a square chip with pins all round.", adds: [{ id: "processor", what: "the processor" }], want: "cpu" },
+  { visual: "Information travels from your laptop to the box that sends it out to the internet.", adds: [{ id: "home-box", what: "the home router" }], want: "router" },
+  // Chemistry
+  { visual: "A carbon atom: six protons and six neutrons in the middle, electrons circling in two rings.", want: "atom" },
+  { visual: "Two hydrogens bonded to one oxygen at an angle, the shape of a water molecule.", adds: [{ id: "h2o-model", what: "ball-and-stick water" }], want: "water-molecule" },
+  { visual: "A glass beaker half full of a blue solution, bubbles rising.", want: "beaker" },
+  { visual: "Heat the tube with a gas flame from below.", adds: [{ id: "burner", what: "the flame underneath" }], want: "bunsen-burner" },
+  { visual: "The strip from 0 to 14, red acids on the left, purple alkalis on the right, a marker at 7.", want: "ph-scale" },
+  { visual: "Reactants climb over a hump of activation energy and settle lower as products, giving out heat.", want: "energy-profile" },
+  { visual: "Ice, water and steam: the particles packed tight, then sliding, then flying apart.", adds: [{ id: "states", what: "particles in a box" }], want: "particles" },
+  { visual: "Sodium hands its outer electron to chlorine, making two charged ions that attract.", want: "ionic-bond" },
+  { visual: "The grid of all the elements in rows and columns, with the noble gases on the far right.", want: "periodic-table" },
 ];
+
+// The keyword fallback: no keys needed, so it always runs.
+let keywordMisses = 0;
+for (const c of cases) {
+  const got = keywordBlocks(beatQuery({ visual: c.visual, adds: c.adds ?? [] }), 5).map((b) => b.id);
+  if (!got.includes(c.want)) keywordMisses++;
+  console.log(`${got.includes(c.want) ? "kw ok  " : "kw MISS"} want ${c.want.padEnd(15)} got ${got.join(", ")}`);
+}
+console.log(`keyword fallback: ${cases.length - keywordMisses} of ${cases.length} in its top 5\n`);
 
 if (!hasMossKeys()) {
   console.error("SKIPPED: no MOSS_PROJECT_ID / MOSS_PROJECT_KEY (add both to .env.local and run with --env-file=.env.local).");
