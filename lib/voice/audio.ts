@@ -19,13 +19,18 @@ export const STT_SAMPLE_RATE = 16000;
 const CHUNK_SAMPLES = STT_SAMPLE_RATE / 10;
 
 let context: AudioContext | null = null;
+/** The microphone's own context: `holdAudio` freezes Chalky's clock without cutting off what the learner says. */
+let captureContext: AudioContext | null = null;
 let outputGain: GainNode | null = null;
 let outputAnalyser: AnalyserNode | null = null;
+
+/** Set by `holdAudio`: the learner stopped Chalky, so nothing may start the clock again until they press Start. */
+let held = false;
 
 /** Call from a click handler. Safe to call again. */
 export async function unlockAudio() {
   context ??= new AudioContext();
-  if (context.state !== "running") await context.resume();
+  if (context.state !== "running" && !held) await context.resume();
   if (!outputGain) {
     outputGain = context.createGain();
     outputAnalyser = context.createAnalyser();
@@ -36,6 +41,19 @@ export async function unlockAudio() {
 }
 
 export const audioUnlocked = () => context?.state === "running";
+
+/**
+ * Freezes (or restarts) Chalky's audio at once: playback and the clock every
+ * player's position() reads (the board and cursor follow it). Whatever is
+ * playing stops on the spot and carries on from there. The microphone runs on
+ * its own context and keeps capturing; whether it is heard is the mic's call.
+ */
+export async function holdAudio(on: boolean) {
+  held = on;
+  if (!context) return;
+  if (on && context.state === "running") await context.suspend();
+  else if (!on && context.state !== "running") await context.resume();
+}
 
 export function audioContext() {
   if (!context) throw new Error("Audio is not unlocked yet");
@@ -66,7 +84,10 @@ export type Microphone = {
 
 /** Starts the mic and calls `onChunk` with 16 kHz s16le PCM chunks. */
 export async function startMicrophone(onChunk: (pcm: ArrayBuffer) => void): Promise<Microphone> {
-  const ctx = await unlockAudio();
+  await unlockAudio();
+  captureContext ??= new AudioContext();
+  const ctx = captureContext;
+  if (ctx.state !== "running") await ctx.resume();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   });

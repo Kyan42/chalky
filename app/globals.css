@@ -16,41 +16,68 @@
 /*
  * The page follows the board's theme (lib/board/theme.ts), set on <html data-theme> by
  * app/layout.tsx from NEXT_PUBLIC_CHALKY_THEME and by ?theme= in the browser. Each theme gives the
- * same roles: the board colour (--paper), the chalk (--ink), a quieter chalk (--muted), rules, the
- * red chalk (--accent), the blue, the yellow, and the frame around the board.
+ * same roles: the board colour (--paper, the Clayzo canvas's own paper, so the board has no edge),
+ * the chalk (--ink), a quieter chalk (--muted), rules, the red chalk (--accent), the blue, the
+ * yellow, and the frame around the board. Leo's tutor interface adds the warm ochre and charcoal
+ * (--ochre, --charcoal and the two caption washes) and the speech bubble's colours, folded in per
+ * theme so the chalkboard and whiteboard variants keep working.
  */
 :root, :root[data-theme="chalk"] {
   --paper: #FBFAF7;
-  --ink: #23262F;
-  --muted: #8A8F9C;
-  --rule: #E2E3E8;
+  --ink: #302B24;
+  --charcoal: #302B24;
+  --muted: #81796B;
+  --rule: #DED7C8;
   --accent: #E0474C;
   --blue: #2F6FDB;
   --yellow: #F5C518;
+  --ochre: #BC870B;
+  --ochre-ink: #805B08;
+  --ochre-wash: #F0DFAE;
+  --learner-ink: #3E5846;
+  --learner-wash: #DCE7D8;
+  --bubble: #FFFDF8;
+  --bubble-rule: #E4DFD3;
   --field: #FFFFFF;
-  --on-ink: #FBFAF7;
+  --on-ink: #FFFAF0;
   --frame: #2B2B2B;
 }
 :root[data-theme="whiteboard"] {
   --paper: #FBFAF7;
-  --ink: #23262F;
-  --muted: #8A8F9C;
-  --rule: #E2E3E8;
+  --ink: #302B24;
+  --charcoal: #302B24;
+  --muted: #81796B;
+  --rule: #DED7C8;
   --accent: #E0474C;
   --blue: #2F6FDB;
   --yellow: #F5C518;
+  --ochre: #BC870B;
+  --ochre-ink: #805B08;
+  --ochre-wash: #F0DFAE;
+  --learner-ink: #3E5846;
+  --learner-wash: #DCE7D8;
+  --bubble: #FFFDF8;
+  --bubble-rule: #E4DFD3;
   --field: #FFFFFF;
-  --on-ink: #FBFAF7;
+  --on-ink: #FFFAF0;
   --frame: #2B2B2B;
 }
 :root[data-theme="chalkboard"] {
   --paper: #25332D;
   --ink: #F1EEE4;
+  --charcoal: #F1EEE4;
   --muted: #AEB5AE;
   --rule: #3C4C44;
   --accent: #F28C82;
   --blue: #8EC5EE;
   --yellow: #F7DC6F;
+  --ochre: #DFB54F;
+  --ochre-ink: #F3DC9A;
+  --ochre-wash: #4A4328;
+  --learner-ink: #CFE6D4;
+  --learner-wash: #2F4A3B;
+  --bubble: #2F3F38;
+  --bubble-rule: #4A5C53;
   --field: #1C2824;
   --on-ink: #25332D;
   --frame: #151D19;
@@ -58,7 +85,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
 /* The board is always 16:9 and as large as the window allows. */
 .board-wrap { width: 100vw; height: 100vh; display: grid; place-items: center; }
@@ -121,7 +148,7 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .lesson-beats li[data-state="done"] .beat-say { color: var(--ink); opacity: 0.6; }
 .beat-say { display: block; }
 .beat-meta { display: block; font-size: 0.85em; color: var(--muted); margin-top: 0.2em; }
-.ask button.continue { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
+.ask button.continue, .ask button.start { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
 .mic[data-state="waiting"] .dot { background: var(--yellow); }
 .lesson-beats ol { overflow-y: auto; max-height: 82%; }
 
@@ -141,11 +168,23 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   background: var(--ink); color: var(--on-ink); cursor: pointer; }
 .caption .heard { color: var(--blue); font-style: italic; }
 .topic .orb { margin-left: 0.6em; }
+/* Voice barge-in is on: say so, so the learner knows talking over Chalky interrupts it. */
+.voice-badge { font-size: clamp(9px, 0.85vw, 13px); color: #1f6f5c; background: #e3f4ee; border: 1px solid #b9e2d4;
+  border-radius: 999px; padding: 0.2em 0.7em; margin-right: 0.6em; white-space: nowrap; }
 /* The topic written on the board while the first beat is planned. */
 .chalk-title { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 12%; text-align: center; pointer-events: none;
   font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; font-size: clamp(18px, 3vw, 46px); color: var(--ink);
   opacity: 0.78; animation: chalk-in 1.2s ease-out both; }
 @keyframes chalk-in { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 0.78; clip-path: inset(0 0 0 0); } }
+
+/* The learner's pen over the board (components/InkLayer.tsx). */
+.stage canvas.ink { position: absolute; inset: 0; touch-action: none; z-index: 2; }
+.stage .pen { position: absolute; right: 0.8em; top: 0.8em; z-index: 3; display: flex; align-items: center; gap: 0.4em;
+  padding: 0.35em 0.5em; border-radius: 999px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+.stage .pen .swatch { width: 1.3em; height: 1.3em; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.stage .pen .swatch[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px #23262f; }
+.stage .pen button:not(.swatch) { font: inherit; font-size: 0.8em; border: 0; background: none; cursor: pointer; padding: 0.2em 0.4em; }
+.stage .pen button:disabled { opacity: 0.4; cursor: default; }
 
 .lesson-board {
   grid-template-columns: minmax(0, 1fr);
@@ -260,3 +299,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .thinking-shapes[data-paused="true"] .thinking-shape { animation-play-state: paused; }
 @media (max-width: 600px) { .thinking-shapes { top: calc(50% + 52px); gap: 15px; transform: translateX(-50%) scale(.85); } }
 @media (prefers-reduced-motion: reduce) { .thinking-shape { animation: none; } }
+
+.shared-transcript.caption { border: 0; padding: 0; grid-area: auto; }

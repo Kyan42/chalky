@@ -32,6 +32,8 @@ export interface PresetElement {
   text: string;
   /** Comma-separated element ids this one connects to or acts on. */
   refs: string;
+  /** Drawn by an answer's sketch: later beats' shapes are moved off it, the way they are moved off labels. */
+  solid?: boolean;
 }
 
 export const PRESET_KINDS = ["circle", "box", "label", "connect", "rays", "flow", "cycle", "equation", "arrow", "line", "plot", "bar", "move", "text", "highlight", "dim", ...BLOCK_KINDS] as const;
@@ -77,14 +79,18 @@ function textSize(str: string, size: number) {
   return { w: Math.max(size, str.length * size * 0.56), h: size * 1.25 };
 }
 
-function outside(b: Box) {
-  return area(b) - overlap(b, STAGE);
+function outside(b: Box, stage: Box = STAGE) {
+  return area(b) - overlap(b, stage);
 }
 
-export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, theme?: Theme): { doc: AnimationDocument; report: LayoutReport } {
+/**
+ * `stage` (board pixels) is the area labels must stay inside: the whole board
+ * by default, or more of it when the lesson has zoomed out to make room.
+ */
+export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, theme?: Theme, stage: Box = STAGE): { doc: AnimationDocument; report: LayoutReport } {
   const s = new Scene(theme);
   const placed = new Map<string, Placed>();
-  const occupied: { id: string; box: Box; text: boolean }[] = [];
+  const occupied: { id: string; box: Box; text: boolean; solid?: boolean }[] = [];
   const report: LayoutReport = { texts: [], shapes: [], dangling: [], nudged: 0 };
   const dimmed = new Set<string>();
 
@@ -94,7 +100,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     report.shapes.push({ id: p.id, box: p.box });
   };
   // Janani's blocks (lib/blocks): `block` and `travel` register their boxes, parts and anchors here.
-  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b) * 4;
+  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b, stage) * 4;
 
   /**
    * Moves a later arrival off what is already there, the way free text is nudged: a shape off
@@ -103,7 +109,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
    * the stage offset [dx, dy] is [0, 0] when the spot was free. Counted in `report.nudged`.
    */
   const nudge = (b: Box, o: { shapes: boolean }): [number, number] => {
-    const price = (box: Box) => occupied.reduce((sum, c) => sum + (c.text ? 3 : o.shapes ? 1 : 0) * overlap(grow(box, 6), c.box), 0) + outside(box) * 4;
+    const price = (box: Box) => occupied.reduce((sum, c) => sum + (c.text ? 3 : o.shapes || c.solid ? 1 : 0) * overlap(grow(box, 6), c.box), 0) + outside(box, stage) * 4;
     const here = price(b);
     if (here === 0) return [0, 0];
     // Up to 144 px (12 grid units) away, nearer spots first; a longer move costs a little extra.
@@ -417,7 +423,10 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     for (const e of shapesFirst(elements)) {
       // An earlier beat's highlight is over; skip it when drawing finished beats.
       if (still && e.kind === "highlight") continue;
+      const from = occupied.length;
       draw(e, still);
+      // A sketch's boxes hold their ground against the beats drawn after it.
+      if (e.solid) for (let k = from; k < occupied.length; k++) occupied[k].solid = true;
     }
   });
   return { doc: s.build(docId, "preset board"), report };

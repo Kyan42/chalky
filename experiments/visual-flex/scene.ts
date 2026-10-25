@@ -27,7 +27,8 @@ const ALLOWED = new Set(["sin", "cos", "tan", "exp", "log", "sqrt", "abs", "pow"
 
 /** Compiles a math expression in `x` without giving it access to anything else. */
 export function compileFn(expr: string): (x: number) => number {
-  const cleaned = expr.replace(/\bpi\b/g, "PI").replace(/\^/g, "**");
+  // A unary minus becomes (-1)*: "-x^4" is -(x^4) in maths, and JavaScript refuses "-x**4" outright.
+  const cleaned = expr.replace(/\bpi\b/g, "PI").replace(/\^/g, "**").replace(/(^|[(*/+\-,]\s*)-/g, "$1(-1)*");
   if (!/^[\d\s.+\-*/(),xA-Za-z]*$/.test(cleaned)) throw new Error(`plot fn has disallowed characters: ${expr}`);
   for (const name of cleaned.match(/[A-Za-z_]+/g) ?? []) {
     if (name !== "x" && !ALLOWED.has(name)) throw new Error(`plot fn uses unknown name "${name}" (allowed: x, ${[...ALLOWED].join(", ")})`);

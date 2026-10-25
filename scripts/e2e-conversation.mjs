@@ -162,7 +162,7 @@ const say = async (name) => {
 };
 
 try {
-  await page.goto(`${BASE_URL}/lesson${FIXTURE ? `?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 4}&intake=0` : ""}`, { waitUntil: "load" });
+  await page.goto(`${BASE_URL}/lesson${FIXTURE ? `?fixture=${FIXTURE}&beats=${process.env.BEATS ?? 4}&intake=0` : ""}${process.env.QUERY ?? ""}`, { waitUntil: "load" });
   await page.click('[data-testid="start-talking"]');
   await waitFor("greeting to end", (s) => s.status === "Listening", 20000);
   // 1. Ask (by voice, or typed with a fixture so the question matches the saved plan).

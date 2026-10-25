@@ -15,6 +15,7 @@
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
 import { trackCall } from "./calllog";
+import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
 import { withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
@@ -139,6 +140,8 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
           .slice(0, 4)
       : [];
 
+  // Nothing in this scene to point at: say it, rather than send a drawing with nothing to draw.
+  if (mode === "point" && !points.length) mode = "talk";
   const region = mode === "talk" ? FULL_BOARD : (cleanRegion(b.region) ?? FULL_BOARD);
   st.scene = scene;
   const check = b.check === true;
@@ -248,20 +251,48 @@ export interface AmendRequest {
   learner?: LearnerRecord;
 }
 
+/**
+ * Where a detour goes: on the board it interrupts when that scene is the plan's latest and nothing later
+ * draws there (it continues the picture, drawing around what is there), else on a clean board.
+ */
+function detourScene(r: AmendRequest, maxScene: number): { scene: number; drawn: PlannedBeat[]; stay: boolean } {
+  const scene = r.beats[r.index]?.scene ?? 0;
+  const drawn = r.beats.slice(0, r.index + 1).filter((b) => b.scene === scene && b.mode === "draw");
+  const stay = r.op === "insert_after" && !r.intake && scene > 0 && scene === maxScene && !r.beats.slice(r.index + 1).some((b) => b.scene === scene);
+  return { scene, drawn, stay };
+}
+
 function amendPrompt(r: AmendRequest, newScene: number): string {
   const lines = r.beats.map((b, i) => {
     const visual = b.mode === "draw" ? ` adds ${b.adds.map((a) => a.id).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]` : b.mode === "point" ? ` points at ${b.points.map((p) => p.id).join(", ") || "-"}` : "";
     return `${i + 1}. [${b.id}, scene ${b.scene}, ${b.mode}${visual}] ${b.say}`;
   });
+  const here = detourScene(r, newScene - 1);
+  const board = r.op === "insert_after" && here.drawn.length
+    ? `Already drawn on the board the learner is looking at (scene ${here.scene}): ${here.drawn.map((b) => `${b.adds.map((a) => `${a.id} (${a.what})`).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]`).join("; ")}. Never draw any of these again: point at them by id instead.${here.drawn.some((b) => /^d\d+-/.test(b.id)) ? " Beats with ids starting with d are a detour you already gave on this board; continue from it, do not repeat what it drew or said." : ""}`
+    : "";
+  const where = here.stay
+    ? `If there is free space on that board for the one or two new things you need (the 100x100 board, outside the regions above), stay in scene ${here.scene}: draw only in free space and point at what is there. Otherwise start a clean board: scene ${newScene}. Either way all of the detour's beats stay in the scene you pick, and its first beat draws something.`
+    : `It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}.`;
+  // A new ending continues on the kept beat's board: say what is on it, so nothing is drawn twice.
+  const keptBeats = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : [];
+  const onBoard = keptBeats.filter((b) => b.scene === newScene && b.mode === "draw");
+  const holds = onBoard.length
+    ? `Already drawn on the board the learner is looking at (scene ${newScene}): ${onBoard.map((b) => `${b.adds.map((a) => `${a.id} (${a.what})`).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]`).join("; ")}. Never add any of these again, under any id or name: refer to them by id (a point beat) instead. Scene ${newScene} has room for ${Math.max(0, MAX_DRAWS_PER_SCENE - onBoard.length)} more drawing(s).`
+    : "";
+  const scenesRule = `A scene holds at most ${MAX_DRAWS_PER_SCENE} draw beats in all (point beats don't count), and the drawings in a scene must not overlap: when a scene is full, start the next scene (fresh space on the board).`;
   const task = r.intake
     ? `REWRITE THE LESSON from beat ${r.index + 1} on, tailored to what the learner just told you (above): beats ${r.index + 1} onward are dropped, and the beats before stay as they are (beat 1 is already being spoken). Write the rest of a whole lesson, 10 to 16 beats, by the same rules as a full lesson (sections with goals, check-ins with bridges, a recap at the end). It continues on the same board: stay in scene ${newScene} for a while, drawing in free space beside what is already there (you may point at those ids), and start new scenes after it as the lesson moves on.`
     : r.op === "insert_after"
-      ? `Write a short DETOUR of 2 to 4 beats that will be spoken right after beat ${r.index + 1}, before the lesson goes on. It explains the same idea from a fresh angle (a concrete case, an analogy, real numbers), following the note above, and does not move the lesson forward. It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}. Its last beat ends with a short check-in question and has "check": true.`
-      : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. Start on a clean board: the first beat is a draw beat in scene ${newScene}; later scenes count up from there. Add a check-in after roughly every fourth beat.`;
+      ? `Write a short DETOUR of 2 to 4 beats that will be spoken right after beat ${r.index + 1}, before the lesson goes on. It explains the same idea from a fresh angle (a concrete case, an analogy, real numbers), following the note above, and does not move the lesson forward. ${where} Its last beat ends with a short check-in question and has "check": true.`
+      : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. It continues on the board the learner is looking at: stay in scene ${newScene} (point at what is drawn there, draw new things in free space) until a new picture is needed, then start new scenes counting up from ${newScene + 1}. Add a check-in after roughly every fourth beat.`;
   return [
     `The lesson answers: ${r.question}`,
     `The lesson planned so far:\n${lines.join("\n")}`,
     r.heard ? `The learner just said: "${r.heard}"` : "",
+    board,
+    holds,
+    r.op === "replace_from" ? scenesRule : "",
     r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
     `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
     describeLearner(r.learner),
@@ -276,9 +307,11 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
 export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
-  // The intake rewrite continues on beat 1's board; every other change starts on a clean one.
-  const newScene = r.intake ? Math.max(1, maxScene) : maxScene + 1;
+  // A new ending (and the intake's rewrite) continues on the board of the last beat it keeps: the beats it
+  // drops are never drawn, so their scenes don't count. A detour goes after everything planned.
+  const kept = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : r.beats;
+  const maxScene = Math.max(1, kept.reduce((m, b) => Math.max(m, b.scene || 0), 0));
+  const newScene = r.op === "replace_from" ? maxScene : maxScene + 1;
   const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
   const stream = tracked.client.messages.stream(
     {
@@ -304,7 +337,14 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   });
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
   const st: PlanState = { scene: maxScene, known: new Map() };
-  if (r.intake) st.known.set(newScene, new Set(r.beats.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
+  if (r.op === "replace_from") st.known.set(newScene, new Set(kept.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
+  const here = detourScene(r, maxScene);
+  if (here.stay) st.known.set(here.scene, new Set(here.drawn.flatMap((b) => b.adds.map((a) => a.id))));
+  /** The scene the detour's drawing beats use: decided by its first one (the same board, if allowed, or a clean one). */
+  let detourAt: number | null = null;
+  const notes: string[] = [];
+  // The scene rules the first plan's layout pass keeps, applied to each changed beat as it arrives.
+  const guard = new SceneGuard(kept);
   let n = 0;
   const parse = function* (line: string): Generator<PlanEvent> {
     const trimmed = line.trim();
@@ -317,8 +357,19 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       return;
     }
     if (typeof obj.title === "string" || typeof obj.say !== "string") return;
-    if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
-    if (r.op === "insert_after" && obj.mode !== "talk") obj.scene = newScene;
+    if (r.op === "insert_after" && obj.mode !== "talk") {
+      detourAt ??= here.stay && Number(obj.scene) === here.scene ? here.scene : newScene;
+      obj.scene = detourAt;
+    } else if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
+    // The first beat of a change must not point: on a new board there is nothing to point at yet.
+    // (Staying on a board that has things on it, a first point beat is fine: checkBeat keeps only real ids.)
+    const onKnownBoard = (r.op === "insert_after" && obj.scene === here.scene && here.stay) || (r.op === "replace_from" && (Number(obj.scene) || newScene) === newScene && (st.known.get(newScene)?.size ?? 0) > 0);
+    if (n === 0 && obj.mode === "point" && !onKnownBoard) {
+      const note = `${r.prefix}-1 was a point beat with nothing on its board; spoken as talk`;
+      console.info(`[amend] ${note}`);
+      notes.push(note);
+      obj.mode = "talk";
+    }
     // index n + 1 (never 0): checkBeat treats beat 0 as the lesson's very first beat.
     // The first beat goes straight in: no "good question", no restating the learner's question (they just heard a hand-off).
     if (n === 0 && typeof obj.say === "string") {
@@ -328,9 +379,10 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       if (say !== obj.say) console.info(`[amend] trimmed the opener of ${r.prefix}-1: "${String(obj.say).slice(0, 80)}" -> "${say.slice(0, 80)}"`);
       obj.say = say.charAt(0).toUpperCase() + say.slice(1);
     }
-    const beat = checkBeat(obj, n + 1, st);
+    const checked = checkBeat(obj, n + 1, st);
     n++;
-    yield { type: "beat", beat: { ...beat, id: `${r.prefix}-${n}` }, tMs: ms() };
+    const beat = guard.guard({ ...checked, id: `${r.prefix}-${n}` }, st);
+    yield { type: "beat", beat, tMs: ms() };
   };
   const done = stream.finalMessage();
   let finished = false;
@@ -347,5 +399,9 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
+  const layout = guard.summary();
+  console.info(`[amend] ${r.prefix}: scenes ${layout.scenes.map((s) => `${s.scene}: ${s.kept}+${s.draws} drawings, ${s.points} points`).join("; ")}${layout.notes.length ? ` | ${layout.notes.join(" | ")}` : ""}`);
+  // On the call log, so the page's amend-done event carries it into the transcript.
+  const call = { ...tracked.finish(), layout };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call, ...(notes.length || layout.notes.length ? { notes: [...notes, ...layout.notes] } : {}) };
 }

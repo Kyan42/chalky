@@ -25,20 +25,22 @@
  * The mic is half-duplex: it isn't sent while Chalky is speaking.
  */
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
-import type { AnimationDocument } from "@clayzo/animation/authoring";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
+import { INK_COLORS, InkLayer, NO_ZOOM, snapshotBoard, type InkCamera } from "@/components/InkLayer";
+import { readInk, type InkStroke } from "@/lib/lesson/ink";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
-import { H, W } from "@/experiments/visual-flex/doc";
+import { END, finishDocument, H, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
-import type { ConverseEvent, ConverseTrailer, Exchange } from "@/lib/lesson/converse";
+import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
+import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
-import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
+import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
-import { unlockAudio } from "@/lib/voice/audio";
+import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
@@ -68,7 +70,7 @@ const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "
 const FILLER_AFTER_MS = 8000;
 const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching this out, just a moment."];
 /** A confirm that already looks ahead makes the bridge redundant. */
-const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up)\b/i;
+const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up|carry on|keep going|go on|onward|continue|on we go)\b/i;
 /** Answers to the intake question that mean "just start". */
 const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
@@ -94,6 +96,10 @@ interface BeatState {
   ready: Promise<PresetElement[] | null>;
   /** Added while teaching (a detour or a new ending): the layout pass leaves it alone. */
   extra?: boolean;
+  /** Sketches Chalky drew while answering a question at this beat; they stay on the board for the rest of the scene. */
+  sketches?: PresetElement[];
+  /** The elements those sketches introduced, for the board's names. */
+  sketchAdds?: { id: string; what: string }[];
 }
 
 type Compile = (current: PresetElement[]) => AnimationDocument | null;
@@ -153,38 +159,257 @@ function pointElements(beat: PlannedBeat, timing: (word: string) => number | nul
   });
 }
 
-/** The element groups of beat `i`'s scene: earlier beats as drawn, then `current` for beat `i` itself. */
+/**
+ * The element groups of beat `i`'s scene: earlier beats as drawn, the sketches
+ * answers added along the way (beat `i`'s own too, already drawn), then
+ * `current` for beat `i` itself, which is the group that animates.
+ */
 function sceneGroups(list: BeatState[], i: number, current: PresetElement[]): PresetElement[][] {
   const scene = list[i].beat.scene;
   const groups: PresetElement[][] = [];
   for (let j = 0; j < i; j++) {
     const b = list[j];
-    if (b.beat.scene !== scene || b.beat.mode === "talk") continue;
-    groups.push(b.elements ?? []);
+    if (b.beat.scene !== scene) continue;
+    if (b.beat.mode !== "talk") groups.push(b.elements ?? []);
+    if (b.sketches?.length) groups.push(b.sketches);
   }
+  if (list[i].sketches?.length) groups.push(list[i].sketches!);
   groups.push(current);
   return groups;
 }
 
-function compileScene(groups: PresetElement[][]): { doc: AnimationDocument; report: LayoutReport } | null {
+/** The names of everything a scene's beats and sketches introduced. */
+const sceneAdds = (list: BeatState[], scene: number) =>
+  list.filter((b) => b.beat.scene === scene).flatMap((b) => [...b.beat.adds, ...(b.sketchAdds ?? [])]);
+
+/**
+ * A free area of the board (100x100 grid) for an answer's sketch: the biggest
+ * of a few sizes that touches nothing drawn, nearest to what is there so it
+ * reads as part of the same picture. Null when nothing fits.
+ */
+function freeRegion(boxes: Record<string, GridBox>, view: Region = FULL_VIEW): Region | null {
+  const taken = Object.values(boxes).filter((b) => b.w * b.h >= 0.3);
+  const cx = taken.length ? taken.reduce((a, b) => a + b.x + b.w / 2, 0) / taken.length : 50;
+  const cy = taken.length ? taken.reduce((a, b) => a + b.y + b.h / 2, 0) / taken.length : 50;
+  const clear = (x: number, y: number, w: number, h: number) =>
+    taken.every((b) => x + w + 3 <= b.x || b.x + b.w + 3 <= x || y + h + 3 <= b.y || b.y + b.h + 3 <= y);
+  const k = view.w / 100;
+  const step = 4 * k;
+  for (const [sw, sh] of [[42, 42], [36, 40], [40, 32], [32, 32], [28, 30], [24, 24]]) {
+    const w = sw * k, h = sh * k;
+    let best: { r: Region; d: number } | null = null;
+    for (let x = view.x + step; x + w <= view.x + view.w - step; x += step) {
+      for (let y = view.y + 2 * step; y + h <= view.y + view.h - step; y += step) {
+        if (!clear(x, y, w, h)) continue;
+        const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy);
+        if (!best || d < best.d) best = { r: { x, y, w, h }, d };
+      }
+    }
+    if (best) return best.r;
+  }
+  return null;
+}
+
+/** The whole board, on the 100x100 grid: a scene's view before any zooming out. */
+const FULL_VIEW: Region = { x: 0, y: 0, w: 100, h: 100 };
+/**
+ * One board for the whole lesson: scenes are places on it, not wipes. Scene k's 100x100 grid starts
+ * SCENE_SPAN grid units right of scene k-1's, in one row read left to right; the span is wider than the
+ * furthest zoom-out (MAX_VIEW, 240) so a zoomed-out scene never shows its neighbour. A new scene moves
+ * the camera to fresh space. Each scene is laid out and compiled in its own coordinates (the planner's
+ * regions, the layout pass and fitToRegion never see the offset); only the camera group places it.
+ */
+const SCENE_SPAN = 260;
+const sceneX = (scene: number) => (Math.max(1, scene) - 1) * SCENE_SPAN;
+const sceneView = (scene: number): Region => ({ x: sceneX(scene), y: 0, w: 100, h: 100 });
+/** How far one zoom-out grows the view, and the most it ever shows (2.4x the board). */
+const ZOOM_STEP = 1.4;
+const MAX_VIEW = 240;
+const ZOOM_SECONDS = 0.9;
+/** The zoom's easing: the board's camera and the learner's ink both follow it. */
+const GLIDE: CubicBezier = { x1: 0.65, y1: 0, x2: 0.35, y2: 1 };
+
+/** A view as the camera that shows it. */
+const cameraFor = (v: Region): InkCamera => ({ cx: v.x + v.w / 2, cy: v.y + v.h / 2, s: 100 / v.w });
+/** The camera `u` (0..1) of the way through a zoom from `a` to `b`, on the board's own curve. */
+function cameraBetween(a: Region, b: Region, u: number): InkCamera {
+  const e = easeAt(GLIDE, Math.max(0, Math.min(1, u)));
+  const p = cameraFor(a), q = cameraFor(b);
+  return { cx: p.cx + (q.cx - p.cx) * e, cy: p.cy + (q.cy - p.cy) * e, s: p.s + (q.s - p.s) * e };
+}
+
+/** The stage (board pixels, scene-local) labels must stay inside for a world view of `scene`. */
+function localStage(view: Region, scene: number) {
+  const x = view.x - sceneX(scene);
+  return { x1: (x / 100) * W + 14, y1: (view.y / 100) * H + 14, x2: ((x + view.w) / 100) * W - 14, y2: ((view.y + view.h) / 100) * H - 14 };
+}
+
+/**
+ * Compiles a scene into the lesson's one board. The scene is laid out in its own coordinates (the
+ * 100x100 grid, and beyond it once it has zoomed out); `others` are the other scenes already drawn,
+ * finished and still, placed at their own spots. `camera.view` is the part of the world the board
+ * shows; moving from `camera.from` (a zoom-out, or the last scene's place) animates over the
+ * document's first second, like an infinite canvas making room. On a scene change that glide
+ * overlaps the first second of the new scene's drawing, which reads as the hand arriving.
+ */
+function compileScene(
+  groups: PresetElement[][],
+  camera: { view: Region; from?: Region } = { view: FULL_VIEW },
+  scene = 1,
+  others: { scene: number; doc: AnimationDocument }[] = [],
+): { doc: AnimationDocument; report: LayoutReport } | null {
   if (!groups.some((g) => g.length)) return null;
-  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`);
+  const { view, from } = camera;
+  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`, undefined, localStage(view, scene));
   if (report.dangling.length) console.info(`[board] dangling refs: ${report.dangling.join("; ")}`);
-  return { doc, report };
+  return { doc: composeWorld([...others, { scene, doc }], view, from), report };
+}
+
+/** A scene drawn and done: every beat finished, nothing animating (another scene's place on the board). */
+function compileStill(groups: PresetElement[][], scene: number): AnimationDocument {
+  return compilePresetBoard(groups, -1, `still-${scene}`, undefined, localStage(sceneView(scene), scene)).doc;
+}
+
+/** Every string under an "id", "inputId" or "children" key, prefixed: one scene's nodes, renamed so scenes never collide. */
+function prefixIds<T>(v: T, p: string): T {
+  if (Array.isArray(v)) return v.map((x) => prefixIds(x, p)) as T;
+  if (!v || typeof v !== "object") return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if ((k === "id" || k === "inputId") && typeof x === "string") out[k] = p + x;
+    else if (k === "children" && Array.isArray(x)) out[k] = x.map((c) => (typeof c === "string" ? p + c : prefixIds(c, p)));
+    else out[k] = prefixIds(x, p);
+  }
+  return out as T;
+}
+
+/**
+ * The lesson's one board: each scene's drawing (not its paper) in a group at its place, all of them in a
+ * camera group that shows `view`, gliding there from `from`. The paper is the newest scene's.
+ */
+function composeWorld(scenes: { scene: number; doc: AnimationDocument }[], view: Region, from?: Region): AnimationDocument {
+  const nodes: Record<string, SceneNode> = {};
+  const places: string[] = [];
+  const latest = scenes[scenes.length - 1].doc;
+  for (const { scene, doc } of scenes) {
+    const comp = doc.compositions[doc.rootCompositionId];
+    const pre = `s${scene}-`;
+    for (const [id, node] of Object.entries(comp.nodes)) if (id !== "paper") nodes[pre + id] = prefixIds(node, pre);
+    const place = `scene-${scene}`;
+    nodes[place] = { ...base(place, { outTick: END, x: (sceneX(scene) / 100) * W, y: 0 }), type: "group", children: comp.rootNodeIds.filter((id) => id !== "paper").map((id) => pre + id) } as SceneNode;
+    places.push(place);
+  }
+  const paper = latest.compositions[latest.rootCompositionId].nodes.paper;
+  // The view's centre goes to the board's centre, scaled so the view fills the board.
+  const pose = (v: Region) => ({ anchor: { x: ((v.x + v.w / 2) / 100) * W, y: ((v.y + v.h / 2) / 100) * H, z: 0 }, scale: { x: 100 / v.w, y: 100 / v.h, z: 1 } });
+  const to = pose(view);
+  const start = from ? pose(from) : to;
+  const glide = GLIDE;
+  const t1 = Math.round(ZOOM_SECONDS * TPS / FRAME_TICKS) * FRAME_TICKS;
+  const camera: SceneNode = {
+    ...base("camera", {
+      outTick: END,
+      x: W / 2,
+      y: H / 2,
+      anchor: from ? keyed("camera.anchor", [[0, start.anchor, glide], [t1, to.anchor]]) : constant(to.anchor),
+      scale: from ? keyed("camera.scale", [[0, start.scale, glide], [t1, to.scale]]) : constant(to.scale),
+    }),
+    type: "group",
+    children: places,
+  };
+  return finishDocument(`${latest.id}-world`, latest.name, { ...(paper ? { paper } : {}), ...nodes, camera }, paper ? ["paper", "camera"] : ["camera"]);
+}
+
+/** A board box (world grid) as it appears on screen through `view`. */
+function onScreen(b: GridBox, view: Region): GridBox {
+  return { x: ((b.x - view.x) / view.w) * 100, y: ((b.y - view.y) / view.h) * 100, w: (b.w / view.w) * 100, h: (b.h / view.h) * 100 };
+}
+const screenBoxes = (boxes: Record<string, GridBox>, view: Region) =>
+  view === FULL_VIEW ? boxes : Object.fromEntries(Object.entries(boxes).map(([id, b]) => [id, onScreen(b, view)]));
+/** A scene-local box as it sits on the one board. */
+const worldBox = (b: GridBox, scene: number): GridBox => (scene > 1 ? { ...b, x: b.x + sceneX(scene) } : b);
+
+/**
+ * The view zoomed out one step, growing to the right and down from where the
+ * drawing is, like adding canvas beside your work: the drawing keeps its place
+ * and one strip of free space opens wide enough for a sketch. Stays square on
+ * the grid so nothing stretches. Null at the most it zooms out.
+ */
+function zoomOut(view: Region, boxes: Record<string, GridBox>): Region | null {
+  const size = Math.min(MAX_VIEW, view.w * ZOOM_STEP);
+  if (size <= view.w + 1) return null;
+  const all = Object.values(boxes);
+  const left = all.length ? Math.min(view.x, ...all.map((b) => b.x - 4)) : view.x;
+  const top = all.length ? Math.min(view.y, ...all.map((b) => b.y - 4)) : view.y;
+  return { x: left, y: top, w: size, h: size };
+}
+
+/** The smallest square view that still shows all of `view` and `region` (plus a margin), or null past MAX_VIEW. */
+function viewFor(view: Region, region: Region): Region | null {
+  const m = 4;
+  const x0 = Math.min(view.x, region.x - m), y0 = Math.min(view.y, region.y - m);
+  const x1 = Math.max(view.x + view.w, region.x + region.w + m), y1 = Math.max(view.y + view.h, region.y + region.h + m);
+  const size = Math.max(x1 - x0, y1 - y0);
+  if (size > MAX_VIEW) return null;
+  if (size <= view.w && x0 >= view.x && y0 >= view.y) return view;
+  return { x: x0 - (size - (x1 - x0)) / 2, y: y0 - (size - (y1 - y0)) / 2, w: size, h: size };
+}
+
+/**
+ * Where an answer's sketch goes: on the side of `near` the reply asked for,
+ * slid along that side (and then further out) until it touches nothing drawn,
+ * zooming the view out to include it when it falls off the board. "on" marks
+ * the element itself. Null when no such spot fits; the caller then takes any
+ * free space.
+ */
+function placeSketch(boxes: Record<string, GridBox>, view: Region, near: string | null, side: SketchSide): { region: Region; view: Region } | null {
+  const ref = near ? boxes[near] : undefined;
+  if (!ref) return null;
+  if (side === "on") {
+    const region = { x: ref.x - 2, y: ref.y - 2, w: ref.w + 4, h: ref.h + 4 };
+    const v = viewFor(view, region);
+    return v ? { region, view: v } : null;
+  }
+  // About the size of what it sits next to, within limits, so it reads at the same scale.
+  const w = Math.max(24, Math.min(40, ref.w * 0.9)), h = Math.max(22, Math.min(36, ref.h * 0.9));
+  const gap = 4;
+  const taken = Object.values(boxes).filter((b) => b.w * b.h >= 0.3);
+  const clear = (r: Region) => taken.every((b) => r.x + r.w + 2 <= b.x || b.x + b.w + 2 <= r.x || r.y + r.h + 2 <= b.y || b.y + b.h + 2 <= r.y);
+  const vertical = side === "above" || side === "below";
+  for (let out = 0; out <= 3; out++) {
+    for (const slide of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
+      const push = out * (vertical ? h * 0.6 : w * 0.6);
+      const r: Region =
+        side === "above" ? { x: ref.x + ref.w / 2 - w / 2 + slide * w, y: ref.y - gap - h - push, w, h }
+        : side === "below" ? { x: ref.x + ref.w / 2 - w / 2 + slide * w, y: ref.y + ref.h + gap + push, w, h }
+        : side === "left" ? { x: ref.x - gap - w - push, y: ref.y + ref.h / 2 - h / 2 + slide * h, w, h }
+        : { x: ref.x + ref.w + gap + push, y: ref.y + ref.h / 2 - h / 2 + slide * h, w, h };
+      if (!clear(r)) continue;
+      const v = viewFor(view, r);
+      if (v) return { region: r, view: v };
+    }
+  }
+  return null;
 }
 
 /** The board as the cursor and the conversation layer see it: element boxes on the 100x100 grid, and a named list. */
 interface BoardView {
+  /** Element boxes in world space (the grid the drawing is laid out on). */
   boxes: Record<string, GridBox>;
   list: { id: string; kind: string; label: string }[];
+  /** The part of the world the board shows: the scene's place, until it zooms out. */
+  view: Region;
+  /** The scene these elements belong to. */
+  scene: number;
 }
-const EMPTY_BOARD: BoardView = { boxes: {}, list: [] };
+const EMPTY_BOARD: BoardView = { boxes: {}, list: [], view: FULL_VIEW, scene: 1 };
 
 /** Turns the compiler's report (stage pixels) into grid boxes, and names every element once for /api/converse. */
-function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[]): BoardView {
+function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[], view: Region = FULL_VIEW, scene = 1): BoardView {
   const boxes: Record<string, GridBox> = {};
   const list: BoardView["list"] = [];
-  const grid = (b: { x1: number; y1: number; x2: number; y2: number }): GridBox => ({ x: (b.x1 / W) * 100, y: (b.y1 / H) * 100, w: ((b.x2 - b.x1) / W) * 100, h: ((b.y2 - b.y1) / H) * 100 });
+  // Boxes on the one board: the report is in the scene's own pixels.
+  const grid = (b: { x1: number; y1: number; x2: number; y2: number }): GridBox => worldBox({ x: (b.x1 / W) * 100, y: (b.y1 / H) * 100, w: ((b.x2 - b.x1) / W) * 100, h: ((b.y2 - b.y1) / H) * 100 }, scene);
   const byId = new Map(elements.map((e) => [e.id, e]));
   const what = new Map(adds.map((a) => [a.id, a.what]));
   // Block parts are registered twice ("cell.nucleus" and "cell-nucleus"); list the dotted one.
@@ -206,7 +431,7 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
     boxes[t.id] = grid(t.box);
     list.push({ id: t.id, kind: "text", label: byId.get(t.id)?.text || t.id });
   }
-  return { boxes, list };
+  return { boxes, list, view, scene };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -280,15 +505,18 @@ export default function Lesson() {
   const [title, setTitle] = useState("Ask Chalky anything");
   const [status, setStatusRaw] = useState<Status>("idle");
   /**
-   * Paused by the learner (a Space tap, or Pause): audio, board and cursor frozen at a point, mic open.
-   * `prev` is the status to go back to; lesson loops wait on `waiters` before starting anything new.
+   * The one pause. Chalky's audio is held (holdAudio), so voice, board and cursor freeze on the word they
+   * reached and carry on from it. Stop, Pause and a Space tap stop Chalky outright (`listening` false: mic,
+   * typing and pen are off until Start, Continue or Space). A barge-in (Space held with the mic on, voice,
+   * the pen) freezes the same way but keeps listening, and what the learner says then cuts in.
+   * `prev` is the status to go back to; lesson loops wait on `unpauseWaiters` before starting anything new.
    */
-  const pausedRef = useRef<{ prev: Status; at: number; beatId: string; wordIndex: number } | null>(null);
+  const pausedRef = useRef<{ prev: Status; at: number; beatId: string; wordIndex: number; listening: boolean } | null>(null);
   const unpauseWaiters = useRef<(() => void)[]>([]);
-  /** While paused, talking statuses are remembered for the resume instead of shown. */
+  /** While paused, statuses are remembered for the resume instead of shown. */
   const setStatus = useCallback((next: Status | ((s: Status) => Status)) => {
     const p = pausedRef.current;
-    if (p && typeof next === "string" && (next === "speaking" || next === "replying" || next === "planning")) {
+    if (p && typeof next === "string" && next !== "stopped" && next !== "error" && next !== "done") {
       p.prev = next;
       return;
     }
@@ -305,16 +533,35 @@ export default function Lesson() {
   const [lastReplyMs, setLastReplyMs] = useState<number | null>(null);
   const [board, setBoard] = useState<BoardView>(EMPTY_BOARD);
   const boardRef = useRef<BoardView>(EMPTY_BOARD);
+  /** The board's camera as the ink reads it; follows the view, and animates with it during a zoom. */
+  const cameraRef = useRef<InkCamera>(NO_ZOOM);
+  const zoomingRef = useRef(false);
+  const readCamera = useCallback(() => cameraRef.current, []);
   const showBoard = useCallback((view: BoardView) => {
     boardRef.current = view;
     setBoard(view);
+    if (!zoomingRef.current) cameraRef.current = cameraFor(view.view);
   }, []);
+  /** The learner's pen strokes on the board; cleared when the lesson moves on from their turn. */
+  const [ink, setInk] = useState<InkStroke[]>([]);
+  const inkRef = useRef<InkStroke[]>([]);
+  const showInk = useCallback((strokes: InkStroke[]) => {
+    inkRef.current = strokes;
+    setInk(strokes);
+  }, []);
+  const [inkColor, setInkColor] = useState(INK_COLORS[0]);
   const [cursorScript, setCursorScript] = useState<CursorStep[]>([]);
   /** The cursor's clock: whatever audio is playing now; frozen when the learner pauses Chalky. */
   const cursorClockRef = useRef<() => number>(() => 0);
   const cursorClock = useCallback(() => cursorClockRef.current(), []);
   const [pausedAt, setPausedAt] = useState<{ beatId: string; wordIndex: number } | null>(null);
-  const [lastLevel, setLastLevel] = useState<string | null>(null);
+  const [lastLevel, setLastLevelRaw] = useState<string | null>(null);
+  /** Turns settled so far (data-turn on the "Last turn" line), so a test can tell two alike turns apart. */
+  const [turns, setTurns] = useState(0);
+  const setLastLevel = useCallback((level: string | null) => {
+    setLastLevelRaw(level);
+    setTurns((n) => n + 1);
+  }, []);
   const [learnerView, setLearnerView] = useState<LearnerRecord | null>(null);
   const [intakeView, setIntakeView] = useState<string | null>(null);
   const [prefetchStats, setPrefetchStats] = useState<PrefetchStats>(NO_PREFETCH);
@@ -358,6 +605,7 @@ export default function Lesson() {
   const askRef = useRef<(q: string) => void>(() => {});
   /** Words Ink is hearing right now, and text being typed: the intake's silence timer waits while either is there. */
   const partialRef = useRef("");
+  const haltRef = useRef<() => void>(() => {});
   const draftRef = useRef("");
   const pauseRef = useRef<() => void>(() => {});
   const cutInRef = useRef<() => void>(() => {});
@@ -388,13 +636,25 @@ export default function Lesson() {
   const [learnerCaption, setLearnerCaption] = useState("");
   const captionAwaitingSpeech = useRef(false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
+  // Read after mount so the server render and the first client render agree.
+  /** Paused and not listening (Stop, Pause, a Space tap): nothing the learner says, types or draws is taken. */
+  const [halted, setHalted] = useState(false);
+  /** A request handed to the slow executor is pending (the badge says so). */
+  const [delegating, setDelegating] = useState(false);
+  /** Any pause (stopped or listening), for the buttons. */
+  const [paused, setPaused] = useState(false);
+  const haltedRef = useRef(false);
+  const setHaltedNow = useCallback((on: boolean) => {
+    haltedRef.current = on;
+    setHalted(on);
+  }, []);
   const voice = useHybridMic({
     // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
     keyterms: SEED_TERMS,
     autoInterrupt: true,
     mergeMs: 850,
     patientMs: 1200,
-    paused: micMuted,
+    paused: micMuted || halted,
     speaking: MUTED.has(status) || speakingAudio,
     // Chalky asked something (intake, check-in, a reply's check): a pause mid-answer must not end the turn.
     patient: status === "waiting",
@@ -407,7 +667,7 @@ export default function Lesson() {
     },
     onUtterance: (text) => {
       const said = text.trim();
-      if (!said) return;
+      if (!said || haltedRef.current) return;
       setLearnerCaption(said);
       inputViaRef.current = "voice";
       if (mergeRef.current(said)) return;
@@ -420,17 +680,12 @@ export default function Lesson() {
         queueRef.current.push(said);
         pauseRef.current();
       } else if (["idle", "done", "stopped", "error"].includes(statusRef.current)) {
-        // "Hey Chalky." on its own is not a question; wait for the rest.
-        if (isGreetingOnly(said)) {
-          setHeardNote(`Heard “${said}”. Go ahead, what do you want to learn?`);
-          return;
-        }
         setHeardNote(null);
         askRef.current(said);
       }
     },
-    // A press with no words leaves Chalky paused in "Your turn": say or type something, or Continue.
-    onBargeInCancelled: () => {},
+    // A press with no words is a tap: Chalky stays paused, now not listening, until Space, Start or Continue.
+    onBargeInCancelled: () => haltRef.current(),
   });
 
   partialRef.current = voice.partial;
@@ -439,6 +694,9 @@ export default function Lesson() {
   const stop = useCallback(() => {
     pausedRef.current = null;
     unpauseWaiters.current.splice(0).forEach((r) => r());
+    setHaltedNow(false);
+    setPaused(false);
+    void holdAudio(false);
     queueRef.current = [];
     replyAbortRef.current?.abort();
     abortRef.current?.abort();
@@ -446,7 +704,7 @@ export default function Lesson() {
     audioRef.current?.stop();
     playerRef.current?.pause();
     turnRef.current?.(null);
-  }, []);
+  }, [setHaltedNow]);
 
   useEffect(() => () => {
     stop();
@@ -596,7 +854,6 @@ export default function Lesson() {
         if (signal.aborted) break;
         if (event.type === "start") {
           audio = new StreamPlayer(ctx, event.sampleRate, event.encoding);
-          if (pausedRef.current) audio.pause();
           audioRef.current = audio;
         } else if (event.type === "audio" && audio) {
           audio.append(event.data);
@@ -710,20 +967,28 @@ export default function Lesson() {
     // Retain the previous board while the next topic is being prepared.
     setCursorScript([]);
     queueRef.current = [];
-    setTitle("Planning…");
-    setStatus("planning");
-    // The first usable drawing replaces the old board, never the planning step.
-
     const post = (path: string, body: unknown, signal: AbortSignal = abort.signal) =>
       fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     // Development: /lesson?fixture=<slug>&beats=<n> plays a saved plan instead of calling the planner.
     const params = new URLSearchParams(window.location.search);
     const fixture = process.env.NODE_ENV !== "production" ? params.get("fixture") : null;
+    /**
+     * The learner's first words go to the conversation model like everything else they say, and its
+     * actions decide: a short answer, a greeting back, or start_lesson (with an ask: the intake).
+     * A fixture starts its saved lesson at once, unless ?firstturn=1 (development).
+     */
+    const direct = !!fixture && params.get("firstturn") !== "1";
+    /** A lesson is running: the planner (or the fixture) has been started. */
+    let lessonStarted = false;
+    setTitle(direct ? "Planning…" : "");
+    setStatus(direct ? "planning" : "replying");
+    // Keep the previous drawing until a replacement is ready.
 
-    // The intake: one short question to the learner, asked while the planner writes the speculative plan.
-    // ?intake=0 turns it off (development).
+    // The intake (only when the lesson starts directly): one short question to the learner, asked while
+    // the planner writes the speculative plan. ?intake=0 turns it off (development). Otherwise the
+    // conversation model's "ask" next to its start_lesson is the intake.
     const intakeAsk =
-      params.get("intake") === "0"
+      !direct || params.get("intake") === "0"
         ? Promise.resolve(null)
         : post("/api/converse", { intent: "intake_ask", question: q })
             .then((r) => r.json())
@@ -753,15 +1018,26 @@ export default function Lesson() {
       end: null as string | null,
     };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    /** How many events the last full save carried: an end marker sends only the ones after. */
+    let sentEvents = 0;
+    const beacon = (body: string) => body.length < 60_000 && !!navigator.sendBeacon?.("/api/live-log", new Blob([body], { type: "application/json" }));
     const flushLog = (closing = false) => {
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
+      // The learner record rides on every save, so Convex has it before the tab closes.
+      transcript.learner = learner;
       const body = JSON.stringify(transcript);
-      // The tab is going away: a beacon outlives the page (browsers cap it at about 64 KB; a longer
-      // transcript keeps what the last regular save sent, at most 2 s old).
-      if (closing && body.length < 60_000 && navigator.sendBeacon?.("/api/live-log", new Blob([body], { type: "application/json" }))) return;
-      // Not the lesson's abort signal, so the final save survives Stop.
-      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => {});
+      if (closing) {
+        // The tab is going away: a beacon outlives the page, but browsers cap it at about 64 KB. A longer
+        // transcript sends a small end marker instead: how it ended and the events since the last full save.
+        if (beacon(body)) return;
+        const tail = transcript.events.slice(sentEvents).slice(-40);
+        const marker = (events: unknown[]) => JSON.stringify({ id: transcript.id, endMarker: true, end: transcript.end, endedAt: transcript.endedAt, fromEvent: transcript.events.length - events.length, events });
+        if (beacon(marker(tail)) || beacon(marker([]))) return;
+      }
+      sentEvents = transcript.events.length;
+      // Not the lesson's abort signal, so the final save survives Stop. keepalive lets a small one outlive the page.
+      void fetch("/api/live-log", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: body.length < 60_000 }).catch(() => {});
     };
     const logEv = (e: Record<string, unknown>) => {
       transcript.events.push({ t: since(), ...e });
@@ -771,6 +1047,12 @@ export default function Lesson() {
     flushLogRef.current = () => {
       transcript.learner = learner;
       transcript.prefetch = { ...stats };
+      // Closed mid-lesson: say so, so the file never ends without an end.
+      if (!transcript.end) {
+        transcript.end = "closed";
+        transcript.endedAt = new Date().toISOString();
+        transcript.events.push({ t: since(), kind: "end", end: "closed" });
+      }
       flushLog(true);
     };
     logEv({ kind: "learner", via: transcript.askedVia, role: "question", text: q });
@@ -888,7 +1170,12 @@ export default function Lesson() {
       setBeats([...list]);
     };
 
-    const planning = (async () => {
+    let planning: Promise<void> = Promise.resolve();
+    /** Starts the lesson: the planner (or the fixture) streams beats in from here on. */
+    const startPlanning = () => {
+    lessonStarted = true;
+    setTitle("Planning…");
+    planning = (async () => {
       const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
       for await (const event of ndjson<PlanEvent>(res)) {
@@ -943,41 +1230,249 @@ export default function Lesson() {
         setStatus("error");
       }
     });
+    };
+    if (direct) startPlanning();
+    /** The intake question the conversation model asked next to its start_lesson, already spoken. */
+    let pendingIntake: string | null = null;
+    /** start_lesson: the planner starts from the model's question; what it learned goes on the learner record. */
+    const startLesson = (lesson: NonNullable<ConverseTrailer["lesson"]>) => {
+      if (lessonStarted) return;
+      q = lesson.question.trim() || q;
+      setQuestion(q);
+      transcript.question = q;
+      if (lesson.focus) learner.focus = lesson.focus;
+      if (lesson.level && lesson.level !== "unknown") learner.level = lesson.level as LearnerRecord["level"];
+      noteLearner();
+      voice.setKeyterms(buildKeyterms(topicWords(q)));
+      logEv({ kind: "start-lesson", question: q, focus: lesson.focus, level: lesson.level });
+      startPlanning();
+    };
 
     // ---------- The conversation layer ----------
     /** Escalation reached for the current confusion: 0 none, 1 a brief answer, 2 a detour. Kept across the detour's beats. */
     let escalation: 0 | 1 | 2 = 0;
+    /** Answers that drew a sketch so far, for unique beat ids. */
+    let sketchCount = 0;
+    /** Each scene's view of the board: the whole board, until answers needed room and it zoomed out. */
+    const views = new Map<number, Region>();
+    const viewOf = (scene: number) => views.get(scene) ?? sceneView(scene);
+    /** The scene the board last showed: a beat in another scene glides the camera over from there. */
+    let shownScene = 0;
+    /** Other scenes, finished and still, cached until one gains a drawing (a sketch). */
+    const stills = new Map<number, { key: string; doc: AnimationDocument }>();
+    /** Each scene's board as last shown (world boxes), so go_to and the scene list can reach any of them. */
+    const sceneBoards = new Map<number, BoardView>();
+    const showSceneBoard = (v: BoardView) => {
+      sceneBoards.set(v.scene, v);
+      showBoard(v);
+      indexBoard(v);
+    };
+    /**
+     * The lesson's board index (Moss, server side): one document per element, with the sentence that
+     * introduced it, sent as each scene's board changes; /api/converse searches it with every utterance.
+     */
+    const indexBoard = (v: BoardView) => {
+      const said = (id: string) => {
+        const b = list.find((x) => x.beat.scene === v.scene && (x.beat.adds.some((a) => a.id === id) || x.sketchAdds?.some((a) => a.id === id)));
+        return b?.beat.say ?? "";
+      };
+      const docs = v.list.filter((e) => !e.id.includes(".")).map((e) => ({ id: e.id, label: e.label, scene: v.scene, said: said(e.id) }));
+      if (!docs.length) return;
+      void post("/api/board-index", { lesson: transcript.id, docs })
+        .then((r) => r.json())
+        .then((r: { added?: number; ms?: number; status?: string }) => r.added && logEv({ kind: "board-index", scene: v.scene, docs: docs.length, added: r.added, ms: r.ms, status: r.status }))
+        .catch(() => {});
+    };
+    const sceneTitle = (scene: number) => {
+      const b = list.find((x) => x.beat.scene === scene && x.beat.section) ?? list.find((x) => x.beat.scene === scene);
+      return (b?.beat.section ?? b?.beat.say ?? "").slice(0, 90);
+    };
+    const sceneRefs = () =>
+      [...sceneBoards.entries()].sort(([a], [b]) => a - b).map(([scene, v]) => ({ scene, title: sceneTitle(scene), ids: v.list.map((e) => e.id) }));
+    /** A board box on its scene's own grid (what the models see). */
+    const localBox = (b: GridBox, scene: number): GridBox => ({ ...b, x: b.x - sceneX(scene) });
+    /** The camera moved away from the lesson's scene (go_to): a talk beat glides it back before speaking. */
+    let wentAway = false;
+    /** Glides the camera over the one board on the wall clock (the board's player follows it). */
+    const glide = async (from: Region, to: Region) => {
+      const t0 = performance.now();
+      zoomingRef.current = true;
+      for (;;) {
+        const u = (performance.now() - t0) / 1000 / ZOOM_SECONDS;
+        cameraRef.current = cameraBetween(from, to, u);
+        const tick = Math.min(DOC_END - FRAME_TICKS, Math.round((Math.min(1, u) * ZOOM_SECONDS * TPS) / FRAME_TICKS) * FRAME_TICKS);
+        await playerRef.current?.seek(tick);
+        if (u >= 1 || abort.signal.aborted) break;
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      zoomingRef.current = false;
+      cameraRef.current = cameraFor(to);
+    };
+    /** Where go_to points: a scene's place, or a square framing one element (with a margin) in whatever scene holds it. */
+    const goToTarget = (g: { scene?: number; element?: string }): { scene: number; view: Region } | null => {
+      if (g.element) {
+        for (const [scene, v] of sceneBoards) {
+          const b = v.boxes[g.element];
+          if (!b) continue;
+          const size = Math.max(40, Math.min(100, Math.max(b.w, b.h) + 16));
+          return { scene, view: { x: b.x + b.w / 2 - size / 2, y: Math.max(-20, b.y + b.h / 2 - size / 2), w: size, h: size } };
+        }
+      }
+      return g.scene && sceneBoards.has(g.scene) ? { scene: g.scene, view: viewOf(g.scene) } : null;
+    };
+    /** go_to: every scene drawn so far, still, with the camera gliding from where it is to the target. */
+    const goTo = async (g: { scene?: number; element?: string }, upto: number) => {
+      const target = goToTarget(g);
+      if (!target) return false;
+      const all = otherScenes(-1, upto + 1);
+      if (!all.length) return false;
+      const from = boardRef.current.view;
+      const doc = composeWorld(all, target.view, from);
+      const sb = sceneBoards.get(target.scene);
+      zoomingRef.current = true;
+      cameraRef.current = cameraFor(from);
+      if (sb) showBoard({ ...sb, view: target.view });
+      await showDocument(doc);
+      await glide(from, target.view);
+      wentAway = target.scene !== shownScene || wentAway;
+      shownScene = target.scene;
+      logEv({ kind: "go-to", ...g, scene: target.scene, view: target.view });
+      return true;
+    };
+    /** Back to the lesson's scene before a beat that draws nothing (a drawing beat glides back by itself). */
+    const backToLesson = async (at: number) => {
+      const b = list[at];
+      if (!wentAway || !b || b.beat.mode !== "talk") return;
+      wentAway = false;
+      await goTo({ scene: b.beat.scene }, at - 1);
+    };
+    /** highlight: the cursor circles an element in view, or a spot on the scene in view (a box made for it). */
+    const highlight = (hs: NonNullable<ConverseTrailer["highlights"]>) => {
+      if (!hs.length) return;
+      const v = boardRef.current;
+      const boxes = { ...v.boxes };
+      const steps: CursorStep[] = [];
+      hs.forEach((h, k) => {
+        let target = h.element && boxes[h.element] ? h.element : null;
+        if (!target && h.region) {
+          target = `spot-${k + 1}`;
+          boxes[target] = worldBox(h.region, v.scene);
+        }
+        if (target) steps.push({ t: 0.2 + k * 1.4, target, gesture: "circle" });
+      });
+      if (!steps.length) return;
+      showBoard({ ...v, boxes });
+      const t0 = performance.now();
+      cursorClockRef.current = () => (performance.now() - t0) / 1000;
+      setCursorScript(steps);
+      logEv({ kind: "highlight", targets: steps.map((s) => s.target) });
+    };
+    /** delegate: the slow executor decides with the whole board; its actions come back for the page to apply. */
+    const delegateTo = async (request: string, utterance: string, i: number): Promise<ConverseAction[]> => {
+      setDelegating(true);
+      const t0 = performance.now();
+      const scenes = [...sceneBoards.entries()].sort(([a], [b]) => a - b).map(([scene, v]) => ({
+        scene,
+        title: sceneTitle(scene),
+        elements: v.list.map((e) => ({ ...e, ...(v.boxes[e.id] ? { box: localBox(v.boxes[e.id], scene) } : {}) })),
+      }));
+      const strokes = inkRef.current;
+      const image = strokes.length ? snapshotBoard(canvasRef.current, strokes, W, H, cameraRef.current) : null;
+      const res: { actions?: ConverseAction[]; ms?: number; model?: string; call?: unknown; error?: string } = await post("/api/delegate", {
+        request,
+        utterance,
+        question: q,
+        beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, scene: s.beat.scene })),
+        beatIndex: i,
+        scene: boardRef.current.scene,
+        scenes,
+        history: history.slice(-8),
+        learner,
+        ...(image ? { image } : {}),
+      })
+        .then((r) => r.json())
+        .catch((e) => ({ error: String(e), actions: [] }));
+      setDelegating(false);
+      logEv({ kind: "delegated", request, actions: res.actions ?? [], ms: Math.round(performance.now() - t0), model: res.model ?? null, call: res.call ?? null, error: res.error ?? null });
+      return res.actions ?? [];
+    };
+    /** Every scene drawn so far before list position `upto`, except `scene`, as still documents for the board. */
+    const otherScenes = (scene: number, upto: number) => {
+      const out: { scene: number; doc: AnimationDocument }[] = [];
+      const done = list.slice(0, upto);
+      for (const sc of [...new Set(done.map((b) => b.beat.scene))].sort((a, b) => a - b)) {
+        if (sc === scene) continue;
+        const groups = done.filter((b) => b.beat.scene === sc).flatMap((b) => [...(b.beat.mode !== "talk" ? [b.elements ?? []] : []), ...(b.sketches?.length ? [b.sketches] : [])]).filter((g) => g.length);
+        if (!groups.length) continue;
+        const key = `${groups.length}:${groups.reduce((n, g) => n + g.length, 0)}`;
+        let c = stills.get(sc);
+        if (!c || c.key !== key) {
+          try {
+            c = { key, doc: compileStill(groups, sc) };
+          } catch {
+            continue;
+          }
+          stills.set(sc, c);
+        }
+        out.push({ scene: sc, doc: c.doc });
+      }
+      return out;
+    };
     const history: Exchange[] = [];
     let amendCount = 0;
     /** A detour planned (and drawn) in the background after a brief answer, in case the learner is still lost. */
-    let draft: { at: number; abort: AbortController; beats: Promise<BeatState[]> } | null = null;
+    type Detour = {
+      at: number;
+      abort: AbortController;
+      /** Every beat, once the amend call is done. */
+      beats: Promise<BeatState[]>;
+      /** The first beat, as soon as it streams in (null if none came). */
+      first: Promise<BeatState | null>;
+      /** The beats so far; `onBeat` hears each one after it is set. */
+      out: BeatState[];
+      onBeat?: (s: BeatState) => void;
+    };
+    let draft: Detour | null = null;
+    /** A detour playing while its later beats still stream in: the loop waits after `last` until the next arrives. */
+    type Growing = { last: BeatState; done: Promise<void> };
+    let growing = null as Growing | null;
     const dropDraft = () => {
       draft?.abort.abort();
       draft = null;
     };
 
     /** Plans a 2-4 beat detour to play at list position `at`, and starts drawing it; nothing is inserted yet. */
-    const planDetour = (at: number, note: string, heardText: string, said?: string) => {
+    const planDetour = (at: number, note: string, heardText: string, said?: string): Detour => {
       const ctl = new AbortController();
       abort.signal.addEventListener("abort", () => ctl.abort(), { once: true });
       const prefix = `d${++amendCount}`;
+      const out: BeatState[] = [];
+      let gotFirst: (s: BeatState | null) => void = () => {};
+      const first = new Promise<BeatState | null>((r) => (gotFirst = r));
+      const d = { at, abort: ctl, first, out } as Detour;
+      // What this scene already shows, so a detour that stays on this board draws around it.
+      const scene = list[at - 1]?.beat.scene;
+      const onBoard = list.slice(0, at).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
       const beats = (async () => {
         const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
-          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
+          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null, ...(ev.notes?.length ? { notes: ev.notes } : {}) });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
-          const earlier = out.filter((b) => b.beat.scene === ev.beat.scene && b.beat.mode === "draw").map((b) => b.beat);
+          const earlier = [...(ev.beat.scene === scene ? onBoard : []), ...out.filter((b) => b.beat.scene === ev.beat.scene && b.beat.mode === "draw").map((b) => b.beat)];
           out.push(state);
           if (ev.beat.mode !== "talk") state.ready = startDraw(state, earlier, ctl.signal);
+          if (out.length === 1) gotFirst(state);
+          else d.onBeat?.(state);
         }
         return out;
       })();
-      beats.catch((e) => console.warn("[detour]", e));
-      return { at, abort: ctl, beats };
+      beats.catch((e) => console.warn("[detour]", e)).finally(() => gotFirst(null));
+      d.beats = beats;
+      return d;
     };
 
     /** Replaces the lesson from list position `from` with a new ending, streamed in as it is planned. */
@@ -1019,7 +1514,13 @@ export default function Lesson() {
      * so word timestamps (and the cursor's cues) share one clock. Returns the
      * trailer and what was said, or null if the learner cut in or it failed.
      */
-    const speakReply = async (utterance: string, i: number, wordIndex: number, onLevel?: (level: ConverseTrailer["level"]) => void): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
+    const speakReply = async (
+      utterance: string,
+      i: number,
+      wordIndex: number,
+      onLevel?: (level: ConverseTrailer["level"]) => void,
+      onTrailer?: (trailer: ConverseTrailer) => void,
+    ): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
       const replyAbort = new AbortController();
       replyAbortRef.current = replyAbort;
       const onStop = () => replyAbort.abort();
@@ -1028,6 +1529,17 @@ export default function Lesson() {
       setStatus("replying");
       // Keep the interrupted drawing exactly as the learner saw it. A spoken
       // follow-up can refer to this board without completing or replacing it.
+      // What the learner drew: the elements it marks, and a picture of the board with it on top.
+      let inkPayload: { marks: ReturnType<typeof readInk>["marks"]; loose: number; image?: string } | undefined;
+      const strokes = inkRef.current;
+      if (strokes.length) {
+        const view = boardRef.current;
+        const labels = Object.fromEntries(view.list.map((e) => [e.id, e.label]));
+        const read = readInk(strokes, view.boxes, labels, { w: W, h: H });
+        const image = snapshotBoard(canvasRef.current, strokes, W, H, cameraRef.current);
+        inkPayload = { ...read, ...(image ? { image } : {}) };
+        console.info(`[ink] ${strokes.length} stroke(s): ${read.marks.map((m) => `${m.how} ${m.id}`).join(", ") || "nothing marked"}${read.loose ? `, ${read.loose} loose` : ""}`);
+      }
       const t1 = performance.now();
       const ctx = await unlockAudio();
       let audio: StreamPlayer | null = null;
@@ -1037,6 +1549,78 @@ export default function Lesson() {
       let firstSoundMs: number | null = null;
       let replyCalls: CallLog[] = [];
       const sonicPerSentence: { sentence: number; firstAudioMs: number | null; totalMs: number; kb: number }[] = [];
+      /**
+       * The answer's sketch: drawn into a free area of the board while the
+       * answer plays, on the reply's own clock, and kept with beat i's scene so
+       * it stays for the beats after. `sketchStart` is the reply audio time its
+       * drawing began (-1 until it is on the board).
+       */
+      let sketchStart = -1;
+      let sketchSeeking = false;
+      let zoomFrom: Region = viewOf(list[i]?.beat.scene ?? 1), zoomTo: Region = zoomFrom;
+      let sketchShown: Promise<void> = Promise.resolve();
+      let replyLive = true;
+      const startSketch = (t: ConverseTrailer) => {
+        const owner = list[i];
+        const ask = t.sketch;
+        if (!ask || !owner) return;
+        const scene = owner.beat.scene;
+        const before = viewOf(scene);
+        // Where the reply says it belongs (zooming out toward it if that is off the board); else any free space.
+        const placed = placeSketch(boardRef.current.boxes, before, ask.near, ask.side);
+        let view = placed?.view ?? before;
+        let region = placed?.region ?? freeRegion(boardRef.current.boxes, view);
+        if (placed) console.info(`[sketch] ${ask.side} ${ask.near}`);
+        else if (ask.near) console.info(`[sketch] no room ${ask.side} ${ask.near}; using free space`);
+        while (!region) {
+          const wider = zoomOut(view, boardRef.current.boxes);
+          if (!wider) break;
+          view = wider;
+          region = freeRegion(boardRef.current.boxes, view);
+        }
+        if (!region) {
+          console.info("[sketch] no free space even zoomed out; skipped");
+          return;
+        }
+        if (view !== before) console.info(`[sketch] zoomed out to ${Math.round(view.w)}% of the board to make room`);
+        const say = sentences.map((x) => x.text).join(" ");
+        // Everything stays inside the region: a line out to the rest of the board would cut across what is drawn there.
+        const visual = `${ask.visual} Keep every shape, label and arrow inside your region; no arrows or connectors out to the rest of the board.`;
+        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual, mode: "draw", check: false, scene, region: { ...region, x: region.x - sceneX(scene) }, adds: ask.adds, points: [] };
+        const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
+        const t0 = performance.now();
+        sketchShown = post("/api/draw", { question: q, beat, earlier }, abort.signal)
+          .then((r) => r.json())
+          .then(async (res: { elements?: PresetElement[]; error?: string | null }) => {
+            const els = res.elements ?? [];
+            console.info(`[sketch] ${els.length} element(s) in ${Math.round(performance.now() - t0)} ms${res.error ? ` (${res.error})` : ""}: ${ask.visual}`);
+            if (!els.length) return;
+            // What the board shows now (the scene so far, this beat finished), with the sketch drawing on top.
+            const base = sceneGroups(list, i, owner.beat.mode === "draw" ? (owner.elements ?? []) : []);
+            // Marked solid: a later beat planned onto this spot is moved off the sketch, not drawn over it.
+            owner.sketches = [...(owner.sketches ?? []), ...els.map((e) => ({ ...e, solid: true }))];
+            owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
+            views.set(scene, view);
+            if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
+            const compiled = compileScene([...base, els], { view, from: before }, scene, otherScenes(scene, i + 1));
+            if (!compiled) return;
+            // The ink stays where it was until the zoom starts, then moves with the board.
+            zoomFrom = before;
+            zoomTo = view;
+            zoomingRef.current = view !== before;
+            cameraRef.current = cameraFor(before);
+            showSceneBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene), view, scene));
+            await showDocument(compiled.doc);
+            const a = audio as StreamPlayer | null;
+            if (a && !a.drained) sketchStart = a.position();
+            else {
+              await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+              zoomingRef.current = false;
+              cameraRef.current = cameraFor(view);
+            }
+          })
+          .catch((e) => console.warn("[sketch]", e));
+      };
       const sentences: { text: string; tts?: Promise<Response> }[] = [];
       // Speech for the sentence playing and one ahead only: Sonic slows down when many streams run at once.
       let playingIndex = 0;
@@ -1064,14 +1648,18 @@ export default function Lesson() {
           "/api/converse",
           {
             utterance,
-            question: q,
+            question: lessonStarted ? q : "",
             beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, section: s.beat.section, check: s.beat.check })),
             beatIndex: i,
             wordIndex,
-            board: boardRef.current.list,
+            board: boardRef.current.list.map((e) => ({ ...e, ...(boardRef.current.boxes[e.id] ? { box: localBox(boardRef.current.boxes[e.id], boardRef.current.scene) } : {}) })),
+            scene: boardRef.current.scene,
+            scenes: sceneRefs(),
+            lesson: transcript.id,
             history: history.slice(-6),
             escalation,
             learner,
+            ...(inkPayload ? { ink: inkPayload } : {}),
           },
           signal,
         );
@@ -1086,11 +1674,15 @@ export default function Lesson() {
               wake();
             } else if (ev.type === "done") {
               replyCalls = ev.calls ?? [];
+            } else if (ev.type === "retrieval") {
+              logEv({ kind: "retrieval", board: ev.board, memory: ev.memory, ms: ev.tMs });
             } else if (ev.type === "level") {
               onLevel?.(ev.level);
             } else if (ev.type === "trailer") {
               modelCues = ev.modelCues ?? [];
               trailer = ev.trailer;
+              onTrailer?.(ev.trailer);
+              startSketch(ev.trailer);
               cue();
             } else if (ev.type === "error") throw new Error(ev.message);
           }
@@ -1106,6 +1698,7 @@ export default function Lesson() {
         cursorClockRef.current = () => Math.max(0, audio?.position() ?? 0);
         const frame = () => {
           raf = requestAnimationFrame(frame);
+          if (pausedRef.current || signal.aborted) return;
           const t = audio?.position() ?? -1;
           if (t >= 0) {
             const w = wordAt(t, all);
@@ -1114,6 +1707,18 @@ export default function Lesson() {
               captionAwaitingSpeech.current = false;
               setLearnerCaption("");
             }
+          }
+          // The sketch (and any zoom) draws on the reply's clock, so Stop freezes it too.
+          if (sketchStart >= 0 && t >= 0 && zoomingRef.current) {
+            const u = (t - sketchStart) / ZOOM_SECONDS;
+            cameraRef.current = cameraBetween(zoomFrom, zoomTo, u);
+            if (u >= 1) zoomingRef.current = false;
+          }
+          const player = playerRef.current;
+          if (sketchStart >= 0 && t >= 0 && player && !sketchSeeking) {
+            sketchSeeking = true;
+            const tick = Math.max(0, Math.min(DOC_END - FRAME_TICKS, Math.round(((t - sketchStart) * TPS) / FRAME_TICKS) * FRAME_TICKS));
+            player.seek(tick).finally(() => (sketchSeeking = false));
           }
         };
         raf = requestAnimationFrame(frame);
@@ -1132,8 +1737,7 @@ export default function Lesson() {
             if (signal.aborted) break;
             if (ev.type === "start" && !audio) {
               audio = new StreamPlayer(ctx, ev.sampleRate, ev.encoding);
-              if (pausedRef.current) audio.pause();
-              audioRef.current = audio;
+                  audioRef.current = audio;
               offset = 0;
             } else if (ev.type === "audio" && audio) {
               audio.append(ev.data);
@@ -1155,6 +1759,16 @@ export default function Lesson() {
         }
         await reading;
         while (!signal.aborted && audio && !(audio as StreamPlayer).drained) await sleep(30);
+        // A sketch still being drawn gets a few more seconds to land before the lesson moves on.
+        await Promise.race([sketchShown, sleep(5000)]);
+        if (sketchStart >= 0) {
+          sketchStart = -1;
+          await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+        }
+        if (zoomingRef.current) {
+          zoomingRef.current = false;
+          cameraRef.current = cameraFor(zoomTo);
+        }
         if (signal.aborted || !trailer) return null;
         setWordIndexNow(all.words.length);
         const saidText = sentences.map((x) => x.text).join(" ");
@@ -1163,6 +1777,7 @@ export default function Lesson() {
           kind: "reply",
           who: "chalky",
           text: saidText,
+          actions: t.actions,
           level: t.level,
           resume: t.resume,
           check: t.check,
@@ -1185,6 +1800,12 @@ export default function Lesson() {
         return null;
       } finally {
         cancelAnimationFrame(raf);
+        replyLive = false;
+        // Cut off mid-zoom: land where the board is going.
+        if (zoomingRef.current) {
+          zoomingRef.current = false;
+          cameraRef.current = cameraFor(zoomTo);
+        }
         abort.signal.removeEventListener("abort", onStop);
         if (replyAbortRef.current === replyAbort) replyAbortRef.current = null;
         lastSpokeRef.current = performance.now();
@@ -1205,7 +1826,9 @@ export default function Lesson() {
      * Returns the list position to play next (`resumeAt` replays the beat cut
      * off), or -1 when the lesson was stopped.
      */
-    const converseAt = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
+    const converseAt = (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> =>
+      converseTurns(i, wordIndex, resumeAt, bridge).finally(() => showInk([]));
+    const converseTurns = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
       setStatus("waiting");
       // Cut off during a check-in beat: whatever the learner says next settles that check, so going on
       // continues after it instead of replaying it and asking the same question again.
@@ -1219,7 +1842,7 @@ export default function Lesson() {
         logEv({
           kind: "learner",
           via: heardText === null ? "button" : inputViaRef.current,
-          role: wordIndex >= 0 ? "cut-in" : bridge ? "check-in" : "between beats",
+          role: !lessonStarted ? "before a lesson" : wordIndex >= 0 ? "cut-in" : bridge ? "check-in" : "between beats",
           beatId: list[i]?.beat.id ?? null,
           wordIndex,
           text: heardText ?? "(Continue)",
@@ -1235,6 +1858,7 @@ export default function Lesson() {
           dropDraft();
           setPausedAt(null);
           setLastLevel(heardText === null ? "continue (button)" : `continue (local, no model call${bridge ? ", bridge" : ""})`);
+          await backToLesson(resumeAt);
           // At a check-in, take a breath and say what comes next: written by the planner, no model call.
           if (bridge && !abort.signal.aborted) {
             logEv({ kind: "say", who: "chalky", role: "bridge", text: bridge });
@@ -1246,20 +1870,66 @@ export default function Lesson() {
         history.push({ who: "learner", text: heardText });
         // A quick second utterance may be merged into this while the reply runs (see mergeRef).
         lastLearnerRef.current = { text: heardText, at: performance.now() };
+        // A hesitant yes is noted on the learner record (later replies and plans see it), not re-explained.
+        if (isHesitant(heardText)) {
+          const about = list[i]?.beat.check ? list[i].beat.say.split(/(?<=[.!?])\s+/).filter((x) => x.trim().endsWith("?")).pop() : list[i]?.beat.section;
+          learner.confusions = [...learner.confusions, `hesitant ("${heardText}") at: ${about ?? list[i]?.beat.say.slice(0, 80) ?? "the check-in"}`].slice(-5);
+          noteLearner();
+          logEv({ kind: "hesitation", text: heardText, beatId: list[i]?.beat.id ?? null });
+        }
+        // A new question starts fresh: only "still lost" builds on the last answer (and its drafted detour).
+        if (!isStillLost(heardText)) {
+          escalation = 0;
+          dropDraft();
+        }
         // A detour is decided before the lead-in is spoken: start planning (and drawing) it right away.
-        const reply = await speakReply(heardText, i, wordIndex, (level) => {
-          if (level === "detour" && !(draft && draft.at === resumeAt)) {
-            dropDraft();
-            draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText, "a one-sentence hand-off, like \"Let me draw that for you.\"");
-          }
-        });
+        // A lesson the reply starts begins planning as soon as its actions arrive, while the reply is spoken.
+        const reply = await speakReply(
+          heardText,
+          i,
+          wordIndex,
+          (level) => {
+            if (level === "detour" && lessonStarted && !(draft && draft.at === resumeAt)) {
+              dropDraft();
+              draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText, "a one-sentence hand-off, like \"Let me draw that for you.\"");
+            }
+          },
+          (t) => {
+            if (t.lesson && !lessonStarted) startLesson(t.lesson);
+          },
+        );
         if (abort.signal.aborted) return -1;
         if (!reply) {
           setStatus("waiting");
           continue;
         }
         history.push({ who: "chalky", text: reply.said });
-        const { trailer } = reply;
+        let trailer = reply.trailer;
+        // An ask whose question the reply never got to say (the sentence cap): say it now, so the wait has a question.
+        const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (trailer.check && !norm(reply.said).includes(norm(trailer.check).slice(0, 40))) {
+          logEv({ kind: "say", who: "chalky", role: "ask (unspoken in the reply)", text: trailer.check });
+          setStatus("speaking");
+          await playBeat(line(trailer.check), abort.signal, null).catch(() => {});
+          history.push({ who: "chalky", text: trailer.check });
+        }
+        // Over the board: go_to moves the camera, highlight circles; a delegate's actions arrive after it and
+        // apply the same way (its amend and resume replace the reply's).
+        if (trailer.goTo) await goTo(trailer.goTo, Math.max(i, 0));
+        if (trailer.highlights?.length) highlight(trailer.highlights);
+        if (trailer.delegate) {
+          const acts = await delegateTo(trailer.delegate, heardText, i);
+          if (abort.signal.aborted) return -1;
+          const g = acts.find((a) => a.type === "go_to");
+          if (g && g.type === "go_to") await goTo(g, Math.max(i, 0));
+          const hs = acts.flatMap((a) => (a.type === "highlight" ? [{ element: a.element, region: a.region }] : []));
+          if (hs.length) highlight(hs);
+          const am = acts.find((a) => a.type === "amend");
+          const rs = acts.find((a) => a.type === "resume");
+          if (am && am.type === "amend") trailer = { ...trailer, amend: { op: am.op, index: am.index, note: am.note, ...(am.count ? { count: am.count } : {}) }, planner_note: am.note, level: am.op === "replace_from" ? "replan" : am.op === "insert_after" ? "detour" : trailer.level };
+          if (rs && rs.type === "resume") trailer = { ...trailer, resume: rs.how };
+          else if (g) trailer = { ...trailer, resume: "wait" };
+        }
         if (trailer.planner_note) {
           learner.confusions = [...learner.confusions, trailer.planner_note].slice(-5);
           noteLearner();
@@ -1271,6 +1941,7 @@ export default function Lesson() {
           dropDraft();
           setPausedAt(null);
           // Either the reply or the bridge carries the lesson forward, not both.
+          await backToLesson(resumeAt);
           if (bridge && spoken && LOOKS_AHEAD.test(spoken)) logEv({ kind: "bridge-skipped", reason: "the reply already looked ahead", bridge });
           else if (bridge && !abort.signal.aborted) {
             logEv({ kind: "say", who: "chalky", role: "bridge", text: bridge });
@@ -1279,6 +1950,31 @@ export default function Lesson() {
           }
           return resumeAt;
         };
+        // Before a lesson: a short answer or a greeting back waits for more; a started lesson goes on to
+        // its beats, with the reply's question (if any) as the intake.
+        if (i < 0) {
+          if (lessonStarted) {
+            pendingIntake = trailer.check;
+            return 0;
+          }
+          setStatus("waiting");
+          continue;
+        }
+        // Asked to teach it properly mid-lesson: the rest of the lesson is rewritten for that.
+        if (trailer.lesson) {
+          replan(resumeAt, `The learner asked for a full lesson: ${trailer.lesson.question}${trailer.lesson.focus ? ` (${trailer.lesson.focus})` : ""}.`, heardText, false, reply.said);
+          return resumeAt;
+        }
+        // Beats that no longer apply (a sketch covered them): dropped from the plan, never from what was said.
+        if (trailer.amend?.op === "delete") {
+          const from = Math.max(resumeAt, trailer.amend.index - 1);
+          const gone = list.splice(from, Math.min(trailer.amend.count ?? 1, Math.max(0, list.length - from)));
+          if (gone.length) {
+            dropPrefetches("beats deleted");
+            logEv({ kind: "beats-deleted", beatIds: gone.map((b) => b.beat.id), note: trailer.amend.note });
+            setBeats([...list]);
+          }
+        }
         if (trailer.level === "confirm") return await goOn(reply.said);
         if (trailer.level === "replan") {
           escalation = 0;
@@ -1291,10 +1987,29 @@ export default function Lesson() {
           const d = draft && draft.at === resumeAt ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText, reply.said));
           draft = null;
           setStatus("planning");
-          const detour = await d.beats.catch(() => [] as BeatState[]);
+          // Start on the first beat as soon as it streams in; the rest join behind it as they arrive.
+          const firstBeat = await d.first;
           if (abort.signal.aborted) return -1;
-          if (detour.length) {
-            logEv({ kind: "detour", at: resumeAt, beats: detour.map((d) => ({ beatId: d.beat.id, mode: d.beat.mode, say: d.beat.say })) });
+          if (firstBeat) {
+            const detour = d.out.slice();
+            const done = d.beats.then(
+              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say })) }),
+              () => {},
+            );
+            const g = { last: detour[detour.length - 1], done };
+            growing = g;
+            d.onBeat = (s) => {
+              const k = list.indexOf(g.last);
+              if (k < 0) return;
+              list.splice(k + 1, 0, s);
+              g.last = s;
+              setBeats([...list]);
+              notify();
+            };
+            void done.finally(() => {
+              if (growing === g) growing = null;
+              notify();
+            });
             dropPrefetches("detour inserted");
             // A talk or check-in beat cut off for this detour is not replayed: the detour's own closing check replaces it.
             const cut = wordIndex >= 0 ? list[i] : undefined;
@@ -1323,21 +2038,35 @@ export default function Lesson() {
     try {
       // The intake: ask one question, wait for an answer (or ~4 s of silence), and let the fast model
       // decide whether the plan should change after beat 1. The plan has been streaming meanwhile.
-      const iq = await intakeAsk;
+      // Before a lesson: the first words, and whatever follows, go to the conversation model until one of
+      // its replies starts a lesson.
+      if (!direct) {
+        queueRef.current.unshift(q);
+        while (!lessonStarted && !abort.signal.aborted) {
+          const next = await converseAt(-1, -1, 0);
+          if (next < 0) break;
+        }
+        if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
+      }
+      const iq = direct ? await intakeAsk : pendingIntake ? { say: pendingIntake, kind: "action", model: "converse", ms: undefined, call: undefined, spoken: true } : null;
       if (iq?.say && !abort.signal.aborted) {
         const tAsk = performance.now();
-        logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms, call: iq.call ?? null });
-        setStatus("speaking");
-        await playBeat(line(iq.say), abort.signal, null, onFirstSound);
+        if ("spoken" in iq) logEv({ kind: "intake-asked", text: iq.say, by: "ask action" });
+        else {
+          logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms, call: iq.call ?? null });
+          setStatus("speaking");
+          await playBeat(line(iq.say), abort.signal, null, onFirstSound);
+        }
         setStatus("waiting");
         const answer = await (async () => {
           const waiting = awaitTurn(abort.signal);
-          const deadline = performance.now() + INTAKE_SILENCE_MS;
+          let deadline = performance.now() + INTAKE_SILENCE_MS;
           let started = false;
           const timer = setInterval(() => {
             // Silence lets the lesson go on, but only if the learner hasn't started answering at all:
-            // once they speak or type, the patient turn end decides when they're done.
-            if (partialRef.current.trim() || draftRef.current.trim()) started = true;
+            // once they speak or type, the patient turn end decides when they're done. Stopped holds it open.
+            if (pausedRef.current) deadline = performance.now() + INTAKE_SILENCE_MS;
+            else if (partialRef.current.trim() || draftRef.current.trim()) started = true;
             if (!started && performance.now() > deadline) turnRef.current?.(null);
           }, 200);
           try {
@@ -1417,6 +2146,8 @@ export default function Lesson() {
           continue;
         }
         if (i >= 1) await intakeGate;
+        // A detour still streaming in: its next beat goes right here, so wait for it (or for the detour to end).
+        for (let g = growing; g && i > 0 && list[i - 1] === g.last && !abort.signal.aborted; g = growing as Growing | null) await Promise.race([changed(), g.done]);
         await waitWhilePaused(abort.signal);
         if (abort.signal.aborted) break;
         if (i >= list.length) {
@@ -1427,14 +2158,33 @@ export default function Lesson() {
         currentBeatIdRef.current = list[i].beat.id;
         setStatus("speaking");
         const bi = i;
+        // A point beat whose elements are on another scene's place: the camera goes there and the cursor
+        // circles them, instead of a drawing that has nothing to point at.
+        let elsewhere: string | null = null;
+        if (list[bi].beat.mode === "point" && list[bi].beat.points.length) {
+          const ids = list[bi].beat.points.map((p) => p.id);
+          const here = sceneBoards.get(list[bi].beat.scene);
+          if (!ids.some((id) => here?.boxes[id])) elsewhere = ids.find((id) => [...sceneBoards.values()].some((v) => v.boxes[id])) ?? null;
+          if (elsewhere) {
+            logEv({ kind: "point-elsewhere", beatId: list[bi].beat.id, element: elsewhere });
+            await goTo({ element: elsewhere }, bi - 1);
+            highlight([{ element: elsewhere }]);
+          }
+        }
         const compile: Compile | null =
-          list[bi].beat.mode === "talk"
+          list[bi].beat.mode === "talk" || elsewhere
             ? null
             : (currentElements) => {
                 let groups = sceneGroups(list, bi, currentElements);
+                const scene = list[bi].beat.scene;
+                const view = viewOf(scene);
+                // A new scene: the camera glides from where the board was to this scene's place.
+                const from = shownScene && shownScene !== scene ? viewOf(shownScene) : undefined;
+                const tc = performance.now();
+                const others = otherScenes(scene, bi);
                 let compiled: ReturnType<typeof compileScene> = null;
                 try {
-                  compiled = compileScene(groups);
+                  compiled = compileScene(groups, { view, from }, scene, others);
                 } catch (e) {
                   // One bad drawing (a NaN size, say) must not end the lesson: keep the board without it.
                   logEv({ kind: "board-error", beatId: list[bi].beat.id, error: String((e as Error).message ?? e).slice(0, 200) });
@@ -1442,21 +2192,25 @@ export default function Lesson() {
                   // Find the drawing(s) that break it by compiling each on its own, and leave only those out.
                   groups = groups.map((g) => {
                     try {
-                      compileScene([g]);
+                      compileScene([g], { view });
                       return g;
                     } catch {
                       return [];
                     }
                   });
                   try {
-                    compiled = compileScene(groups);
+                    compiled = compileScene(groups, { view, from }, scene, others);
                   } catch {
                     compiled = null;
                   }
                 }
                 if (!compiled) return null;
-                const scene = list[bi].beat.scene;
-                showBoard(boardView(compiled.report, groups.flat(), list.filter((b) => b.beat.scene === scene).flatMap((b) => b.beat.adds)));
+                const compileMs = Math.round(performance.now() - tc);
+                console.info(`[board] ${list[bi].beat.id}: scene ${scene}${from ? ` (camera from scene ${shownScene})` : ""} ${groups.flat().length} elements, ${others.length} other scene(s) on the board, compiled in ${compileMs} ms`);
+                logEv({ kind: "board-compiled", beatId: list[bi].beat.id, scene, otherScenes: others.map((o) => o.scene), ms: compileMs, ...(from ? { cameraFrom: shownScene } : {}) });
+                shownScene = scene;
+                wentAway = false;
+                showSceneBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene), view, scene));
                 return compiled.doc;
               };
         const beatAbort = new AbortController();
@@ -1560,27 +2314,52 @@ export default function Lesson() {
     askRef.current = (q) => void ask(q);
   }, [ask]);
 
-  /** Pauses right where Chalky is: sound, board and cursor freeze (they follow the audio clock); the mic opens. */
-  const pausePlayback = useCallback(() => {
+  /**
+   * Pauses right where Chalky is: its audio is held, so sound, board and cursor freeze (they follow the
+   * audio clock). `listening`: a barge-in, the mic hears the learner; otherwise Chalky is stopped outright.
+   * A barge-in only happens while Chalky talks; a stop works at any point of a running lesson.
+   */
+  const pausePlayback = useCallback((listening = true) => {
     const st = statusRef.current;
-    if (pausedRef.current || (st !== "speaking" && st !== "replying")) return;
-    pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
-    audioRef.current?.pause();
+    const p = pausedRef.current;
+    if (p) {
+      // Already paused to listen, and now a tap or Stop: stop listening too.
+      if (!listening && p.listening) {
+        p.listening = false;
+        setHaltedNow(true);
+        queueRef.current = [];
+        setDraft("");
+        logRef.current({ kind: "pause", beatId: p.beatId, wordIndex: p.wordIndex, during: "paused", listening: false });
+      }
+      return;
+    }
+    if (!abortRef.current || abortRef.current.signal.aborted) return;
+    if (listening ? st !== "speaking" && st !== "replying" : !MUTED.has(st) && st !== "waiting" && st !== "listening") return;
+    pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, listening };
+    void holdAudio(true);
     playerRef.current?.pause();
     speakingRef.current = false;
     setSpeakingAudio(false);
-    setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
+    if (st === "speaking" || st === "replying") setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
     setStatusRaw("paused");
-    logRef.current({ kind: "pause", beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, during: st });
-  }, []);
+    setPaused(true);
+    if (!listening) {
+      setHaltedNow(true);
+      queueRef.current = [];
+      setDraft("");
+    }
+    logRef.current({ kind: "pause", beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current, during: st, listening });
+  }, [setHaltedNow]);
 
-  /** Goes on from exactly where the pause was (a second Space tap, or Continue). */
+  /** Goes on from exactly where the pause was (Space, Start or Continue). */
   const resumePlayback = useCallback(() => {
     const p = pausedRef.current;
     if (!p) return;
     pausedRef.current = null;
     captionAwaitingSpeech.current = true;
-    audioRef.current?.resume();
+    setHaltedNow(false);
+    setPaused(false);
+    void holdAudio(false);
     if (audioRef.current && !audioRef.current.drained) {
       speakingRef.current = true;
       setSpeakingAudio(true);
@@ -1589,18 +2368,28 @@ export default function Lesson() {
     setStatusRaw(p.prev);
     logRef.current({ kind: "resume", beatId: p.beatId, wordIndex: p.wordIndex, pausedMs: Math.round(performance.now() - p.at) });
     unpauseWaiters.current.splice(0).forEach((r) => r());
-  }, []);
+  }, [setHaltedNow]);
 
   /** Stops Chalky to listen: the beat (replayed or settled later) or the reply in flight is cut. */
   const interrupt = useCallback(() => {
-    // A cut-in from a pause ends the pause: what is cut is what was paused.
+    // A cut-in from a pause ends the pause: what is cut is what was paused. Its audio is stopped first,
+    // then the hold is let go, so not a sample of it plays on.
     const p = pausedRef.current;
     if (p) {
       pausedRef.current = null;
+      setHaltedNow(false);
+      setPaused(false);
       setStatusRaw(p.prev);
       statusRef.current = p.prev;
       unpauseWaiters.current.splice(0).forEach((r) => r());
     }
+    try {
+      cutIn();
+    } finally {
+      if (p) void holdAudio(false);
+    }
+  }, [setHaltedNow]);
+  const cutIn = () => {
     const st = statusRef.current;
     if (st !== "speaking" && st !== "replying") return;
     const reply = replyAbortRef.current;
@@ -1625,10 +2414,14 @@ export default function Lesson() {
     // The audio is cut: open the mic now rather than after the echo tail.
     setSpeaking(false);
     setStatus("waiting");
-  }, [setSpeaking]);
+  };
+  /** Stop (and Pause, and a Space tap): Chalky freezes where it is and takes no input until Start. */
+  const halt = useCallback(() => pausePlayback(false), [pausePlayback]);
+
   useEffect(() => {
     // Space down (the hybrid mic's barge-in) pauses at once; holding and talking then cuts in.
-    pauseRef.current = pausePlayback;
+    pauseRef.current = () => pausePlayback(true);
+    haltRef.current = halt;
     cutInRef.current = interrupt;
     lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && (MUTED.has(statusRef.current) || !!pausedRef.current) && !turnRef.current;
     mergeRef.current = (said) => {
@@ -1648,7 +2441,7 @@ export default function Lesson() {
       interrupt();
       return true;
     };
-  }, [interrupt, pausePlayback, resumePlayback]);
+  }, [interrupt, pausePlayback, resumePlayback, halt]);
 
   // Space is a toggle: a tap while Chalky talks pauses, a tap while paused resumes. With the mic on, the
   // hybrid mic sees Space first (it pauses on key down, and holding it talks); without it, this does.
@@ -1662,7 +2455,7 @@ export default function Lesson() {
         resumePlayback();
       } else if (statusRef.current === "speaking" || statusRef.current === "replying") {
         e.preventDefault();
-        pausePlayback();
+        pausePlayback(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1686,7 +2479,7 @@ export default function Lesson() {
 
   const submit = () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || haltedRef.current) return;
     inputViaRef.current = "typed";
     if (mergeRef.current(text)) {
       setDraft("");
@@ -1704,15 +2497,19 @@ export default function Lesson() {
   };
 
   const waitingForLearner = status === "waiting" || status === "listening" || status === "paused";
+  const onScreenBoxes = useMemo(() => screenBoxes(board.boxes, board.view), [board]);
+  /** The pen works once something is on the board and a lesson is running; drawing while Chalky talks pauses it. */
+  const penReady = !halted && board.list.length > 0 && ["speaking", "paused", "waiting", "listening", "replying"].includes(status);
   const busy = ["planning", "speaking", "paused", "waiting", "listening", "replying"].includes(status) && !!question;
   const orbState: OrbState =
-    status === "speaking" ? "speaking"
+    halted ? "idle"
+    : status === "speaking" ? "speaking"
     : status === "planning" || status === "replying" ? "thinking"
     : voice.started ? "listening"
     : "idle";
   const orbLevel = useCallback(() => (speakingRef.current ? (audioRef.current?.level() ?? 0) : voice.level()), [voice]);
   const statusLabel: Record<Status, string> = {
-    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", paused: "Paused · Space to go on", waiting: "Your turn",
+    idle: voice.started ? "Listening" : "Ready", planning: "Planning…", speaking: voice.mode === "held" ? "Listening" : "Speaking", paused: halted ? "Paused · Space or Start to go on" : "Paused · listening", waiting: "Your turn",
     listening: "Listening", replying: "Thinking…", done: voice.started ? "Done · ask another" : "Done", stopped: "Stopped", error: "Error",
   };
   const [lecturePreview, setLecturePreview] = useState(false);
@@ -1733,7 +2530,7 @@ export default function Lesson() {
 
   return (
     <div className="board-wrap tutor-wrap">
-      <div className="board lesson-board tutor-board" data-status={status} data-mic={voice.mode}>
+      <div className="board lesson-board tutor-board" data-status={status} data-mic={voice.mode} data-scene={board.scene} data-view={`${Math.round(board.view.x)},${Math.round(board.view.y)},${Math.round(board.view.w)}`}>
         {!voice.started && <button type="button" className="preview-lecture" onClick={() => setLecturePreview(v => !v)}>{lecturePreview ? "Exit preview" : "Preview lecture"}<span>Temporary</span></button>}
         <h1 hidden data-testid="title">{title}</h1>
         <section className="stage" data-testid="stage">
@@ -1752,7 +2549,29 @@ export default function Lesson() {
                 </div>
               </div>
             )}
-            <ChalkyCursor boxes={board.boxes} script={cursorScript} clock={cursorClock} />
+            <InkLayer
+              width={W}
+              height={H}
+              enabled={penReady}
+              strokes={ink}
+              color={inkColor}
+              camera={readCamera}
+              onPenDown={() => {
+                // Drawing while Chalky talks is cutting in, like Space.
+                if (lessonBusyRef.current()) pauseRef.current();
+              }}
+              onStroke={(stroke) => showInk([...inkRef.current, stroke])}
+            />
+            <ChalkyCursor boxes={onScreenBoxes} script={cursorScript} clock={cursorClock} />
+            {penReady && (
+              <div className="pen" data-testid="pen">
+                {INK_COLORS.map((c) => (
+                  <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Pen colour ${c}`} aria-pressed={c === inkColor} onClick={() => setInkColor(c)} />
+                ))}
+                <button type="button" onClick={() => showInk(inkRef.current.slice(0, -1))} disabled={!ink.length} data-testid="ink-undo">Undo</button>
+                <button type="button" onClick={() => showInk([])} disabled={!ink.length} data-testid="ink-clear">Clear</button>
+              </div>
+            )}
           </div>
           {lecturePreview && <svg className="lecture-preview-diagram" viewBox="0 0 900 480" role="img" aria-label="Sample lesson: how plants turn sunlight into energy">
             <text x="450" y="48" textAnchor="middle" fontSize="32" fill="#302b24">How plants turn sunlight into energy</text>
@@ -1789,7 +2608,7 @@ export default function Lesson() {
           )}
           {layoutMs !== null && <p className="beat-meta" data-testid="layout-ms">Layout pass took {(layoutMs / 1000).toFixed(1)} s.</p>}
           {lastReplyMs !== null && <p className="beat-meta" data-testid="reply-ms">Last answer: first sound {(lastReplyMs / 1000).toFixed(1)} s after the learner finished.</p>}
-          {lastLevel && <p className="beat-meta" data-testid="last-level">Last turn: {lastLevel}</p>}
+          {lastLevel && <p className="beat-meta" data-testid="last-level" data-turn={turns}>Last turn: {lastLevel}</p>}
           {intakeView && <p className="beat-meta" data-testid="intake">Intake: {intakeView}</p>}
           {prefetchStats.fetched > 0 && (
             <p className="beat-meta" data-testid="prefetch">
@@ -1804,14 +2623,14 @@ export default function Lesson() {
           {pausedAt && <p className="beat-meta" data-testid="paused-at">Paused at {pausedAt.beatId}, word {pausedAt.wordIndex + 1}.</p>}
         </aside>
         <div className="conversation-dock">
-          <div className="shared-transcript" data-testid="caption" aria-live="polite">
-            {lecturePreview ? <p>Think of the leaf as a tiny kitchen.</p> : learnerCaption ? <p data-testid="heard">{learnerCaption.trim().split(/\s+/).slice(-24).map((word,i,list) => <span key={i} className={i === list.length-1 ? "transcript-word current learner-word" : "transcript-word"}>{word} </span>)}</p> : heardNote && !question ? <p data-testid="heard-note">{heardNote}</p> : <p>{captionWindow(words, wordIndexNow).map(({word,index}) => <span key={index} className={index === wordIndexNow ? "transcript-word current chalky-word" : "transcript-word"} data-state={index === wordIndexNow ? "now" : "spoken"}>{word} </span>)}</p>}
+          <div className="shared-transcript caption" data-testid="caption" aria-live="polite">
+            {lecturePreview ? <p>Think of the leaf as a tiny kitchen.</p> : learnerCaption ? <p data-testid="heard">{learnerCaption.trim().split(/\s+/).slice(-24).map((word,i,list) => <span key={i} className={i === list.length-1 ? "transcript-word current learner-word" : "transcript-word"}>{word} </span>)}</p> : heardNote && !question ? <p data-testid="heard-note">{heardNote}</p> : <p>{captionWindow(words, wordIndexNow).map(({word,index}) => <span key={index} className={index === wordIndexNow ? "transcript-word word current chalky-word" : "transcript-word word"} data-state={index === wordIndexNow ? "now" : "spoken"}>{word} </span>)}</p>}
           </div>
           <div className="voice-actions">
             {lecturePreview ? <button className="start-voice" onClick={() => setLecturePreview(false)}>Back to start</button> : <>
               {<button className="start-voice" type="button" onClick={() => { if (!voice.started) { void startTalking(); return; } setMicMuted(value => !value); }} aria-pressed={voice.started ? micMuted : undefined} data-testid="start-talking"><svg width="18" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/>{micMuted && <path d="M3 3l18 18"/>}<path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>{!voice.started ? "Start talking" : micMuted ? "Unmute" : "Mute"}</button>}
             {status === "speaking" && busy && (
-              <button className="quiet-action" type="button" onClick={pausePlayback} data-testid="interrupt" title="Space">Pause</button>
+              <button className="quiet-action" type="button" onClick={() => pausePlayback(true)} data-testid="interrupt" title="Space">Pause</button>
             )}
             {waitingForLearner && (
               <button type="button" className="quiet-action" onClick={() => (pausedRef.current ? resumePlayback() : turnRef.current?.(null))} data-testid="continue">Continue</button>

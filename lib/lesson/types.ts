@@ -111,11 +111,19 @@ export interface CallLog {
   retries: number;
   attempts: CallAttempt[];
   error: string | null;
+  /** For a plan change: what each scene holds once it is in, and what the scene rules fixed (lib/lesson/scenes.ts). */
+  layout?: {
+    scenes: { scene: number; kept: number; draws: number; points: number }[];
+    deduped: string[];
+    replaced: number;
+    movedOn: number;
+    notes: string[];
+  };
 }
 
 /** NDJSON events from POST /api/plan. */
 export type PlanEvent =
   | { type: "title"; title: string; tMs: number }
   | { type: "beat"; beat: PlannedBeat; tMs: number }
-  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number; call?: CallLog }
+  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number; call?: CallLog; notes?: string[] }
   | { type: "error"; message: string; tMs: number };

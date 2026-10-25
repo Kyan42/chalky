@@ -1,5 +1,5 @@
 /**
- * POST /api/converse  { utterance, question, beats, beatIndex, wordIndex, board, history, escalation }
+ * POST /api/converse  { utterance, question, beats, beatIndex, wordIndex, board, history, escalation, ink? }
  *   →  NDJSON stream of ConverseEvent: start, sentence…, trailer, done.
  *
  * The fast reply to whatever the learner says mid-lesson. When the browser
@@ -8,6 +8,9 @@
 import { converse, type ConverseEvent, type ConverseInput } from "@/lib/lesson/converse";
 import { decideIntake, intakeQuestion } from "@/lib/lesson/intake";
 import { cleanLearner, type BeatMode } from "@/lib/lesson/types";
+import { learnerIdFrom } from "@/lib/convexMirror";
+import { learnerMemory } from "@/lib/moss/memory";
+import { searchDocs } from "@/lib/moss/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +33,10 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     ? body.board.slice(0, 80).flatMap((e) => {
         const o = (e ?? {}) as Record<string, unknown>;
         const id = str(o.id, 60).trim();
-        return id ? [{ id, kind: str(o.kind, 30) || "element", label: str(o.label, 120) }] : [];
+        const b = (o.box ?? null) as Record<string, unknown> | null;
+        const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+        const box = b && [b.x, b.y, b.w, b.h].every((v) => num(v) !== null) ? { x: num(b.x)!, y: num(b.y)!, w: num(b.w)!, h: num(b.h)! } : undefined;
+        return id ? [{ id, kind: str(o.kind, 30) || "element", label: str(o.label, 120), ...(box ? { box } : {}) }] : [];
       })
     : [];
   const history = Array.isArray(body.history)
@@ -41,8 +47,31 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
       })
     : [];
   const esc = int(body.escalation, 0);
+  const inkBody = (body.ink ?? null) as Record<string, unknown> | null;
+  const HOWS = new Set(["circled", "pointed at", "drew over"]);
+  const marks = Array.isArray(inkBody?.marks)
+    ? inkBody.marks.slice(0, 5).flatMap((m) => {
+        const o = (m ?? {}) as Record<string, unknown>;
+        const id = str(o.id, 60).trim();
+        const how = str(o.how, 20);
+        return id && HOWS.has(how) ? [{ id, label: str(o.label, 120), how: how as "circled" | "pointed at" | "drew over", ...(o.latest === true ? { latest: true } : {}) }] : [];
+      })
+    : [];
+  // A JPEG of the board, base64: under about 1 MB, or it is dropped.
+  const image = typeof inkBody?.image === "string" && inkBody.image.length < 1_400_000 && /^[A-Za-z0-9+/=]+$/.test(inkBody.image) ? inkBody.image : undefined;
+  const loose = int(inkBody?.loose, 0);
+  const scenes = Array.isArray(body.scenes)
+    ? body.scenes.slice(0, 20).flatMap((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        const scene = int(o.scene, 0);
+        const ids = Array.isArray(o.ids) ? o.ids.filter((i): i is string => typeof i === "string").slice(0, 40).map((i) => i.slice(0, 60)) : [];
+        return scene > 0 ? [{ scene, title: str(o.title, 120), ids }] : [];
+      })
+    : [];
   return {
     utterance,
+    ...(int(body.scene, 0) > 0 ? { scene: int(body.scene, 0) } : {}),
+    ...(scenes.length ? { scenes } : {}),
     question: str(body.question, 500),
     beats,
     beatIndex: Math.min(beats.length - 1, int(body.beatIndex, -1)),
@@ -51,6 +80,7 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     history,
     escalation: esc >= 2 ? 2 : esc === 1 ? 1 : 0,
     learner: cleanLearner(body.learner),
+    ...(marks.length || loose > 0 ? { ink: { marks, loose: Math.min(20, Math.max(0, loose)), ...(image ? { image } : {}) } } : {}),
   };
 }
 
@@ -72,6 +102,19 @@ export async function POST(request: Request) {
   }
   const input = parse(body);
   if (typeof input === "string") return Response.json({ error: input }, { status: 400 });
+  // Retrieval before the call: the board elements (any scene) and the learner's earlier lines that best
+  // match what they said, both from Moss session indexes (lib/moss); neither is a tool the model calls.
+  const lesson = typeof body.lesson === "string" && /^[a-z0-9-]{8,100}$/.test(body.lesson) ? body.lesson : null;
+  const tr = performance.now();
+  const [boardHits, memory] = await Promise.all([lesson ? searchDocs(`board-${lesson}`, input.utterance, 3) : Promise.resolve(null), learnerMemory(learnerIdFrom(request, body), `${input.utterance} ${input.question}`.trim(), lesson)]);
+  if (boardHits?.hits.length) input.candidates = boardHits.hits.map((h) => ({ id: h.id, label: h.meta.label ?? h.id, scene: Number(h.meta.scene) || 1, said: h.meta.said ?? "" }));
+  if (memory.lines.length) input.memory = memory.lines;
+  const retrieval: ConverseEvent = {
+    type: "retrieval",
+    board: boardHits ? { status: boardHits.status, ms: boardHits.ms, hits: boardHits.hits.map((h) => `${h.id}@${h.meta.scene}:${h.score}`) } : null,
+    memory: { status: memory.status, ms: memory.ms, lines: memory.lines, ...(memory.docs !== undefined ? { docs: memory.docs } : {}) },
+    tMs: Math.round(performance.now() - tr),
+  };
 
   const upstream = new AbortController();
   const t0 = performance.now();
@@ -85,8 +128,13 @@ export async function POST(request: Request) {
   );
   const events = converse(input, upstream.signal);
   const encoder = new TextEncoder();
+  let sentRetrieval = false;
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
+      if (!sentRetrieval) {
+        sentRetrieval = true;
+        controller.enqueue(encoder.encode(JSON.stringify(retrieval) + "\n"));
+      }
       try {
         const { value, done } = await events.next();
         if (done) return controller.close();

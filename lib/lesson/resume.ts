@@ -28,3 +28,28 @@ export function isGreetingOnly(text: string): boolean {
   const t = text.trim();
   return t.length > 0 && GREETING.test(t);
 }
+
+/**
+ * The learner is still lost on what was just explained ("I still don't get
+ * it", "huh?", "what do you mean"), as opposed to asking something new. Only
+ * this escalates an answer to a detour; a new question starts fresh.
+ */
+const STILL_LOST = /\b(still|again|don'?t (get|understand|follow)|do not (get|understand|follow)|not (getting|following|sure)|confus|lost me|i'?m lost|what do you mean|makes? no sense|doesn'?t make sense|huh|wait what|say that again)\b|^\W*(what|huh|sorry)\W*$/i;
+
+/** A yes that isn't sure ("yeah, I think so", "kind of"): one line back, the lesson goes on, the record notes it. */
+const HESITANT = /^\W*((yeah|yes|yep|sure|ok(ay)?|um+|uh+)\W+)*(i think so|i guess( so)?|kind of|sort of|maybe|probably|not sure|i'?m not sure|more or less|somewhat|a little)\b/i;
+
+export function isHesitant(text: string): boolean {
+  return HESITANT.test(text.trim()) && text.trim().split(/\s+/).length <= 8;
+}
+
+/** The learner asked something: a question gets an answer, never a confirm that moves on. */
+const QUESTION = /\?\s*$|^\W*(why|what|how|when|where|who|which|whose|is|are|was|were|do|does|did|can|could|would|should|will|isn'?t|aren'?t|doesn'?t|don'?t)\b/i;
+
+export function isQuestion(text: string): boolean {
+  return QUESTION.test(text.trim());
+}
+
+export function isStillLost(text: string): boolean {
+  return STILL_LOST.test(text.trim());
+}
