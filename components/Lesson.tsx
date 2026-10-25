@@ -1046,9 +1046,16 @@ export default function Lesson() {
             stalled(attempt, "stream")(where);
           });
         };
+        // A prefetch held to HOLD_MAX_MS with no audio yet is already the first stall: ask again at once.
+        const heldEmpty = !!pre && !pre.failed && !pre.done && !pre.events.some((e) => e.type === "audio");
         const first = pre && !pre.failed ? guardSpeech(replayPrefetch(pre), stalled(1, "prefetch")) : fetched(1);
         return (async function* () {
           try {
+            if (heldEmpty) {
+              pre!.abort.abort();
+              stalled(1, "prefetch")("first");
+              throw new SpeechStall("prefetch held with no audio");
+            }
             yield* first;
           } catch (e) {
             if (!(e instanceof SpeechStall) || signal.aborted) throw e;
