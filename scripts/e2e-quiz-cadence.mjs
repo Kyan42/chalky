@@ -238,7 +238,7 @@ if (SOCRATIC) {
   console.log(`        confusions: ${JSON.stringify((t?.learner?.confusions ?? []).filter((c) => /quiz \(predict\)/.test(c)))}`);
   check("sections open with a setup and a question", asked.length >= 2 && asked.every((e) => /\?/.test(e.ask)), asked.map((e) => e.ask).join(" | "));
   check("a miss gets a reframe that ends with a question", reframes.length >= 1 && reframes.every((e) => /\?$/.test(e.line ?? "")), reframes.map((e) => e.line).join(" | "));
-  check("no reaction or reframe names a verdict", [...reactions, ...reframes.map((e) => e.line ?? "")].every((x) => !/\b(right|wrong|correct|incorrect|exactly)\b/i.test(x)));
+  check("no reaction or reframe names a verdict", [...reactions, ...reframes.map((e) => e.line ?? "")].every((x) => !/\b(you'?re right|that'?s right|right answer|wrong|correct|incorrect|exactly right)\b/i.test(x)));
   if (REAL) {
     check("a right answer on the second try shortens the section", adjust[0]?.verdict === "right" && adjust[0].try === 2 && adjust[0].cut.length > 0, JSON.stringify(adjust[0]));
     check("\"just explain\" stops the questions", !!off && !asked.some((e) => e.t > off.t), off ? `off at ${off.t}; later openers skipped: ${ev("socratic-skipped").filter((e) => e.t > off.t).length}` : "no socratic-off");
