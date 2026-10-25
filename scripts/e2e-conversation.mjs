@@ -177,15 +177,25 @@ try {
   const interruptedSay = target?.beatSay;
   await page.keyboard.down("Space");
   const tDown = Date.now();
-  const paused = await waitFor("the pause", (s) => s.status === "Your turn" || s.status === "Listening", 3000);
+  const paused = await waitFor("the pause", (s) => /^(Your turn|Listening|Paused)/.test(s.status ?? ""), 3000);
   check("Space pauses at once", !!paused, `${Date.now() - tDown} ms after key down; ${paused?.paused ?? ""}`);
   await page.waitForTimeout(400);
   await page.keyboard.up("Space");
   await page.waitForTimeout(600);
   const still = await state();
-  check("stays paused after a wordless press (nothing resumes on silence)", still.status === "Your turn", still.status);
+  check("stays paused after a wordless press (nothing resumes on silence)", /^(Your turn|Paused)/.test(still.status ?? ""), still.status);
 
   // 3. Type the question: a brief answer, cursor on a named element.
+  // ASK1 + EXPECT_FIRST=detour: a first question that needs a picture not on the board must draw it at once.
+  if (process.env.ASK1) {
+    await type(process.env.ASK1);
+    const first = await waitFor("the first reply's decision", (s) => /^Last turn: /.test(s.level ?? ""), 60000);
+    check(`a first question needing a missing visual gets a ${process.env.EXPECT_FIRST ?? "detour"}`, new RegExp(`^Last turn: ${process.env.EXPECT_FIRST ?? "detour"}`).test(first?.level ?? ""), first?.level ?? "");
+    const drawn = await waitFor("the detour's first beat", (s) => s.beat && /^d\d+-/.test(s.beat) && s.status === "Speaking", 90000);
+    check("the detour plays a drawing beat right away", !!drawn, drawn ? `${drawn.beat}; beats ${drawn.beats.join(",")}` : "");
+    await page.waitForTimeout(6000);
+    throw new Error("stopping after the first ask (ASK1)");
+  }
   await type("wait, I don't get this part");
   let cursorSeen = null;
   const answered = await (async () => {

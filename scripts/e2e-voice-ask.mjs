@@ -95,6 +95,7 @@ console.log(`\nink turns: ${JSON.stringify(turns)}`);
 console.log(`transcripts shown while listening: ${JSON.stringify([...seen.heard])}`);
 console.log(`/api/opener requests: ${opener.length}; /api/plan requests: ${plan.length}; questions planned: ${JSON.stringify(asked)}`);
 const full = asked.length === 1 && /leaves/i.test(asked[0]);
-console.log(`${opener.length === 1 && plan.length === 1 ? "PASS" : "FAIL"}  one opener and one plan`);
+// The opener was replaced by the intake question (one /api/converse intake_ask); one plan either way.
+console.log(`${plan.length === 1 && opener.length <= 1 ? "PASS" : "FAIL"}  one plan (and at most one opener)`);
 console.log(`${full ? "PASS" : "FAIL"}  the planned question contains the real question (${JSON.stringify(asked[0] ?? "")})`);
 console.log(`frames in ${OUT}`);

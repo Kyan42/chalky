@@ -28,10 +28,19 @@ await page.fill('[data-testid="question"]', "Why is the sky blue?");
 await page.click('[data-testid="ask"]');
 const check = await waitFor((s) => s.status === "Your turn", 240000);
 console.log(`${since()} s  check-in reached at ${check?.beat}`);
-await page.fill('[data-testid="question"]', "yeah got it");
+const ANSWER = process.env.ANSWER ?? "yeah got it";
+await page.fill('[data-testid="question"]', ANSWER);
 await page.click('[data-testid="ask"]');
 const tAns = Date.now();
-const bridge = await waitFor((s) => /next|zoom|let's/i.test(s.caption ?? "") && s.status === "Speaking", 15000);
+// A summary goes to the model (confirm: one or two sentences); "got it" doesn't. Either way the bridge follows.
+let replyText = null;
+if (!/^\W*(yeah|yes|ok|got it)/i.test(ANSWER)) {
+  const r = await waitFor((s) => /^Last turn: (confirm|answer|detour|replan)/.test(s.level ?? ""), 30000);
+  await page.waitForTimeout(300);
+  replyText = (await st()).caption;
+  console.log(`${r && /^Last turn: confirm/.test(r.level) ? "PASS" : "FAIL"}  the summary is confirmed: ${r?.level}; Chalky said "${replyText}" (${replyText?.split(/(?<=[.!?])\s+/).length} sentence(s))`);
+}
+const bridge = await waitFor((s) => /next|zoom|let's|now/i.test(s.caption ?? "") && s.status === "Speaking" && s.caption !== replyText, 30000);
 console.log(`${bridge ? "PASS" : "FAIL"}  bridge spoken ${bridge ? `${Date.now() - tAns} ms after answering: "${bridge.caption}"` : ""}`);
 const next = await waitFor((s) => s.beat && s.beat !== check?.beat && s.status === "Speaking", 60000);
 console.log(`${next ? "PASS" : "FAIL"}  next beat ${next?.beat} starts after the bridge; ${next?.level}`);

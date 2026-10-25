@@ -7,9 +7,9 @@
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
 import { cleanId } from "./planner";
-import type { PlannedBeat, Region } from "./types";
+import type { CallLog, PlannedBeat, Region } from "./types";
 
 const MODEL = process.env.LAYOUT_MODEL || "claude-sonnet-5-5";
 const TIMEOUT_MS = Number(process.env.LAYOUT_TIMEOUT_MS) || 25000;
@@ -96,11 +96,12 @@ function cleanRegion(raw: unknown, fallback: Region): Region {
 }
 
 /** Lays out every visual beat; the fixed ones keep their region and ids, and the rest are checked the way the planner's are. */
-export async function layoutLesson(question: string, beats: PlannedBeat[], fixed: FixedBeat[], signal?: AbortSignal): Promise<{ beats: LaidOutBeat[]; ms: number; model: string }> {
+export async function layoutLesson(question: string, beats: PlannedBeat[], fixed: FixedBeat[], signal?: AbortSignal): Promise<{ beats: LaidOutBeat[]; ms: number; model: string; call: CallLog }> {
   const t0 = performance.now();
   const deadline = AbortSignal.timeout(TIMEOUT_MS);
-  const message = await anthropic()
-    .messages.stream(
+  const tracked = trackCall("layout", MODEL);
+  const message = await tracked
+    .watch(tracked.client.messages.stream(
       {
         model: MODEL,
         max_tokens: 8000,
@@ -110,7 +111,7 @@ export async function layoutLesson(question: string, beats: PlannedBeat[], fixed
         output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
       } as Anthropic.MessageStreamParams,
       { signal: signal ? AbortSignal.any([signal, deadline]) : deadline },
-    )
+    ))
     .finalMessage();
   if (message.stop_reason !== "end_turn") throw new Error(`layout stopped: ${message.stop_reason}`);
   const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
@@ -152,5 +153,5 @@ export async function layoutLesson(question: string, beats: PlannedBeat[], fixed
         : [];
     out.push({ id: beat.id, scene, region: cleanRegion(l?.region, beat.region), adds, points });
   }
-  return { beats: out, ms: Math.round(performance.now() - t0), model: MODEL };
+  return { beats: out, ms: Math.round(performance.now() - t0), model: MODEL, call: tracked.finish() };
 }

@@ -29,12 +29,18 @@ export type MicMode = "off" | "open" | "muted" | "held" | "tail";
 export interface HybridMicOptions {
   /** True while Chalky's voice is playing (plus a short echo tail). */
   speaking: boolean;
-  /** Stream echo-cancelled input during playback and interrupt on recognized speech. */
-  autoInterrupt?: boolean;
   /** KeyboardEvent.code of the barge-in key. */
   key?: string;
   /** Turns ending within this window merge into one utterance. */
   mergeMs?: number;
+  /**
+   * Chalky has just asked the learner something (an intake or check-in
+   * question): wait this long after a turn ends for more before calling it an
+   * utterance, so a pause mid-answer doesn't cut it off. Ink's eager end is
+   * never used. Barge-in timing is unaffected.
+   */
+  patient?: boolean;
+  patientMs?: number;
   /** A barge-in shorter than this (or without words) is ignored. */
   minHoldMs?: number;
   /** After the key is released, wait this long for Ink to end the turn. */
@@ -46,6 +52,8 @@ export interface HybridMicOptions {
   onPartial?: (text: string) => void;
   onUtterance?: (text: string, meta: { via: "open" | "barge"; turns: number; holdMs?: number }) => void;
   onError?: (message: string) => void;
+  /** Ink-2 key terms for the first connection (at most 100; see lib/voice/keyterms.ts). */
+  keyterms?: string[];
 }
 
 export function useHybridMic(options: HybridMicOptions) {
@@ -53,6 +61,11 @@ export function useHybridMic(options: HybridMicOptions) {
   opts.current = options;
   const key = options.key ?? "Space";
   const mergeMs = options.mergeMs ?? 700;
+  const patientMs = options.patientMs ?? 1800;
+  const windowMs = options.patient ? patientMs : mergeMs;
+  const windowRef = useRef(windowMs);
+  windowRef.current = windowMs;
+  useEffect(() => merger.current?.setWindow(windowMs), [windowMs]);
   const minHoldMs = options.minHoldMs ?? 300;
   const tailMs = options.tailMs ?? 1200;
 
@@ -75,14 +88,14 @@ export function useHybridMic(options: HybridMicOptions) {
     if (!ink.current) return "off";
     if (held.current) return "held";
     if (tail.current) return "tail";
-    return speakingRef.current && !opts.current.autoInterrupt ? "muted" : "open";
+    return speakingRef.current ? "muted" : "open";
   }, []);
   const refreshMode = useCallback(() => setMode(modeNow()), [modeNow]);
 
   /** Whether mic audio goes to Ink right now. */
   const gateOpen = useCallback(() => {
     if (held.current || tail.current) return true;
-    return !!opts.current.autoInterrupt || !speakingRef.current;
+    return !speakingRef.current;
   }, []);
 
   const endTail = useCallback(() => {
@@ -96,7 +109,7 @@ export function useHybridMic(options: HybridMicOptions) {
     if (ink.current) return;
     try {
       await unlockAudio();
-      merger.current = new TurnMerger({ mergeMs }, (text, turns) => {
+      merger.current = new TurnMerger({ mergeMs: windowRef.current }, (text, turns) => {
         const via = tail.current || held.current ? "barge" : "open";
         const holdMs = tail.current?.holdMs;
         endTail();
@@ -104,14 +117,11 @@ export function useHybridMic(options: HybridMicOptions) {
         lastPartial.current = "";
         refreshMode();
         opts.current.onUtterance?.(text, { via, turns, ...(holdMs !== undefined ? { holdMs } : {}) });
+        applyKeyterms();
       });
       const session = new InkSession(cartesiaToken, {
         onStart: () => merger.current?.turnStart(),
         onUpdate: (t) => {
-          if (t.trim() && speakingRef.current && opts.current.autoInterrupt) {
-            speakingRef.current = false;
-            opts.current.onBargeIn?.();
-          }
           lastPartial.current = t;
           if (held.current && t.trim()) held.current.words = true;
           setPartial(t);
@@ -121,6 +131,7 @@ export function useHybridMic(options: HybridMicOptions) {
           lastPartial.current = "";
           setPartial("");
           merger.current?.turnEnd(t);
+          applyKeyterms();
           // The key is up and Ink has ended the turn: no need to wait any longer.
           if (tail.current) merger.current?.flush();
         },
@@ -128,7 +139,7 @@ export function useHybridMic(options: HybridMicOptions) {
           setError(message);
           opts.current.onError?.(message);
         },
-      });
+      }, opts.current.keyterms ?? []);
       ink.current = session;
       await session.connect();
       mic.current = await startMicrophone((pcm) => {
@@ -147,13 +158,13 @@ export function useHybridMic(options: HybridMicOptions) {
 
   // Chalky starting to speak closes the open mic; a turn caught half-way is dropped (it was never going to end).
   useEffect(() => {
-    if (options.speaking && !options.autoInterrupt && !held.current && !tail.current) {
+    if (options.speaking && !held.current && !tail.current) {
       merger.current?.discard();
       setPartial("");
       lastPartial.current = "";
     }
     refreshMode();
-  }, [options.speaking, options.autoInterrupt, refreshMode]);
+  }, [options.speaking, refreshMode]);
 
   // The barge-in key: down opens the mic and interrupts Chalky; up ends the turn.
   useEffect(() => {
@@ -239,7 +250,26 @@ export function useHybridMic(options: HybridMicOptions) {
     [endTail],
   );
 
-  const setKeyterms = useCallback((terms: string[]) => ink.current?.setKeyterms(terms), []);
+  /**
+   * Changing key terms reconnects Ink's socket, which would drop a turn in
+   * progress: a change asked for mid-turn (or while a turn may still merge, or
+   * the barge-in key is down) waits until the utterance is complete.
+   */
+  const pendingTerms = useRef<string[] | null>(null);
+  const applyKeyterms = useCallback(() => {
+    const terms = pendingTerms.current;
+    if (!terms || !ink.current) return;
+    if (merger.current?.active || merger.current?.buffered || held.current || tail.current || lastPartial.current.trim()) return;
+    pendingTerms.current = null;
+    ink.current.setKeyterms(terms);
+  }, []);
+  const setKeyterms = useCallback(
+    (terms: string[]) => {
+      pendingTerms.current = terms;
+      applyKeyterms();
+    },
+    [applyKeyterms],
+  );
   const level = useCallback(() => (gateOpen() ? (mic.current?.level() ?? 0) : 0), [gateOpen]);
 
   return { start, started, mode, partial, error, level, setKeyterms };

@@ -26,3 +26,7 @@ npm-debug.log*
 /experiments/mic-e2e/
 /experiments/voice-e2e/
 /experiments/conversation-e2e/
+/experiments/live-runs/
+
+# Janani's reference boards for /experiments/chalk, rebuilt from her presets branch
+/public/experiments/chalk-ref/

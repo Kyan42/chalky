@@ -20,7 +20,8 @@ export interface GridBox {
   h: number;
 }
 
-export type CursorGestureKind = "point" | "circle" | "sweep";
+/** point: rest beside it. circle: orbit it once. sweep: travel along it or to another. underline: a stroke under it. tap: two quick pulses, "this one". */
+export type CursorGestureKind = "point" | "circle" | "sweep" | "underline" | "tap";
 
 export interface CursorStep {
   /** Clock time (seconds) the gesture starts. */
@@ -50,6 +51,10 @@ type Pt = { x: number; y: number };
 const TRAVEL = 0.45; // s, easing to a target
 const ORBIT = 1.2; // s, one circle
 const SWEEP = 1.0; // s, from one element to the other
+const UNDERLINE = 0.9; // s, along the bottom edge
+const TAP = 0.5; // s, two pulses
+const INK_FADE = 2; // s, chalk left by a circle or underline fades over this
+const INK_ALPHA = 0.38;
 const FADE = 0.6; // s, fade-out length
 const PAD = 8; // px, distance kept from an element's outline
 
@@ -94,12 +99,27 @@ export interface CursorPose {
   /** Which gesture is active (index into the script), -1 none. */
   step: number;
   /** "travel" while easing, "orbit"/"sweep" while performing, "rest" after, "idle" before anything. */
-  phase: "idle" | "travel" | "orbit" | "sweep" | "rest";
+  phase: "idle" | "travel" | "orbit" | "sweep" | "underline" | "tap" | "rest";
+  /** 0..1 while tapping: drives the two pulses. */
+  tap: number;
+  /** The chalk a circle or underline leaves: the path so far and its opacity (fading after). */
+  ink: { pts: Pt[]; opacity: number } | null;
 }
 
 /** How long gesture `s` takes from its start until the hand rests. */
 function duration(s: CursorStep): number {
-  return s.gesture === "point" ? TRAVEL : s.gesture === "circle" ? TRAVEL + ORBIT : TRAVEL + SWEEP;
+  switch (s.gesture) {
+    case "point":
+      return TRAVEL;
+    case "circle":
+      return TRAVEL + ORBIT;
+    case "underline":
+      return TRAVEL + UNDERLINE;
+    case "tap":
+      return TRAVEL + TAP;
+    default:
+      return TRAVEL + SWEEP;
+  }
 }
 
 /** A soft, deterministic drift so a resting hand still breathes. */
@@ -116,7 +136,7 @@ export function poseAt(t: number, script: CursorStep[], boxes: Record<string, Px
   // The active gesture: the last one that has started and whose target exists.
   let i = -1;
   for (let k = 0; k < script.length; k++) if (script[k].t <= t && boxes[script[k].target]) i = k;
-  if (i < 0) return { p: home, opacity: 0, pulse: 0, step: -1, phase: "idle" };
+  if (i < 0) return { p: home, opacity: 0, pulse: 0, step: -1, phase: "idle", tap: 0, ink: null };
 
   /** The hand's position (no drift) at time `at` while gesture `k` owns it. */
   const posIn = (k: number, at: number): Pt => {
@@ -127,9 +147,18 @@ export function poseAt(t: number, script: CursorStep[], boxes: Record<string, Px
     for (let j = k - 1; j >= 0; j--) if (script[j].t <= s.t && boxes[script[j].target]) { prev = j; break; }
     const from = prev >= 0 ? posIn(prev, s.t) : home;
     const u = (at - s.t) / TRAVEL;
-    if (s.gesture === "point") {
+    if (s.gesture === "point" || s.gesture === "tap") {
       const rest = restPoint(b, from);
       return lerp(from, rest, ease(u));
+    }
+    if (s.gesture === "underline") {
+      // A stroke just under the element, left to right, like a teacher underlining a word.
+      const y = b.y + b.h + PAD * 0.7;
+      const a1: Pt = { x: b.x - 2, y }, a2: Pt = { x: b.x + b.w + 2, y };
+      if (u < 1) return lerp(from, a1, ease(u));
+      const v = Math.min(1, (at - s.t - TRAVEL) / UNDERLINE);
+      const e = v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2;
+      return { x: a1.x + (a2.x - a1.x) * e, y: y + Math.sin(e * Math.PI) * 1.5 };
     }
     if (s.gesture === "circle") {
       const c = centre(b);
@@ -170,13 +199,31 @@ export function poseAt(t: number, script: CursorStep[], boxes: Record<string, Px
   const dur = duration(s);
   const p = posIn(i, t);
   const resting = since >= dur;
-  const phase: CursorPose["phase"] = !resting ? (since < TRAVEL ? "travel" : s.gesture === "circle" ? "orbit" : "sweep") : "rest";
+  const phase: CursorPose["phase"] = !resting
+    ? since < TRAVEL
+      ? "travel"
+      : s.gesture === "circle"
+        ? "orbit"
+        : s.gesture === "underline" || s.gesture === "tap"
+          ? s.gesture
+          : "sweep"
+    : "rest";
+  const tap = s.gesture === "tap" && since >= TRAVEL && since < dur ? (since - TRAVEL) / TAP : 0;
+  // Chalk: a circle or underline leaves its stroke behind, fading once it is done.
+  let ink: CursorPose["ink"] = null;
+  if ((s.gesture === "circle" || s.gesture === "underline") && since > TRAVEL) {
+    const upto = Math.min(since, dur);
+    const pts: Pt[] = [];
+    for (let k = 0; k <= 36; k++) pts.push(posIn(i, s.t + TRAVEL + ((upto - TRAVEL) * k) / 36));
+    const opacity = since <= dur ? INK_ALPHA : Math.max(0, INK_ALPHA * (1 - (since - dur) / INK_FADE));
+    if (opacity > 0) ink = { pts, opacity };
+  }
   const restFor = resting ? since - dur : 0;
   const d = resting ? drift(t, 1.5 + Math.min(2, restFor * 0.4)) : { x: 0, y: 0 };
   // Fade in over the first travel, out after idleFade seconds of rest.
   const fadeIn = Math.min(1, since / 0.25);
   const fadeOut = restFor > idleFade ? Math.max(0, 1 - (restFor - idleFade) / FADE) : 1;
-  return { p: { x: p.x + d.x, y: p.y + d.y }, opacity: fadeIn * fadeOut, pulse: resting ? restFor : 0, step: i, phase };
+  return { p: { x: p.x + d.x, y: p.y + d.y }, opacity: fadeIn * fadeOut, pulse: resting ? restFor : 0, step: i, phase, tap, ink };
 }
 
 export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSeconds = 4, look = "chalk", className }: ChalkyCursorProps) {
@@ -184,6 +231,7 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
   const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null);
   const glyph = useRef<SVGGElement>(null);
   const trail = useRef<SVGPolylineElement>(null);
+  const inkRef = useRef<SVGPolylineElement>(null);
   const history = useRef<Pt[]>([]);
 
   // Measure our own box when no size is given (and keep it current on resize).
@@ -212,7 +260,13 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
       const g = glyph.current;
       if (!g || !px.w) return;
       const pose = poseAt(Math.max(0, clock()), sorted, pxBoxes, px, idleFadeSeconds);
-      const scale = 1 + (pose.pulse ? Math.sin(pose.pulse * Math.PI * 1.6) * 0.06 + 0.03 : 0);
+      // Two quick pulses for a tap; a slow breath while resting.
+      const scale = pose.tap > 0 ? 1 + Math.abs(Math.sin(pose.tap * Math.PI * 2)) * 0.28 : 1 + (pose.pulse ? Math.sin(pose.pulse * Math.PI * 1.6) * 0.06 + 0.03 : 0);
+      const ink = inkRef.current;
+      if (ink) {
+        ink.setAttribute("points", pose.ink ? pose.ink.pts.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" ") : "");
+        ink.setAttribute("opacity", pose.ink ? pose.ink.opacity.toFixed(3) : "0");
+      }
       g.setAttribute("transform", `translate(${pose.p.x.toFixed(1)} ${pose.p.y.toFixed(1)}) scale(${scale.toFixed(3)})`);
       g.setAttribute("opacity", pose.opacity.toFixed(3));
       g.dataset.phase = pose.phase;
@@ -244,6 +298,7 @@ export default function ChalkyCursor({ boxes, size, script, clock, idleFadeSecon
               <feDropShadow dx="1.5" dy="2.5" stdDeviation="1.6" floodColor="#1F2A44" floodOpacity="0.28" />
             </filter>
           </defs>
+          <polyline ref={inkRef} fill="none" stroke="#E4572E" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" opacity="0" data-testid="chalky-cursor-ink" />
           <polyline ref={trail} fill="none" stroke="#E4572E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0" />
           <g ref={glyph} opacity="0" data-testid="chalky-cursor-glyph">
             <circle r="22" fill="url(#chalky-cursor-glow)" />

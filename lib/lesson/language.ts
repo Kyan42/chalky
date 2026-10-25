@@ -8,6 +8,7 @@
  * Shared by the live /api/draw route and the board-layout experiment.
  */
 import { PALETTE } from "@/experiments/visual-flex/doc";
+import { BLOCKS } from "@/lib/blocks";
 import { BLOCK_LANGUAGE } from "@/lib/blocks/catalog";
 import { PRESET_KINDS } from "@/lib/lesson/presets";
 import type { PlannedBeat } from "@/lib/lesson/types";
@@ -22,7 +23,7 @@ Every element has: id (short unique name, e.g. "sun", "leaf", "co2-in"), kind, a
 
 ${BLOCK_LANGUAGE}
 
-Shapes (give them a text label; the renderer puts it inside or on the free side):
+Shapes (give them a text label; the renderer puts it inside or on the free side). Not for anything that has a block: ${BLOCKS.map((b) => b.id).join(", ")} are drawn with block (above), and a circle or box labelled "leaf", "cell" or "sun" is wrong, not a simpler version.
 - circle: args cx, cy, r (radius in x units, 3-15 is typical), filled (1 or 0). text = label.
 - box: args x, y, w, h (top-left corner and size), filled (1 or 0). text = label.
 Connections (snap to the shapes they join; never give coordinates for these):
@@ -41,8 +42,8 @@ Free drawing (only when nothing above fits; you place it yourself):
 - move: args x1, y1, x2, y2, r. A dot that travels.
 - text: args x, y, size. A free label (it is nudged if it would cover something).
 Edits on what is already drawn (refs = the target id, args []):
-- highlight: a soft yellow mark behind it for about 1.5 s, timed to the word that names it. Use it to point while you talk about something already there.
-- dim: fades it back so new things stand out.
+- highlight: circles it once with a quick chalk loop that fades after about 1.5 s, timed to the word that names it. Use it to point while you talk about something already there (a shape, a block, a part or a label).
+- dim: half-wipes it so new things stand out.
 
 Rules: keep shapes inside your region and leave room around them for their labels; draw few, large, clear shapes rather than many small ones (a beat usually adds 2 to 6 elements); never redraw what is already there, connect to it or highlight it instead. Colors: ${COLORS.join(", ")}.`;
 

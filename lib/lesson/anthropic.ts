@@ -15,6 +15,6 @@ export function anthropic(): Anthropic {
   if (client) return client;
   const file = join(process.cwd(), ".env.local");
   const local = existsSync(file) ? parseEnv(readFileSync(file, "utf8")).ANTHROPIC_API_KEY : undefined;
-  client = new Anthropic({ apiKey: local || process.env.ANTHROPIC_API_KEY });
+  client = new Anthropic({ apiKey: local || process.env.ANTHROPIC_API_KEY, maxRetries: 2 });
   return client;
 }

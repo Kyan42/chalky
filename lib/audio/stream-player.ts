@@ -6,6 +6,11 @@
  * Each chunk remembers both where it sits in the speech and when it was
  * scheduled on the AudioContext, so the mapping stays exact even if the
  * network falls behind and a gap has to be inserted.
+ *
+ * pause() stops the sound and freezes the clock where it is (the board and the
+ * cursor follow the clock, so they freeze too); resume() goes on from exactly
+ * there. Audio that arrives while paused is kept and played after resume. The
+ * AudioContext itself keeps running: the microphone shares it.
  */
 
 interface Scheduled {
@@ -13,6 +18,13 @@ interface Scheduled {
   /** AudioContext time the chunk starts playing. */
   ctxStart: number;
   /** Speech time the chunk starts at. */
+  speechStart: number;
+  duration: number;
+}
+
+/** Every chunk received, decoded, so playback can restart from any point after a pause. */
+interface Received {
+  buffer: AudioBuffer;
   speechStart: number;
   duration: number;
 }
@@ -26,6 +38,9 @@ export class StreamPlayer {
   private nextCtxTime = 0;
   private speechCursor = 0;
   private stopped = false;
+  private received: Received[] = [];
+  /** Speech time the clock is frozen at while paused; null when playing. */
+  private pausedAt: number | null = null;
   /** Seconds of silence inserted because audio arrived late. */
   underrunSeconds = 0;
   bytesReceived = 0;
@@ -85,6 +100,12 @@ export class StreamPlayer {
     if (samples.length === 0) return;
     const buffer = this.ctx.createBuffer(1, samples.length, this.sampleRate);
     buffer.copyToChannel(samples, 0);
+    this.received.push({ buffer, speechStart: this.speechCursor, duration: buffer.duration });
+    if (this.pausedAt !== null) {
+      // Paused: keep it for resume().
+      this.speechCursor += buffer.duration;
+      return;
+    }
 
     const now = this.ctx.currentTime;
     if (this.startCtxTime === null) {
@@ -105,6 +126,7 @@ export class StreamPlayer {
 
   /** Speech seconds audible now; -1 before the first sample plays. */
   position(at = this.ctx.currentTime): number {
+    if (this.pausedAt !== null) return this.startCtxTime === null && this.pausedAt === 0 ? -1 : this.pausedAt;
     if (this.startCtxTime === null || at < this.startCtxTime) return -1;
     for (let i = this.chunks.length - 1; i >= 0; i--) {
       const c = this.chunks[i];
@@ -120,12 +142,43 @@ export class StreamPlayer {
 
   /** True once every received chunk has finished playing. */
   get drained() {
-    return this.startCtxTime !== null && this.ctx.currentTime >= this.nextCtxTime;
+    return this.pausedAt === null && this.startCtxTime !== null && this.ctx.currentTime >= this.nextCtxTime;
   }
 
-  /** Silences everything now and ignores anything appended later. */
-  stop() {
-    this.stopped = true;
+  get paused() {
+    return this.pausedAt !== null;
+  }
+
+  /** Stops the sound now and freezes the clock at the current speech time. */
+  pause() {
+    if (this.stopped || this.pausedAt !== null) return;
+    this.pausedAt = Math.max(0, this.position());
+    this.silence();
+    this.chunks = [];
+  }
+
+  /** Plays on from exactly where pause() stopped, including anything that arrived meanwhile. */
+  resume() {
+    if (this.stopped || this.pausedAt === null) return;
+    const from = this.pausedAt;
+    this.pausedAt = null;
+    let at = this.ctx.currentTime + 0.05;
+    if (this.startCtxTime === null && this.received.length) this.startCtxTime = at;
+    for (const r of this.received) {
+      if (r.speechStart + r.duration <= from) continue;
+      const offset = Math.max(0, from - r.speechStart);
+      const source = this.ctx.createBufferSource();
+      source.buffer = r.buffer;
+      source.connect(this.meter);
+      source.start(at, offset);
+      // ctxStart is when this chunk's speechStart *would* play, so position() maps exactly.
+      this.chunks.push({ source, ctxStart: at - offset, speechStart: r.speechStart, duration: r.duration });
+      at += r.duration - offset;
+    }
+    this.nextCtxTime = at;
+  }
+
+  private silence() {
     for (const c of this.chunks) {
       try {
         c.source.stop();
@@ -134,5 +187,12 @@ export class StreamPlayer {
         /* already stopped */
       }
     }
+  }
+
+  /** Silences everything now and ignores anything appended later. */
+  stop() {
+    this.stopped = true;
+    this.pausedAt = null;
+    this.silence();
   }
 }

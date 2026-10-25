@@ -14,13 +14,28 @@
  */
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
+import { withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
 
 // Medium effort thought for about 25 s before the first beat; low takes about 3 s with similar depth.
 const EFFORT = (process.env.PLANNER_EFFORT ?? "low") as "low" | "medium" | "high";
+
+/**
+ * Experiment switches for time to first beat (scripts/planner-bench.ts):
+ * PLANNER_THINKING=off turns thinking off (Sonnet 5.5: between_tools; others: disabled),
+ * PLANNER_TITLE_FIRST=1 tells the model to write the title line at once.
+ */
+function plannerThinking(model: string) {
+  if (process.env.PLANNER_THINKING !== "off") return { type: "adaptive" as const };
+  return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
+}
+const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
+const plannerSystem = () => withVoiceRules(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
+
+${TITLE_FIRST}` : SYSTEM);
 
 const SYSTEM = `You are Chalky, a great teacher who explains things out loud while drawing on a whiteboard. The learner wants to actually understand the answer, not hear a one-liner. Plan a spoken lesson of about three minutes that goes slowly and keeps the learner involved.
 
@@ -136,12 +151,13 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  const stream = anthropic().messages.stream(
+  const tracked = trackCall("plan", MODEL);
+  const stream = tracked.client.messages.stream(
     {
       model: MODEL,
       max_tokens: 14000,
-      system: SYSTEM,
-      thinking: { type: "adaptive" },
+      system: plannerSystem(),
+      thinking: plannerThinking(MODEL),
       output_config: { effort },
       messages: [{ role: "user", content: question }],
     },
@@ -153,6 +169,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   const st: PlanState = { scene: 0, known: new Map() };
   const lines: string[] = [];
   stream.on("text", (delta) => {
+    tracked.firstToken();
     pending += delta;
     let nl: number;
     while ((nl = pending.indexOf("\n")) >= 0) {
@@ -191,7 +208,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this question");
   if (!beats) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
 }
 
 /**
@@ -222,6 +239,8 @@ export interface AmendRequest {
   note: string;
   /** What the learner said that led here. */
   heard?: string;
+  /** What Chalky has just said aloud before these beats (the hand-off or answer); they continue from it. */
+  said?: string;
   /** Unique id prefix for the new beats, e.g. "d1" → d1-1, d1-2… */
   prefix: string;
   /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
@@ -243,6 +262,8 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     `The lesson answers: ${r.question}`,
     `The lesson planned so far:\n${lines.join("\n")}`,
     r.heard ? `The learner just said: "${r.heard}"` : "",
+    r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
+    `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
     describeLearner(r.learner),
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,
@@ -258,11 +279,12 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
   // The intake rewrite continues on beat 1's board; every other change starts on a clean one.
   const newScene = r.intake ? Math.max(1, maxScene) : maxScene + 1;
-  const stream = anthropic().messages.stream(
+  const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
+  const stream = tracked.client.messages.stream(
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
-      system: SYSTEM,
+      system: withVoiceRules(SYSTEM),
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       messages: [{ role: "user", content: amendPrompt(r, newScene) }],
@@ -272,6 +294,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   let pending = "";
   const lines: string[] = [];
   stream.on("text", (delta) => {
+    tracked.firstToken();
     pending += delta;
     let nl: number;
     while ((nl = pending.indexOf("\n")) >= 0) {
@@ -297,6 +320,14 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
     if (r.op === "insert_after" && obj.mode !== "talk") obj.scene = newScene;
     // index n + 1 (never 0): checkBeat treats beat 0 as the lesson's very first beat.
+    // The first beat goes straight in: no "good question", no restating the learner's question (they just heard a hand-off).
+    if (n === 0 && typeof obj.say === "string") {
+      let say = obj.say.trim().replace(/^(good|great|nice|excellent|fair|interesting|fun)\s+(question|one)\s*[-:,.!—]\s*/i, "");
+      const sentences = say.split(/(?<=[.!?])\s+/);
+      if (sentences.length > 1 && sentences[0].trim().endsWith("?")) say = sentences.slice(1).join(" ");
+      if (say !== obj.say) console.info(`[amend] trimmed the opener of ${r.prefix}-1: "${String(obj.say).slice(0, 80)}" -> "${say.slice(0, 80)}"`);
+      obj.say = say.charAt(0).toUpperCase() + say.slice(1);
+    }
     const beat = checkBeat(obj, n + 1, st);
     n++;
     yield { type: "beat", beat: { ...beat, id: `${r.prefix}-${n}` }, tMs: ms() };
@@ -316,5 +347,5 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
 }

@@ -6,6 +6,7 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
+import { withVoiceRules } from "./voice";
 
 const MODEL = "claude-opus-5-5";
 
@@ -17,9 +18,7 @@ export interface ReplyResult {
   ms: number;
 }
 
-const SYSTEM = `You are Chalky, a warm, clear teacher giving a spoken lesson at a whiteboard. The learner just said something to you mid-lesson. Reply out loud as a teacher would: if they asked a question or are confused, answer it directly and concretely in one or two spoken sentences, at most 35 words, building on what the lesson has covered. If they just said yes, got it, or keep going, reply with a very short acknowledgement of a few words. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud.
-
-Address the person as "you". Never narrate analysis of their words or intentions. If the request is unclear, ask one short clarification question instead of guessing.
+const SYSTEM = `You are Chalky, a warm, clear teacher giving a spoken lesson at a whiteboard. The learner just said something to you mid-lesson. Reply out loud as a teacher would: if they asked a question or are confused, answer it directly and concretely in two to four spoken sentences, at most 70 words, building on what the lesson has covered. If they just said yes, got it, or keep going, reply with a very short acknowledgement of a few words. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud.
 
 Set intent to "stop" only if they clearly want to end the lesson; otherwise "continue" (the lesson carries on right after your reply).`;
 
@@ -43,7 +42,7 @@ export async function reply(o: { question: string; said: string[]; now?: string;
   const message = await anthropic().messages.create({
     model: MODEL,
     max_tokens: 2000,
-    system: SYSTEM,
+    system: withVoiceRules(SYSTEM),
     thinking: { type: "adaptive" },
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     messages: [{ role: "user", content: context }],
