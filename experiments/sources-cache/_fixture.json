@@ -1,0 +1,34 @@
+{
+  "question": "fixture (hand-written test cards, not fetched)",
+  "query": "fixture",
+  "status": "ready",
+  "fetchedVia": "fixture",
+  "actor": "none (hand-written)",
+  "startedAt": "2026-10-24T00:00:00.000Z",
+  "fetchedAt": "2026-10-24T00:00:00.000Z",
+  "cards": [
+    {
+      "title": "Fixture card A: how leaves turn light into sugar",
+      "url": "https://example.org/fixture/leaves",
+      "site": "example.org",
+      "excerpt": "A hand-written test card for the source cards UI. Not a real source.",
+      "paragraphs": [
+        "Green plants, algae and some bacteria make their own food from light. The process takes carbon dioxide and water and turns them into sugar, giving off oxygen as a by-product.",
+        "The light-capturing pigment is chlorophyll, which sits in the thylakoid membranes of the chloroplast. Chlorophyll absorbs red and blue light most strongly and reflects green light, which is why leaves look green.",
+        "In the light-dependent reactions, water molecules are split apart. The oxygen we breathe comes from that split water, not from the carbon dioxide the leaf takes in.",
+        "The energy captured from light is stored briefly in two carrier molecules, ATP and NADPH, which carry it to the next stage."
+      ]
+    },
+    {
+      "title": "Fixture card B: the Calvin cycle and the stomata",
+      "url": "https://example.org/fixture/calvin",
+      "site": "example.org",
+      "excerpt": "A second hand-written test card. Not a real source.",
+      "paragraphs": [
+        "Carbon dioxide enters the leaf through stomata, tiny pores on the underside that open and close as their guard cells swell or shrink.",
+        "In the Calvin cycle, which runs in the stroma, an enzyme called RuBisCO fixes carbon dioxide onto a five-carbon sugar. Using the ATP and NADPH from the light reactions, the cycle builds a three-carbon sugar that the plant turns into glucose.",
+        "Because the stomata must open to let carbon dioxide in, the plant also loses water vapour through them, a trade-off every land plant has to manage."
+      ]
+    }
+  ]
+}
