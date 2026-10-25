@@ -180,12 +180,14 @@ export async function gradePredict(o: { question: string; ask: string; answer: s
   ].join("\n");
   const { out, call } = await json<{ verdict: "right" | "partly" | "wrong"; right: string[]; missing: string[]; feedback: string }>(CONVERSE_MODEL, "quiz-predict", system, user, PREDICT_SCHEMA, 400, signal);
   const verdict = out.verdict === "right" || out.verdict === "partly" ? out.verdict : "wrong";
+  // One line: the next section is about to show the rest.
+  const feedback = out.feedback.trim().split(/(?<=[.!?])\s+/)[0] ?? out.feedback.trim();
   return {
     verdict,
     score: verdict === "right" ? 1 : verdict === "partly" ? 0.5 : 0,
     right: out.right.slice(0, 4),
     missing: out.missing.slice(0, 4),
-    feedback: out.feedback.trim(),
+    feedback,
     ms: Math.round(performance.now() - t0),
     model: CONVERSE_MODEL,
     call,
