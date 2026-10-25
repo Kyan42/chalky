@@ -96,7 +96,8 @@ const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching thi
 /** A confirm that already looks ahead makes the bridge redundant. */
 const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up|carry on|keep going|go on|onward|continue|on we go)\b/i;
 /** Answers to the intake question that mean "just start". */
-const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
+// ("not much", "no idea", "nothing" are not here: they say where the learner starts, so the intake rewrites toward the basics.)
+const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|go ahead|skip( it)?|start|let'?s go|whatever)[^a-z0-9]*$/i;
 
 type Status = "idle" | "planning" | "speaking" | "paused" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
 
@@ -3242,7 +3243,8 @@ export default function Lesson() {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
+      // Not inside a dialog either (the recap, settings): Space there presses a button, it doesn't pause.
+      if (el && (el.closest("dialog") || el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
       if (pausedRef.current) {
         e.preventDefault();
         resumePlayback();

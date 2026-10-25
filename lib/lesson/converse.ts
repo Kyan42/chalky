@@ -228,9 +228,10 @@ Choosing:
 - Still lost on what you just explained: "amend" insert_after; still lost after a detour: "amend" replace_from.
 - A remark or a reaction mid-lesson: "say" one short sentence, and the lesson goes on.
 - A question is never just a "say" that moves on: answer it (point, or sketch what is missing) and end with a short check question ("ask"), then wait. Only when they also said to go on does the lesson continue.
-- A hesitant yes at a check-in ("yeah, I think so", "kind of"): ONE short sentence and the lesson goes on; do not re-explain, and do not add "carry on" or announce what is next.
+- A hesitant yes ("yeah, I think so", "kind of"): ask ONE specific, low-pressure question that reveals the uncertain part, optionally after a small hint. Use "ask" and wait. Never treat hesitation as permission to continue.
 Never open with "good question", "great question" or similar, and never repeat their question back.
-- Off the lesson's path: answer briefly by the same rules and steer back.
+- A new topic or a preferred approach takes priority over the plan. If they say this is boring, ask what kind of example would help, then use it. Do not steer back to the plan without their agreement.
+- Off the lesson's path otherwise (a quick aside): answer briefly by the same rules.
 At most two spoken sentences, except a quick "say" answer may use three. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
 The learner can draw on the board with a pen (blue, green, orange or dark strokes; your own marks are red). When they did, you are told what their ink marks and may see a picture of the board with their ink. Their "this", "that" or "here" means their newest mark, even when older ink is still on the board: answer about it by name, and point at it or circle it.
@@ -546,6 +547,8 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   let resume: ConverseResume = how ?? (check || goTo ? "wait" : "continue");
   // Going on at once would glide the camera straight back: after a go_to, always wait.
   if (goTo) resume = "wait";
+  // A hesitant yes is never permission to go on: its question waits for the answer.
+  if (input.beats.length && isHesitant(input.utterance)) resume = "wait";
   // A question gets an answer and a wait, unless they also said to go on ("why? ok, keep going").
   if (input.beats.length && isQuestion(input.utterance) && !isResume(input.utterance) && !/\b(go on|keep going|carry on|continue|move on)\b/i.test(input.utterance)) {
     if (level === "confirm") level = "answer";
@@ -737,7 +740,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
               if (ev) yield ev;
               capped = true;
             } else if (m) {
-              budget = isHesitant(input.utterance) ? 1 : sentenceBudget(names);
+              // A hesitant yes gets a small hint at most, then its one question.
+              budget = isHesitant(input.utterance) ? 2 : sentenceBudget(names);
               yield { type: "actions", names, tMs: ms() };
               yield { type: "level", level: levelOf(names), tMs: ms() };
             }

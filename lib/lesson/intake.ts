@@ -48,7 +48,7 @@ const ASK_SYSTEM = `You are Chalky, a warm teacher about to explain something ou
 Plain spoken words, one question, no greeting, no preamble. Answer on one line, exactly: prior: <question>  or  focus: <question>`;
 
 const DECIDE_SYSTEM = `You are Chalky, a teacher. You asked the learner one question before teaching; a lesson plan was already written from their original question alone. From their answer, decide:
-- "amend": true when the answer changes what the lesson should be: it narrows the focus to one part, shows they already know the basics (skip ahead, go deeper), or shows they are new to it (slower, more basic). false when the answer adds nothing the plan doesn't already cover (vague, "not much", "I don't know", or it simply restates the question).
+- "amend": true when the answer changes what the lesson should be: it narrows the focus to one part, shows they already know the basics (skip ahead, go deeper), or shows they are new to it (slower, more basic). Treat "not much", "no idea", "I don't know" as useful evidence, not as nothing: amend true, level new, rewrite toward the basics (one concrete intuition first, then an easy question). false only when the answer adds nothing the plan doesn't already cover (vague, or it simply restates the question).
 - "note": one or two sentences for the planner on how to change the lesson, or "" when amend is false.
 - "level": "new" (has not met it), "some" (knows the basics) or "strong" (knows it well and wants depth); "unknown" if the answer doesn't say.
 - "prior": what they already know, in a few words, or "".

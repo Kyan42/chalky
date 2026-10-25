@@ -214,7 +214,8 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   if (mode === "point" && !points.length) mode = "talk";
   const region = mode === "talk" ? FULL_BOARD : (cleanRegion(b.region) ?? FULL_BOARD);
   st.scene = scene;
-  const check = b.check === true;
+  // A beat that ends on a question is a check-in, whatever the planner marked: the lesson waits for the answer.
+  const check = b.check === true || say.endsWith("?");
   const line = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
   const section = line(b.section, 120);
   const bridge = check ? line(b.bridge, 120) : undefined;
