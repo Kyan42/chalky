@@ -53,7 +53,7 @@ Skip a section only if it truly doesn't apply. Go deeper where the question need
 
 Write 12 to 18 beats. A beat is ONE idea in one to three short plain spoken sentences, 25 to 35 words, said while the board shows one thing. Sound like a person talking: no lists, no markdown, no symbols that read badly aloud (write "percent", not "%"; spell out units and abbreviations). No filler or "great question". Give the learner time: after a beat that draws something new, follow it with a point or talk beat that dwells on it before drawing the next thing; at most about half the beats draw.
 
-Split the lesson into sections of 2 or 3 beats, each with a one-line goal (what the learner should get from it). The first beat of a section carries "section": "<the goal, at most 12 words>". The last beat of every section except the recap ends with a short check-in question to the learner, like "Does the pressure part make sense so far?", and is marked "check": true. A check-in beat also carries "bridge": a short line, at most 12 words, that you say when the learner answers "yes" or "got it", like a teacher taking a breath and naming what comes next ("Okay, next is how the water gets in.").
+Split the lesson into sections of 2 or 3 beats, each with a one-line goal (what the learner should get from it). The first beat of a section carries "section": "<the goal, at most 12 words>". The last beat of every section except the recap ends with a short check-in question to the learner and is marked "check": true. The check-in is one specific question about what was just shown, answerable in a few words ("Which of these two gets the energy first?", "So where does the oxygen come from?"), never "does that make sense?". A check-in beat also carries "bridge": a short line, at most 12 words, that you say when the learner answers "yes" or "got it", like a teacher taking a breath and naming what comes next ("Okay, next is how the water gets in.").
 
 Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
@@ -117,6 +117,10 @@ interface PlanState {
   opened?: boolean;
   /** The section before this one had an opener (past four sections, openers come every other section). */
   openedPrev?: boolean;
+  /** Opening questions so far (Socratic: one in a lesson). */
+  openers?: number;
+  /** The section before this one had a quiz (Socratic: never two sections in a row). */
+  quizzedPrev?: boolean;
   /** The last beat checked is to be left out (a quiz Socratic mode doesn't allow, with nothing else to say). */
   drop?: boolean;
   /** The beat's place in its section (0: the section's first beat). */
@@ -127,7 +131,7 @@ interface PlanState {
  * Ask me first (Socratic, the learner's preference): appended to the planner's rules. The opener is a predict
  * quiz the page already knows how to ask and grade (the rubric: the rest of its section).
  */
-const SOCRATIC_RULES = `Ask me first (the learner's preference; this replaces the quiz cadence above): the first section just teaches, with drawings. From the second section on, a section may open by letting them think: its first beat is a "talk" beat with "quiz": "predict", carrying the section's "section" title as usual: its "say" is one short setup line, then one question of the form "what do you think happens here, and why?", without giving the answer away. The rest of the section then teaches the answer, as its own beats. In a lesson of more than four sections, open every other section this way. A section with an opening question has no other quiz. Besides those questions, at most two quizzes in the whole lesson ("label" or "sketch", never "predict"), each in a section without an opening question. Most beats teach and draw; the lesson keeps moving.`;
+const SOCRATIC_RULES = `Ask me first (the learner's preference): the lesson plays as planned, with its check-ins, and with ONE question that lets them think first, in the whole lesson. Put it where it earns its place: the first beat of the section that holds the key mechanism (never the first section), a "talk" beat with "quiz": "predict" carrying that section's "section" title: one short setup line, then a real prediction about the mechanism, in plain words, answerable in one sentence ("If the leaf gets no light, what do you think happens to the sugar it makes, and why?"), without giving the answer away. That section then teaches the answer. Besides that one question, at most two quizzes in the whole lesson ("label" or "sketch", never "predict"), never in two sections in a row, never in the section with the question.`;
 
 const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 
@@ -158,7 +162,7 @@ const QUIZ_SAY: Record<QuizKind, string> = {
 function dueQuiz(st: PlanState, hasNext: boolean): Record<string, unknown> | null {
   if ((st.sections ?? 0) < 2 || st.quizzed) return null;
   // Socratic: a section that opened with a question has no quiz, and two quizzes is the lesson's most.
-  if (st.socratic && (st.opened || (st.kinds?.length ?? 0) >= 2)) return null;
+  if (st.socratic && (st.opened || st.quizzedPrev || (st.kinds?.length ?? 0) >= 2)) return null;
   // Not after the closing recap: the lesson is over.
   if (!hasNext && /\b(recap|summary|wrap|review)\b/i.test(st.title ?? "")) return null;
   if ((st.sections ?? 0) > 4 && (st.dry ?? 0) < 1) return null;
@@ -229,6 +233,7 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
     st.sections = (st.sections ?? 0) + 1;
     st.quizzed = false;
     st.openedPrev = !!st.opened;
+    st.quizzedPrev = !!st.quizzed;
     st.opened = false;
     st.title = section ?? "";
     st.inSection = 0;
@@ -236,11 +241,15 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const asked = QUIZ_KINDS.includes(b.quiz as QuizKind) ? (b.quiz as QuizKind) : undefined;
   // Socratic: a predict question in a section's first two beats opens it, from the second section on (the
   // first teaches), and past four sections every other section.
-  const opener = !!st.socratic && asked === "predict" && !st.opened && (st.sections ?? 0) >= 2 && (st.inSection ?? 0) <= 1 && !((st.sections ?? 0) > 4 && st.openedPrev);
-  if (opener) st.opened = true;
+  // Socratic: ONE predict question in the lesson, opening a section from the second on.
+  const opener = !!st.socratic && asked === "predict" && !st.opened && (st.openers ?? 0) < 1 && (st.sections ?? 0) >= 2 && (st.inSection ?? 0) <= 1;
+  if (opener) {
+    st.opened = true;
+    st.openers = (st.openers ?? 0) + 1;
+  }
   // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
   // Socratic: none in a section that opened with a question, none of kind predict, two in the lesson at most.
-  const allowed = !st.socratic || (asked !== "predict" && !st.opened && (st.kinds?.length ?? 0) < 2);
+  const allowed = !st.socratic || (asked !== "predict" && !st.opened && !st.quizzedPrev && (st.kinds?.length ?? 0) < 2);
   const quiz = opener ? asked : asked && allowed && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
   // A quiz Socratic mode doesn't allow keeps its teaching words, not its question; with nothing left it goes.
   let sayOut = say;
@@ -506,6 +515,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const lastStart = kept.map((b, k) => (k === 0 || b.section ? k : -1)).reduce((a, b) => Math.max(a, b), 0);
   st.quizzed = kept.slice(lastStart).some((b) => b.quiz && !b.opener);
   st.opened = kept.slice(lastStart).some((b) => b.opener);
+  st.openers = kept.filter((b) => b.opener).length;
   st.inSection = Math.max(0, kept.length - 1 - lastStart);
   const here = detourScene(r, maxScene);
   if (here.stay) st.known.set(here.scene, new Set(here.drawn.flatMap((b) => b.adds.map((a) => a.id))));

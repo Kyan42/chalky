@@ -63,6 +63,11 @@ const DOC_END = 20 * TPS;
 const GAP_SECONDS = 0.65;
 /** A section's opening question with nothing heard this long: "no worries, let me just show you", and on. */
 const QUESTION_WAIT_MS = 40_000;
+/**
+ * The Socratic question is light: one try, a one-line reaction whatever the answer, and the section plays as
+ * planned (no reframes, no gap line, nothing cut). false brings back reframes and cutting what they already said.
+ */
+const SOCRATIC_ONE_TRY = true;
 /** Speakers ring on for a moment after the audio ends; keep the mic closed a little longer. */
 const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
@@ -1889,13 +1894,12 @@ export default function Lesson() {
           return;
         }
         tries.push({ ask: asking, answer, verdict: g.verdict });
-        if (g.verdict === "right" || g.verdict === "partly") {
-          // Right or partly right: one sentence back and the section plays; if they have it, the section's
-          // beats that would repeat what they said go.
+        // One try (the lighter default): any answer gets one sentence back, and the section plays as planned.
+        if (SOCRATIC_ONE_TRY || g.verdict === "right" || g.verdict === "partly") {
           setStatus("speaking");
           const spoken = sayFeedback("predict", beatId, g.feedback);
           const section = sectionBeats(i);
-          const drop = g.verdict !== "right" ? [] : ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw");
+          const drop = SOCRATIC_ONE_TRY || g.verdict !== "right" ? [] : ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw");
           for (const b of drop) list.splice(list.indexOf(b), 1);
           if (drop.length) setBeats([...list]);
           await spoken;
