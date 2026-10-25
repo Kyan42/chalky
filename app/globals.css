@@ -333,7 +333,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 @media (prefers-reduced-motion: reduce) { .welcome-stone-rise img { animation: none; } }
 
 /* Compact brand signature, independent of the lesson controls. */
-.chalky-wordmark { position: absolute; top: 26px; left: 38px; z-index: 5; display: flex; align-items: center; gap: 6px; pointer-events: none; color: #17130c; }
+.chalky-wordmark { position: absolute; top: 26px; left: 38px; z-index: 5; display: flex; align-items: center; gap: 6px; cursor: pointer; text-decoration: none; color: #17130c; }
 .chalky-wordmark img { width: 40px; height: 57px; object-fit: contain; }
 .chalky-wordmark span { font: 400 44px/1 "Instrument Serif", Georgia, serif; letter-spacing: -.025em; }
 @media (max-width: 600px) {
@@ -341,3 +341,5 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
   .chalky-wordmark img { width: 32px; height: 46px; }
   .chalky-wordmark span { font-size: 35px; }
 }
+
+.chalky-wordmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 4px; }

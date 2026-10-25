@@ -2540,10 +2540,10 @@ export default function Lesson() {
   return (
     <div className="board-wrap tutor-wrap">
       <div className="board lesson-board tutor-board" data-status={status} data-mic={voice.mode} data-scene={board.scene} data-view={`${Math.round(board.view.x)},${Math.round(board.view.y)},${Math.round(board.view.w)}`}>
-        <div className="chalky-wordmark" aria-label="Chalky">
+        <a className="chalky-wordmark" href="/lesson" aria-label="Chalky — back to start">
           <img src="/brand/chalk-hand.png" alt="" />
           <span>Chalky</span>
-        </div>
+        </a>
         <h1 hidden data-testid="title">{title}</h1>
         <section className="stage" data-testid="stage">
           {showWelcome && treeRevealed && (
