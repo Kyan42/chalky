@@ -25,6 +25,12 @@
  * The mic is half-duplex: it isn't sent while Chalky is speaking.
  */
 import Preferences from "@/components/Preferences";
+import type { DrawMode } from "@/lib/lesson/language";
+import { readPreferences } from "@/lib/preferences";
+import { registerBlocks, type Block } from "@/lib/blocks";
+import VoiceRecovery from "@/components/VoiceRecovery";
+import LessonEnding from "@/components/LessonEnding";
+import { continuationPrompt, historyFromTranscript, isLessonEnding, saveLearningSession, type HistoryTranscript, type LearningSession } from "@/lib/learning-history";
 import { motion, useReducedMotion } from "framer-motion";
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
@@ -60,22 +66,25 @@ const HIGHLIGHT_SECONDS = 1.8;
 const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
 /** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
-/** Seconds of silence after the intake question before the lesson just goes on. */
-const INTAKE_SILENCE_MS = 4000;
 /** After a reply ends, this long during which a two-word fragment is not taken as a new turn. */
 const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
-const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
+const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Okay, let’s start from there."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
 const FILLER_AFTER_MS = 8000;
 const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching this out, just a moment."];
 /** A confirm that already looks ahead makes the bridge redundant. */
 const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up|carry on|keep going|go on|onward|continue|on we go)\b/i;
 /** Answers to the intake question that mean "just start". */
-const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
+const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|go ahead|skip( it)?|start|let'?s go)[^a-z0-9]*$/i;
+
+/** Read at each draw so a changed preference reaches the next drawing. */
+function savedDrawMode(): DrawMode {
+  return readPreferences(document.cookie).draw;
+}
 
 type Status = "idle" | "planning" | "speaking" | "paused" | "waiting" | "listening" | "replying" | "done" | "stopped" | "error";
 
@@ -621,6 +630,12 @@ export default function Lesson() {
   /** Drops every prefetched beat's speech (an interrupt or a plan change); set by the running lesson. */
   const dropPrefetchRef = useRef<(why: string) => void>(() => {});
 
+  const [ending, setEnding] = useState<LearningSession | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [historySaved, setHistorySaved] = useState(false);
+  const historyTranscriptRef = useRef<HistoryTranscript | null>(null);
+  const endRequestedRef = useRef<string | null>(null);
+  const finishLessonRef = useRef<() => void>(() => {});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
   const playerGen = useRef(0);
@@ -658,7 +673,7 @@ export default function Lesson() {
   }, [status]);
 
   const askRef = useRef<(q: string) => void>(() => {});
-  /** Words Ink is hearing right now, and text being typed: the intake's silence timer waits while either is there. */
+  /** Words Ink is hearing right now, and text being typed: used to retain partial input while the learner thinks. */
   const partialRef = useRef("");
   const haltRef = useRef<() => void>(() => {});
   const draftRef = useRef("");
@@ -675,12 +690,12 @@ export default function Lesson() {
   /** Adds an event to the running lesson's transcript; set by the running lesson. */
   const logRef = useRef<(e: Record<string, unknown>) => void>(() => {});
   /** Sends the running lesson's transcript now; set by the running lesson. */
-  const flushLogRef = useRef<() => void>(() => {});
+  const flushLogRef = useRef<(closing?: boolean) => void>(() => {});
   // Closing or hiding the tab still saves the transcript (keepalive outlives the page).
   useEffect(() => {
-    const save = () => flushLogRef.current();
+    const save = () => flushLogRef.current(true);
     window.addEventListener("pagehide", save);
-    const onHidden = () => document.visibilityState === "hidden" && save();
+    const onHidden = () => document.visibilityState === "hidden" && flushLogRef.current(false);
     document.addEventListener("visibilitychange", onHidden);
     return () => {
       window.removeEventListener("pagehide", save);
@@ -730,6 +745,10 @@ export default function Lesson() {
     onUtterance: (text) => {
       const said = text.trim();
       if (!said || haltedRef.current) return;
+      if (historyTranscriptRef.current && !abortRef.current?.signal.aborted && (historyTranscriptRef.current.end === null || historyTranscriptRef.current.end === "closed") && isLessonEnding(said)) {
+        finishLessonRef.current();
+        return;
+      }
       setLearnerCaption(said);
       // A fragment of two words or fewer right after a reply ("That was.") is the end of what they were saying,
       // not a new cut-in; a resume phrase ("ok", "go on") still counts, and so does any answer while Chalky waits for one.
@@ -777,6 +796,15 @@ export default function Lesson() {
     playerRef.current?.pause();
     turnRef.current?.(null);
   }, [setHaltedNow]);
+
+  const finishLesson = useCallback(() => {
+    const transcript = historyTranscriptRef.current;
+    if (!transcript || abortRef.current?.signal.aborted || (transcript.end && transcript.end !== "closed")) return;
+    endRequestedRef.current = transcript.id;
+    setMicMuted(true);
+    stop();
+  }, [stop]);
+  finishLessonRef.current = finishLesson;
 
   useEffect(() => () => {
     stop();
@@ -1016,7 +1044,7 @@ export default function Lesson() {
     });
   }, []);
 
-  const ask = useCallback(async (q: string) => {
+  const ask = useCallback(async (q: string, displayTopic?: string) => {
     q = q.trim();
     if (!q) return;
     stop();
@@ -1048,7 +1076,9 @@ export default function Lesson() {
     /** After a cut-in: this beat goes on from `sec` (the word they cut in at) rather than from its start. */
     let resumeFrom = null as { state: BeatState; sec: number; word: number } | null;
 
-    setQuestion(q);
+    setEnding(null);
+    setHistorySaved(false);
+    setQuestion(displayTopic ?? q);
     setDraft("");
     setError(null);
     setBeats([]);
@@ -1099,7 +1129,7 @@ export default function Lesson() {
     const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "lesson";
     const transcript = {
       id: `${new Date().toISOString().slice(0, 19).replace(/[^0-9]/g, "")}-${slug}`,
-      question: q,
+      question: displayTopic ?? q,
       askedVia: inputViaRef.current,
       startedAt: new Date().toISOString(),
       fixture,
@@ -1113,6 +1143,23 @@ export default function Lesson() {
       endedAt: null as string | null,
       end: null as string | null,
     };
+    historyTranscriptRef.current = transcript;
+    const saveHistory = (final = false) => {
+      const session = historyFromTranscript(transcript);
+      // Only the active lesson owns the canvas. An older run can finish after a new one starts.
+      if (final && historyTranscriptRef.current === transcript && (boardRef.current.list.length || inkRef.current.length)) {
+        try {
+          const image = snapshotBoard(canvasRef.current, inkRef.current, W, H, cameraRef.current);
+          if (image) session.boardImage = `data:image/jpeg;base64,${image}`;
+        } catch { /* The recap still saves when a GPU frame is unavailable. */ }
+      }
+      void saveLearningSession(session).then(() => {
+        if (historyTranscriptRef.current === transcript) { setHistoryError(""); if (final) setHistorySaved(true); }
+      }).catch(() => {
+        if (historyTranscriptRef.current === transcript) setHistoryError("Learning history couldn’t save on this browser. Try saving your reflection again.");
+      });
+      return session;
+    };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     /** How many events the last full save carried: an end marker sends only the ones after. */
     let sentEvents = 0;
@@ -1122,6 +1169,7 @@ export default function Lesson() {
       flushTimer = null;
       // The learner record rides on every save, so Convex has it before the tab closes.
       transcript.learner = learner;
+      saveHistory();
       const body = JSON.stringify(transcript);
       if (closing) {
         // The tab is going away: a beacon outlives the page, but browsers cap it at about 64 KB. A longer
@@ -1140,11 +1188,11 @@ export default function Lesson() {
       flushTimer ??= setTimeout(flushLog, 2000);
     };
     logRef.current = logEv;
-    flushLogRef.current = () => {
+    flushLogRef.current = (closing = false) => {
       transcript.learner = learner;
       transcript.prefetch = { ...stats };
       // Closed mid-lesson: say so, so the file never ends without an end.
-      if (!transcript.end) {
+      if (closing && !transcript.end) {
         transcript.end = "closed";
         transcript.endedAt = new Date().toISOString();
         transcript.events.push({ t: since(), kind: "end", end: "closed" });
@@ -1220,9 +1268,11 @@ export default function Lesson() {
       state.elements = null;
       const index = list.indexOf(state);
       const earlier = earlierOverride ?? list.filter((b, i) => i < index && b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
-      return post("/api/draw", { question: q, beat, earlier }, signal)
+      return post("/api/draw", { question: q, beat, earlier, mode: savedDrawMode() }, signal)
         .then((r) => r.json())
-        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[] }) => {
+        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[]; free?: boolean; learned?: string[]; blocks?: Block[] }) => {
+          if (r.blocks?.length) registerBlocks(r.blocks);
+          if (r.free) logEv({ kind: "free-beat", beatId: beat.id, learned: r.learned ?? [], blocks: (r.blocks ?? []).map((b) => b.id) });
           state.drawCalls = r.calls;
           state.elements = r.elements ?? [];
           state.draw = state.elements.length ? "ready" : "failed";
@@ -1833,9 +1883,10 @@ export default function Lesson() {
         const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
         const t0 = performance.now();
         // The reply's own signal: a new learner turn cancels a drawing still pending.
-        sketchShown = post("/api/draw", { question: q, beat, earlier }, signal)
+        sketchShown = post("/api/draw", { question: q, beat, earlier, mode: savedDrawMode() }, signal)
           .then((r) => r.json())
-          .then(async (res: { elements?: PresetElement[]; error?: string | null }) => {
+          .then(async (res: { elements?: PresetElement[]; error?: string | null; blocks?: Block[] }) => {
+            if (res.blocks?.length) registerBlocks(res.blocks);
             const els = res.elements ?? [];
             console.info(`[sketch] ${els.length} element(s) in ${Math.round(performance.now() - t0)} ms${res.error ? ` (${res.error})` : ""}: ${ask.visual}`);
             if (!els.length || !replyLive || signal.aborted) return;
@@ -2067,7 +2118,7 @@ export default function Lesson() {
 
     /**
      * The one Waiting state: after a check-in, after the learner cut in, or when
-     * they spoke between beats. Nothing resumes on silence. "got it / keep going"
+     * they spoke between beats. Nothing resumes on silence. "keep going"
      * (or Continue) resumes with no model call; anything else gets a spoken
      * reply and, by its level, a brief answer (then wait), a detour (inserted
      * here, then wait at its check-in) or a new ending (then go on).
@@ -2303,16 +2354,15 @@ export default function Lesson() {
           setStatus("waiting");
           continue;
         }
-        // A brief answer: draft the detour now, in case they are still lost.
+        // A small verbal hint needs no speculative drawing. Plan one only if requested.
         escalation = Math.max(escalation, 1) as 1 | 2;
-        if (!draft) draft = planDetour(resumeAt, trailer.planner_note, heardText);
         if (trailer.resume === "continue" || trailer.resume === "replay_beat") return await goOn(reply.said);
         setStatus("waiting");
       }
     };
 
     try {
-      // The intake: ask one question, wait for an answer (or ~4 s of silence), and let the fast model
+      // The intake: ask one question, wait for an answer or explicit Continue, and let the fast model
       // decide whether the plan should change after beat 1. The plan has been streaming meanwhile.
       // Before a lesson: the first words, and whatever follows, go to the conversation model until one of
       // its replies starts a lesson.
@@ -2334,33 +2384,18 @@ export default function Lesson() {
           await playBeat(line(iq.say), abort.signal, null, onFirstSound);
         }
         setStatus("waiting");
-        const answer = await (async () => {
-          const waiting = awaitTurn(abort.signal);
-          let deadline = performance.now() + INTAKE_SILENCE_MS;
-          let started = false;
-          const timer = setInterval(() => {
-            // Silence lets the lesson go on, but only if the learner hasn't started answering at all:
-            // once they speak or type, the patient turn end decides when they're done. Stopped holds it open.
-            if (pausedRef.current) deadline = performance.now() + INTAKE_SILENCE_MS;
-            else if (partialRef.current.trim() || draftRef.current.trim()) started = true;
-            if (!started && performance.now() > deadline) turnRef.current?.(null);
-          }, 200);
-          try {
-            return await waiting;
-          } finally {
-            clearInterval(timer);
-          }
-        })();
+        // Thinking time belongs to the learner; silence is not permission to teach.
+        const answer = await awaitTurn(abort.signal);
         if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
         const waitedMs = Math.round(performance.now() - tAsk);
-        logEv({ kind: "learner", role: "intake answer", via: answer === null ? "silence" : inputViaRef.current, text: answer ?? "(silence)" });
+        logEv({ kind: "learner", role: "intake answer", via: answer === null ? "button" : inputViaRef.current, text: answer ?? "(Continue)" });
         if (!answer || SKIP_INTAKE.test(answer) || isResume(answer)) {
-          setIntakeView(`Asked “${iq.say}” (${iq.kind}, ${iq.model}); ${answer ? `“${answer}”: skipped` : "no answer: went on"}; the intake took ${(waitedMs / 1000).toFixed(1)} s.`);
+          setIntakeView(`Asked “${iq.say}” (${iq.kind}, ${iq.model}); ${answer ? `“${answer}”: skipped` : "continued explicitly"}; the intake took ${(waitedMs / 1000).toFixed(1)} s.`);
           if (answer) {
             learner.replies = [answer];
             noteLearner();
           }
-          logEv({ kind: "intake-decision", skipped: true, reason: answer ? "skip phrase" : "silence", intakeMs: waitedMs });
+          logEv({ kind: "intake-decision", skipped: true, reason: answer ? "skip phrase" : "continue button", intakeMs: waitedMs });
         } else {
           learner.replies = [answer];
           const tDecide = performance.now();
@@ -2557,7 +2592,7 @@ export default function Lesson() {
         Object.assign(timing, {
           endMs: since(),
           playedMs: Math.round(performance.now() - tBeat),
-          interrupted: interruptedRef.current,
+          interrupted: interruptedRef.current || abort.signal.aborted,
           ...(interruptedRef.current ? { atWord: (resumeRef.current?.wordIndex ?? -1) + 1 } : {}),
           draw: list[i].draw,
           drawMs: list[i].drawMs ?? null,
@@ -2583,8 +2618,7 @@ export default function Lesson() {
         said.push(list[i].beat.say);
 
         // A check-in question waits for the learner before the lesson goes on.
-        const more = i + 1 < list.length || planOpen();
-        if (list[i].beat.check && more) {
+        if (list[i].beat.check) {
           const next = await converseAt(i, -1, i + 1, list[i].beat.bridge);
           if (next < 0) break;
           i = next;
@@ -2603,11 +2637,22 @@ export default function Lesson() {
       }
       transcript.end = abort.signal.aborted ? "stopped" : `error: ${String((e as Error).message ?? e)}`;
     } finally {
+      if (endRequestedRef.current === transcript.id) transcript.end = "ended";
       transcript.endedAt = new Date().toISOString();
       transcript.learner = learner;
       transcript.prefetch = { ...stats };
       logEv({ kind: "end", end: transcript.end });
       flushLog();
+      // Refresh the held frame before copying WebGL pixels into the saved whiteboard.
+      if (historyTranscriptRef.current === transcript && playerRef.current) {
+        const player = playerRef.current;
+        await player.seek(player.tick).catch(() => {});
+      }
+      const session = saveHistory(true);
+      if (historyTranscriptRef.current === transcript && (transcript.end === "ended" || (transcript.end === "done" && transcript.beats.length > 0))) {
+        setMicMuted(true);
+        setEnding(session);
+      }
     }
   }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused]);
 
@@ -2748,7 +2793,7 @@ export default function Lesson() {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
+      if (el && (el.closest("dialog") || el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
       if (pausedRef.current) {
         e.preventDefault();
         resumePlayback();
@@ -2780,6 +2825,9 @@ export default function Lesson() {
   const submit = () => {
     const text = draft.trim();
     if (!text || haltedRef.current) return;
+    if (historyTranscriptRef.current && !abortRef.current?.signal.aborted && (historyTranscriptRef.current.end === null || historyTranscriptRef.current.end === "closed") && isLessonEnding(text)) {
+      setDraft(""); finishLesson(); return;
+    }
     inputViaRef.current = "typed";
     if (mergeRef.current(text)) {
       setDraft("");
@@ -2794,6 +2842,14 @@ export default function Lesson() {
       queueRef.current.push(text);
       interrupt();
     } else void ask(text);
+  };
+
+  const continueLearning = async (session: LearningSession) => {
+    try { await saveLearningSession(session); }
+    catch { setHistoryError("Your latest reflection couldn’t save, but it will be used in this conversation."); }
+    setEnding(null);
+    setMicMuted(false);
+    void ask(continuationPrompt(session), session.topic);
   };
 
   const waitingForLearner = status === "waiting" || status === "listening" || status === "paused";
@@ -2841,7 +2897,10 @@ export default function Lesson() {
           <img src="/brand/chalk-hand.png" alt="" />
           <span>Chalky</span>
         </a>
-        <Preferences />
+        <VoiceRecovery active={voice.started && !micMuted && !halted} />
+        <Preferences onContinue={session => void continueLearning(session)} />
+        {ending && <LessonEnding key={ending.id} session={ending} saved={historySaved} error={historyError} onClose={() => setEnding(null)} onContinue={session => void continueLearning(session)} onSaved={session => { setEnding(session); setHistorySaved(true); setHistoryError(""); }} />}
+        {historyError && <p className="history-save-error" role="alert">{historyError}</p>}
             {penReady && (
               <div className="pen" data-testid="pen">
                 {INK_COLORS.map((c) => (
@@ -3036,6 +3095,7 @@ export default function Lesson() {
                 </span>
               ) : micMuted ? "Unmute" : "Mute"}
             </motion.button>
+            {busy && <button type="button" className="lesson-end-button" onClick={finishLesson}>Finish lesson</button>}
             {quizDone && (
               <button type="button" className="quiet-action" onClick={quizDone} data-testid="quiz-done">Done</button>
             )}

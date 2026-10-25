@@ -26,10 +26,32 @@ let outputAnalyser: AnalyserNode | null = null;
 
 /** Set by `holdAudio`: the learner stopped Chalky, so nothing may start the clock again until they press Start. */
 let held = false;
+const voiceStateListeners = new Set<() => void>();
+const notifyVoiceState = () => voiceStateListeners.forEach(listener => listener());
+function makeContext() {
+  const ctx = new AudioContext();
+  ctx.addEventListener("statechange", notifyVoiceState);
+  return ctx;
+}
+export function subscribeVoiceState(listener: () => void) {
+  voiceStateListeners.add(listener);
+  return () => { voiceStateListeners.delete(listener); };
+}
+export function voiceNeedsGesture() {
+  return !held && !!context && (context.state !== "running" || (!!captureContext && captureContext.state !== "running"));
+}
+
+/** Both resume calls run inside the tap, before network or permission awaits. */
+export async function unlockVoice() {
+  const playback = unlockAudio();
+  captureContext ??= makeContext();
+  const capture = captureContext.state !== "running" ? captureContext.resume() : Promise.resolve();
+  await Promise.all([playback, capture]);
+}
 
 /** Call from a click handler. Safe to call again. */
 export async function unlockAudio() {
-  context ??= new AudioContext();
+  context ??= makeContext();
   if (context.state !== "running" && !held) await context.resume();
   if (!outputGain) {
     outputGain = context.createGain();
@@ -84,16 +106,25 @@ export type Microphone = {
 
 /** Starts the mic and calls `onChunk` with 16 kHz s16le PCM chunks. */
 export async function startMicrophone(onChunk: (pcm: ArrayBuffer) => void): Promise<Microphone> {
-  await unlockAudio();
-  captureContext ??= new AudioContext();
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Microphone access requires a secure HTTPS connection and a browser that supports voice.");
+  }
+  await unlockVoice();
+  captureContext ??= makeContext();
   const ctx = captureContext;
   if (ctx.state !== "running") await ctx.resume();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   });
   const url = URL.createObjectURL(new Blob([CAPTURE_WORKLET], { type: "application/javascript" }));
-  await ctx.audioWorklet.addModule(url);
-  URL.revokeObjectURL(url);
+  try {
+    await ctx.audioWorklet.addModule(url);
+  } catch (error) {
+    stream.getTracks().forEach(track => track.stop());
+    throw error;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 
   const source = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
@@ -101,6 +132,10 @@ export async function startMicrophone(onChunk: (pcm: ArrayBuffer) => void): Prom
   const worklet = new AudioWorkletNode(ctx, "chalky-capture");
   source.connect(analyser);
   source.connect(worklet);
+  // Keep the capture graph pulled by Safari's audio renderer, without monitoring the microphone.
+  const silent = ctx.createGain();
+  silent.gain.value = 0;
+  worklet.connect(silent).connect(ctx.destination);
 
   // Downsample by averaging, then convert to 16-bit.
   const ratio = ctx.sampleRate / STT_SAMPLE_RATE;
@@ -135,6 +170,8 @@ export async function startMicrophone(onChunk: (pcm: ArrayBuffer) => void): Prom
       worklet.port.onmessage = null;
       source.disconnect();
       worklet.disconnect();
+      analyser.disconnect();
+      silent.disconnect();
       stream.getTracks().forEach((track) => track.stop());
     },
   };

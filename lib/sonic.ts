@@ -19,9 +19,11 @@ export const SONIC_SAMPLE_RATE = 24000;
 export const SONIC_ENCODING = "pcm_s16le" as const;
 const BYTES_PER_SAMPLE = 2;
 const CARTESIA_URL = "https://api.cartesia.ai/tts/sse";
-const CARTESIA_VERSION = "2026-08-14";
+export const CARTESIA_VERSION = "2026-08-14";
 const DEFAULT_VOICE = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"; // the SDK README's example voice
 const DEFAULT_MODEL = "sonic-3";
+/** The Sonic model the lesson speaks with (CARTESIA_MODEL_ID overrides). */
+export const sonicModel = () => process.env.CARTESIA_MODEL_ID || DEFAULT_MODEL;
 
 /** What the route streams to the browser, one JSON object per line. */
 export type BeatAudioEvent =
@@ -93,7 +95,7 @@ export async function* sonicStream(text: string, signal: AbortSignal, speedOverr
       Accept: "text/event-stream",
     },
     body: JSON.stringify({
-      model_id: process.env.CARTESIA_MODEL_ID || DEFAULT_MODEL,
+      model_id: sonicModel(),
       transcript: text,
       voice: { id: preferences.voice || process.env.CARTESIA_VOICE_ID || DEFAULT_VOICE },
       output_format: { container: "raw", encoding: SONIC_ENCODING, sample_rate: SONIC_SAMPLE_RATE },

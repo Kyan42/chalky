@@ -1,0 +1,55 @@
+/* Same lesson and voice controls, fitted around mobile browser chrome and touch. */
+@media (max-width: 768px), (max-width: 1024px) and (pointer: coarse), (max-height: 540px) and (pointer: coarse) {
+  .board-wrap.tutor-wrap { width:100%; height:100dvh; min-height:360px; }
+  .board.tutor-board { height:100%; min-height:360px; }
+  .chalky-wordmark { left:max(16px,env(safe-area-inset-left)); top:calc(12px + env(safe-area-inset-top)); min-height:48px; }
+  .chalky-wordmark img { width:30px; height:44px; }
+  .chalky-wordmark span { font-size:34px; }
+  .preferences-gear { top:calc(10px + env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); width:48px; height:48px; }
+  .preferences-gear svg { width:32px; height:32px; }
+  .tutor-board > .pen { top:calc(76px + env(safe-area-inset-top)); gap:2px; padding:4px; font-size:16px; max-width:calc(100% - 16px); }
+  .tutor-board > .pen .swatch { width:44px; height:44px; border-width:9px; border-color:var(--paper); }
+  .tutor-board > .pen .swatch[aria-pressed="true"] { border-color:var(--paper); box-shadow:inset 0 0 0 2px #fff,0 0 0 1px var(--ink); }
+  .tutor-board > .pen button:not(.swatch) { min-width:44px; min-height:44px; padding:6px; font-size:13px; }
+  .tutor-board .stage { inset:calc(136px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) calc(220px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); padding:0; }
+  .tutor-board .stage .visual { width:min(100%,calc(100cqh * 1.5)); max-height:100%; aspect-ratio:3 / 2; }
+  .tutor-character { width:clamp(140px,55vw,240px); height:auto; aspect-ratio:1; }
+  .tutor-character.teaching { width:64px; height:64px; left:0; bottom:-64px; }
+  .welcome-tree-ground { width:25vw; bottom:-45px; left:-12px; }
+  .welcome-stone-ground { left:auto; right:-12px; }
+  .conversation-dock { bottom:calc(12px + env(safe-area-inset-bottom)); width:calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)); max-width:640px; }
+  .shared-transcript, .shared-transcript.caption { height:116px; min-height:116px; max-height:116px; margin-bottom:12px; align-items:safe center; overflow-y:auto; overscroll-behavior:contain; }
+  .shared-transcript p { font-size:22px; line-height:1.3; overflow-wrap:anywhere; }
+  .start-voice { min-height:52px; padding:14px 24px; font-size:16px; }
+  .voice-actions { gap:8px; }
+  .lesson-end-button, .quiet-action { min-height:44px; padding:10px 12px; }
+  .thinking-topic { max-width:calc(100% - 32px); }
+  .thinking-shapes { inset:-26px -14px; }
+  .chalk-title { font-size:clamp(20px,5vw,30px); }
+  .preferences-panel { width:calc(100% - 24px); max-width:620px; max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overscroll-behavior:contain; }
+  .preferences-content { padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
+  .preferences-content header { gap:8px; margin-bottom:24px; }
+  .preferences-content h2 { font-size:32px; }
+  .preferences-content header button { min-width:44px; min-height:44px; margin-top:-8px; padding:4px; }
+  .preferences-grid { grid-template-columns:1fr; }
+  .preferences-content select, .preferences-content textarea, .conversation-dock .ask input { font-size:16px; min-height:48px; }
+  .settings-tabs { gap:20px; }
+  .settings-tabs button, .history-back, .history-actions a { min-height:44px; display:inline-flex; align-items:center; }
+  .confidence-options button, .history-actions button { min-height:44px; }
+  .history-list-title, .history-topic { font-size:27px; }
+  .history-save-error { max-width:calc(100% - 24px); text-align:center; }
+  button, a, select { touch-action:manipulation; }
+}
+/* In landscape the board stays large, with the voice dock beside it. */
+@media (max-height: 540px) and (min-width: 600px) and (pointer: coarse) {
+  .tutor-board .stage { inset:calc(76px + env(safe-area-inset-top)) 42% calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); }
+  .tutor-board > .pen { top:calc(12px + env(safe-area-inset-top)); left:52%; }
+  .conversation-dock { width:37%; left:auto; right:max(16px,env(safe-area-inset-right)); bottom:calc(28px + env(safe-area-inset-bottom)); transform:none; }
+  .tutor-character { width:min(170px,50cqh); }
+  .tutor-character.teaching { width:46px; height:46px; bottom:0; }
+  .shared-transcript, .shared-transcript.caption { height:100px; min-height:100px; max-height:100px; }
+  .shared-transcript p { font-size:20px; }
+  .start-voice { padding:12px 18px; }
+  .preferences-content { padding-top:18px; }
+}
+.audio-recovery { position:absolute; top:calc(134px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); z-index:8; max-width:calc(100% - 32px); padding:12px 18px; border:1px solid var(--rule); border-radius:12px; background:var(--paper); color:var(--ink); font:500 15px "Instrument Sans",sans-serif; box-shadow:0 4px 20px #0001; cursor:pointer; }

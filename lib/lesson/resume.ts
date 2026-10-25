@@ -4,13 +4,13 @@
  */
 
 /**
- * Replies that just mean "carry on": Janani's session-controller list, widened
- * so a string of acknowledgements ("yeah ok keep going") also counts.
+ * Only an explicit request to continue bypasses the tutor. Acknowledgements,
+ * hesitation and answers to questions need conversational interpretation.
  */
 const ACK = "u+h+|u+m+|hmm+|mm+|oh|ah|ok(ay)?|sure|yes|yeah|yep|yup|right|alright|got it|i see|makes sense|that makes sense|thanks?( you)?|cool|great|good|fine|uh huh|mhm";
 const GO = "resume|continue|keep going|go on|carry on|next|never ?mind|move on|go ahead";
 const GAP = "[^a-z0-9]*";
-const RESUME = new RegExp(`^${GAP}((${ACK})${GAP})*((${GO})${GAP})?$`, "i");
+const RESUME = new RegExp(`^${GAP}((${ACK})${GAP})*((${GO})${GAP})$`, "i");
 
 export function isResume(text: string): boolean {
   const t = text.trim();
@@ -36,7 +36,7 @@ export function isGreetingOnly(text: string): boolean {
  */
 const STILL_LOST = /\b(still|again|don'?t (get|understand|follow)|do not (get|understand|follow)|not (getting|following|sure)|confus|lost me|i'?m lost|what do you mean|makes? no sense|doesn'?t make sense|huh|wait what|say that again)\b|^\W*(what|huh|sorry)\W*$/i;
 
-/** A yes that isn't sure ("yeah, I think so", "kind of"): one line back, the lesson goes on, the record notes it. */
+/** A hesitant answer needs a focused follow-up, not automatic progression. */
 const HESITANT = /^\W*((yeah|yes|yep|sure|ok(ay)?|um+|uh+)\W+)*(i think so|i guess( so)?|kind of|sort of|maybe|probably|not sure|i'?m not sure|more or less|somewhat|a little)\b/i;
 
 export function isHesitant(text: string): boolean {

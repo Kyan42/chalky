@@ -30,3 +30,6 @@ npm-debug.log*
 
 # Janani's reference boards for /experiments/chalk, rebuilt from her presets branch
 /public/experiments/chalk-ref/
+
+# Drawings learned by slow mode (local runtime data)
+experiments/learned-blocks.json

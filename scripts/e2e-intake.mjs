@@ -3,7 +3,7 @@
 //   npm run dev
 //   ANSWER="I know it's about scattering, but why isn't it violet?" node scripts/e2e-intake.mjs     # real plan, asked by voice
 //   FIXTURE=why-is-the-sky-blue-paced ANSWER="..." node scripts/e2e-intake.mjs                      # saved plan, typed question
-//   FIXTURE=why-is-the-sky-blue-paced node scripts/e2e-intake.mjs                                   # no answer: silence goes on
+//   FIXTURE=why-is-the-sky-blue-paced node scripts/e2e-intake.mjs                                   # no answer: verify it waits, then explicitly continue
 //
 // Asks the question (by voice through a scripted microphone, or typed with a
 // fixture), waits for Chalky's intake question, types ANSWER (or stays silent),
@@ -146,7 +146,15 @@ try {
     await page.fill('[data-testid="question"]', ANSWER);
     await page.click('[data-testid="ask"]');
     console.log(`${since().padStart(5)} s  [typed] "${ANSWER}"`);
-  } else console.log(`${since().padStart(5)} s  [silent]`);
+  } else {
+    console.log(`${since().padStart(5)} s  [silent: thinking time]`);
+    await page.waitForTimeout(6000);
+    const held = await st();
+    check("silence does not start the lesson", held.status === "Your turn" && !held.beat, held.status);
+    // Say an explicit continuation through the typed test input.
+    await page.fill('[data-testid="question"]', 'continue');
+    await page.click('[data-testid="ask"]');
+  }
   if (voiceAnswer) {
     // The whole answer, both halves, must reach the intake decision as one utterance.
     const decided = await waitFor((s) => /answer “/.test(s.intake ?? ""), 30000);
@@ -156,7 +164,7 @@ try {
     check(`a ${PAUSE} s pause mid-answer doesn't cut the answer`, norm.includes(a) && norm.includes(b), `heard “${heard}”`);
   }
   const b1 = await waitFor((s) => s.beat === "b1" && s.status === "Speaking", 30000);
-  check("beat 1 starts after the intake", !!b1, b1 ? `${((Date.now() - tQuestionAsked) / 1000).toFixed(1)} s after the intake question finished${ANSWER || VOICE_ANSWER ? "" : " (silence)"}` : "");
+  check("beat 1 starts after the intake", !!b1, b1 ? `${((Date.now() - tQuestionAsked) / 1000).toFixed(1)} s after the intake question finished${ANSWER || VOICE_ANSWER ? "" : " (explicit continue after silence)"}` : "");
   const s1 = await st();
   console.log(`        intake: ${s1.intake}\n        learner: ${s1.learner ?? "(nothing known)"}`);
   const second = await waitFor((s) => s.beat && s.beat !== "b1", 240000);

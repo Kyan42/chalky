@@ -19,7 +19,7 @@
  * Built on the existing stt.ts and audio.ts; useListening.ts is untouched.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { startMicrophone, unlockAudio, type Microphone } from "./audio";
+import { startMicrophone, unlockVoice, type Microphone } from "./audio";
 import { InkSession } from "./stt";
 import { cartesiaToken } from "./token";
 import { TurnMerger } from "./turn-merger";
@@ -150,7 +150,7 @@ export function useHybridMic(options: HybridMicOptions) {
   const start = useCallback(async () => {
     if (ink.current) return;
     try {
-      await unlockAudio();
+      await unlockVoice();
       merger.current = new TurnMerger({ mergeMs: windowRef.current }, (text, turns) => {
         const via = tail.current || held.current || voiceBarged.current ? "barge" : "open";
         voiceBarged.current = false;
