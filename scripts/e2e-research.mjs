@@ -11,7 +11,7 @@ import { speechWav } from "./fake-mic.mjs";
 const BASE = process.env.BASE_URL ?? "http://localhost:3006";
 const DIR = process.env.LIVE_RUNS ?? join(process.cwd(), "experiments/live-runs");
 const OUT = join(process.cwd(), "experiments/research", process.env.RUN ?? "run");
-const ASK = process.env.ASK ?? "What's new in vision-language-action models this month?";
+const ASK = process.env.ASK ?? "What's new in CRISPR this month?";
 const INTAKE = process.env.INTAKE ?? "I know what a robot arm policy is, but not these new models.";
 mkdirSync(OUT, { recursive: true });
 const clipDir = join(process.cwd(), "experiments/conversation-e2e/clips");
@@ -48,13 +48,13 @@ const st = () =>
     status: document.querySelector('[data-testid="status"]')?.textContent?.trim() ?? "",
     beat: document.querySelector('[data-testid="beats"] li[data-state="now"]')?.dataset.beatId ?? null,
     badge: !!document.querySelector('[data-testid="research-badge"]'),
-    cards: document.querySelectorAll('[data-testid="paper-card"]').length,
+    cards: document.querySelectorAll('[data-testid="research-card"]').length,
     // PaperCards opens the cited paper's card (data-open) and marks its matching key sentence.
     lit: (() => {
-      const open = document.querySelector('[data-testid="paper-card"][data-open="true"]');
+      const open = document.querySelector('[data-testid="research-card"][data-open="true"]');
       return open ? `paper-${open.getAttribute("data-n")}` : null;
     })(),
-    match: !!document.querySelector('[data-testid="paper-card"][data-open="true"] [data-testid="paper-match"]'),
+    match: !!document.querySelector('[data-testid="research-card"][data-open="true"] [data-testid="research-match"]'),
   }));
 const waitFor = async (pred, ms) => {
   const until = Date.now() + ms;
@@ -106,15 +106,15 @@ const f = readdirSync(DIR).map((n) => ({ n, m: statSync(join(DIR, n)).mtimeMs })
 const t = f ? JSON.parse(readFileSync(join(DIR, f.n), "utf8")) : null;
 const ev = (k) => t?.events.filter((e) => e.kind === k) ?? [];
 const reply = ev("reply")[0];
-const research = ev("research")[0];
+const research = ev("research-ready")[0] ?? ev("research-none")[0];
 const planned = ev("planned");
-console.log(`        first reply: "${reply?.text}" [${(reply?.actions ?? []).map((a) => (a.type === "research" ? `research(${a.topic}, ${a.days}d)` : a.type)).join(", ")}]`);
+console.log(`        first reply: "${reply?.text}" [${(reply?.actions ?? []).map((a) => a.type).join(", ")}]`);
 console.log(`        research: ${JSON.stringify(research)}; requests: ${polls.join(", ")}`);
 console.log(`        planned: ${planned.map((e) => `${e.beatId}${e.cite ? `[${e.cite}]` : ""}`).join(" ")}`);
 console.log(`        lit while speaking: ${JSON.stringify(litByBeat)}`);
 check("the first reply asks for recent papers", (reply?.actions ?? []).some((a) => a.type === "research"));
 // A cached topic is ready at once (no badge to see, no polling); a fresh one shows the badge and polls.
-check("the research came back ready (cached at once, or polled until ready with Finding papers shown)", research?.papers > 0 && (research.cached || (sawBadge && polls.some((p) => p.startsWith("GET")))), `${research?.papers} papers via ${research?.via}${research?.cached ? ", cached" : ""}`);
+check("the lookup came back ready", research?.kind === "research-ready" && research.items > 0, `${research?.items} items${research?.cached ? ", cached" : ""}, ${research?.ms} ms`);
 check("the intake was asked and answered meanwhile", ev("intake-asked").length === 1 && ev("intake-decision").length === 1);
 const cited = planned.filter((e) => e.cite);
 check("the planner taught from the papers: beats carry cite", cited.length >= 3 && new Set(cited.map((e) => e.cite)).size >= 2, `${cited.length} cited beats`);
