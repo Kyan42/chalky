@@ -1762,7 +1762,7 @@ export default function Lesson() {
     let socraticOff = !socratic(readPreferences(document.cookie));
     const STOP_ASKING = /\b(just explain|just teach( me)?|stop asking|don'?t ask|no more questions|skip the questions)\b/i;
     /** This question only: tell them, and teach the section as planned (questions stay on). */
-    const TELL_ME = /\b(just tell me|tell me the answer|move on|i (really |honestly )?(don'?t|do not) know)\b/i;
+    const TELL_ME = /\b(just tell me|tell me the answer|move on|keep going|go on|carry on|i (really |honestly )?(don'?t|do not) know)\b/i;
     /** The beats of the section after `i` that teach (no quiz beats), in the order the predict rubric numbers them. */
     const sectionBeats = (i: number) => {
       const out: BeatState[] = [];
