@@ -43,7 +43,7 @@ export interface DrawResult {
   error: string | null;
   /** Each model call made (a fallback adds a second). */
   calls?: CallLog[];
-  /** The blocks Moss listed in the prompt; absent when it listed the whole catalog. */
+  /** The blocks the prompt listed (Moss's pick, or the keyword fallback's). */
   blockIds?: string[];
 }
 
@@ -103,7 +103,7 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
   return { elements: pointOnly ? out : fitToRegion(out, beat.region), dropped, swapped };
 }
 
-async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks?: Block[] | null): Promise<DrawResult> {
+async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks: Block[] = []): Promise<DrawResult> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -137,7 +137,7 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
 }
 
 export async function drawBeat(question: string, beat: PlannedBeat, earlier: PlannedBeat[], signal?: AbortSignal, model = modelFor(beat)): Promise<DrawResult> {
-  // Moss picks the catalog blocks this beat's prompt lists (null: all of them).
+  // Moss (or the keyword fallback) picks the catalog blocks this beat's prompt lists.
   const { blocks } = await blocksForBeat(beat);
   const blockIds = blocks?.map((b) => b.id);
   const first = { ...(await attempt(question, beat, earlier, model, TIMEOUT_MS, signal, blocks)), blockIds };

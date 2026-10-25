@@ -5,13 +5,15 @@
  *
  * Env: MOSS_PROJECT_ID and MOSS_PROJECT_KEY (portal.usemoss.dev); CHALKY_BLOCK_RETRIEVAL=moss|all
  * (default moss when the keys are set); MOSS_BLOCK_INDEX (default "chalky-blocks"). Without keys,
- * or when Moss is still loading, slow or failing, every caller gets null and keeps the full catalog.
+ * or when Moss is still loading, slow or failing, a beat gets keywordBlocks() instead: the catalog is
+ * about 300 blocks, too big to list whole.
  *
  * No "server-only" here: scripts/moss-build-blocks.ts and scripts/test-moss-blocks.ts import it
  * under tsx. The index is built by `npx tsx --env-file=.env.local scripts/moss-build-blocks.ts`.
  */
 import { MossClient, type DocumentInfo } from "@moss-js/moss";
 import { BLOCKS, blockById, type Block } from "@/lib/blocks";
+import { foldNumbered, keywordBlocks } from "@/lib/blocks/catalog";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
 export const BLOCK_INDEX = process.env.MOSS_BLOCK_INDEX || "chalky-blocks";
@@ -27,6 +29,8 @@ const QUERY_BUDGET_MS = 150;
 const QUERY_ALPHA = Number(process.env.MOSS_BLOCK_ALPHA) || 0.5;
 /** How many retrieved blocks a drawn beat sees (plus any named by id in its adds). */
 const BEAT_K = Number(process.env.CHALKY_BLOCK_K) || 5;
+/** How many keyword matches join Moss's pick (lib/blocks/catalog.ts keywordBlocks). */
+const KEYWORD_K = 3;
 
 export type RetrievalMode = "moss" | "all";
 export type BlockHit = { id: string; score: number };
@@ -41,13 +45,19 @@ export function retrievalMode(): RetrievalMode {
   return process.env.CHALKY_BLOCK_RETRIEVAL === "all" || !hasMossKeys() ? "all" : "moss";
 }
 
-/** The text Moss embeds for a block: what it is, what it's about, its parts and anchor names. */
+const STANDARD_ANCHORS = new Set(["center", "top", "bottom", "left", "right"]);
+
+/**
+ * The text Moss embeds for a block: its title and topic words first, then what it is, its parts and
+ * anchor names, with numbered runs folded ("cell 1-1…cell 7-18") so a block with 118 parts is
+ * still about its title.
+ */
 export function blockDoc(b: Block): DocumentInfo {
-  const parts = b.parts.map((p) => p.label).join(", ");
-  const anchors = Object.keys(b.anchors).join(", ");
+  const parts = foldNumbered([...new Set(b.parts.map((p) => p.label))]);
+  const anchors = foldNumbered(Object.keys(b.anchors).filter((a) => !STANDARD_ANCHORS.has(a)));
   return {
     id: b.id,
-    text: `${b.title}: ${b.describe}. About: ${b.tags.join(", ")}. Parts: ${parts}. Anchors: ${anchors}.`,
+    text: `${b.title}. About: ${b.tags.join(", ")}. ${b.describe}. Parts: ${parts}.${anchors ? ` Anchors: ${anchors}.` : ""}`,
     metadata: { blockId: b.id, title: b.title },
   };
 }
@@ -114,26 +124,37 @@ export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?:
 /** What a beat asks Moss: the planned drawing plus what each new id is. */
 export const beatQuery = (beat: Pick<PlannedBeat, "visual" | "adds">) => [beat.visual, ...beat.adds.map((a) => a.what)].filter(Boolean).join(". ");
 
-/** Blocks a beat names outright: an add whose id is a block id, or starts with one ("co2-in"). */
+/** Blocks a beat names outright: an add whose id is a block id, or starts with one ("co2-in", "neural-net-1"). */
 export function namedBlocks(beat: Pick<PlannedBeat, "adds">): Block[] {
   return beat.adds.flatMap((a) => {
-    const b = blockById(a.id) ?? blockById(a.id.split(/[-_.]/)[0]);
-    return b ? [b] : [];
+    const words = a.id.split(/[-_.]/);
+    for (let n = words.length; n > 0; n--) {
+      const b = blockById(words.slice(0, n).join("-"));
+      if (b) return [b];
+    }
+    return [];
   });
 }
 
 /**
- * The blocks one beat's drawer prompt lists, or null for the whole catalog (retrieval off, no key,
- * index loading or failing, or a point beat that adds nothing). Logs the pick and its latency.
+ * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches
+ * and the top keyword matches, or just keyword matches when Moss is off, keyless, loading or
+ * failing. A point beat adds nothing, so
+ * it gets none. Logs the pick and its latency.
  */
-export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[] | null; retrieval: Retrieval }> {
-  if (beat.mode === "point") return { blocks: null, retrieval: { status: "off", hits: null, ms: 0 } };
-  const retrieval = await relevantBlocks(beatQuery(beat), BEAT_K);
+export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[]; retrieval: Retrieval }> {
+  if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
+  const query = beatQuery(beat);
+  const retrieval = await relevantBlocks(query, BEAT_K);
   if (!retrieval.hits) {
-    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; full catalog`);
-    return { blocks: null, retrieval };
+    const blocks = [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])];
+    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; keyword match`);
+    console.log(`[blocks] ${beat.id}: keywords -> ${blocks.map((b) => b.id).join(", ") || "none"}`);
+    return { blocks, retrieval };
   }
-  const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!)])];
+  // Plus the keyword match's top few: an embedding can rank a literal "water molecules" below the
+  // plant it is in (scripts/test-moss-blocks.ts), and a keyword match never does.
+  const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])];
   console.log(`[moss] ${beat.id}: ${retrieval.ms} ms -> ${blocks.map((b) => b.id).join(", ")} (${retrieval.hits.map((h) => `${h.id} ${h.score}`).join(", ")})`);
   return { blocks, retrieval };
 }

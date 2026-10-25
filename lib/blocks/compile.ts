@@ -16,7 +16,7 @@
 import type { Scene } from "@/experiments/visual-flex/doc";
 import { blockById } from "./index";
 import { placeBlock, renderBlock, renderLoop, renderTravel, ungx, ungy, type Box, type Pt, type Rendered } from "./render";
-import type { Block } from "./types";
+import type { Block } from "@/presets/types";
 
 /** The compiler's placed element, structurally (lib/lesson/presets.ts `Placed`). */
 export interface PlacedLike {

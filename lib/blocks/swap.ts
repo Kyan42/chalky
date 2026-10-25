@@ -4,12 +4,17 @@
  * is kept beside the block. Used by the drawer's cleanElements (lib/lesson/draw.ts); pure, so it
  * can be tested without the server.
  */
-import { BLOCKS } from "./index";
+import { BLOCKS, blockKey } from "./index";
 import type { ElementLike } from "./compile";
 
 /** Block id by its id or title, spelling aside ("Water drop", "water-drop", "CO2", "a leaf"). */
 const BLOCK_NAMES = new Map<string, string>();
-for (const b of BLOCKS) for (const name of [b.id, b.title]) BLOCK_NAMES.set(name.toLowerCase().replace(/[^a-z0-9]/g, ""), b.id);
+// Ids first, then titles, and the first block to claim a name keeps it: "Carbon dioxide" is
+// chemistry's carbon-dioxide (its id) before biology's co2 (whose title it only matches).
+for (const name of [...BLOCKS.map((b) => [b.id, b.id]), ...BLOCKS.map((b) => [b.title, b.id])]) {
+  const key = blockKey(name[0]);
+  if (!BLOCK_NAMES.has(key)) BLOCK_NAMES.set(key, name[1]);
+}
 
 export const blockNamed = (text: string): string | null =>
   BLOCK_NAMES.get(text.toLowerCase().replace(/^(a|an|the|one)\s+/, "").replace(/[^a-z0-9]/g, "")) ?? null;

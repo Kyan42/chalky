@@ -1,5 +1,37 @@
 # Blocks in the preset compiler: handoff
 
+## Update: 300 blocks from presets/
+
+Janani's `presets` branch is merged in, and `presets/` is now the only copy of the blocks:
+biology (100), computing (100) and chemistry (100). `lib/blocks/index.ts` reads them from there.
+The old copies in `lib/blocks/biology`, `types.ts` and `geometry.ts` are gone.
+
+- **Ids:** `blockById` compares ids without case or punctuation, so a hyphenated id like
+  `neural-net` or `water-molecule` resolves. Before, the compiler stripped hyphens from `text` and
+  then missed. `namedBlocks` also matches a planner id that starts with a hyphenated block id,
+  such as `neural-net-1`.
+- **Prompt:** the whole catalog is about 74k characters, so the drawer prompt never lists all of
+  it.
+  - `blocksForBeat` returns the blocks the beat names, plus Moss's top 5.
+  - When Moss is off, has no keys, is loading or fails, `keywordBlocks` (`lib/blocks/catalog.ts`)
+    picks them from names, tags and descriptions instead.
+  - A point beat gets none.
+  - `presetLanguage(blocks)` in `lib/lesson/language.ts` writes the scene language for just those
+    blocks. It replaces the old `PRESET_LANGUAGE` constant.
+- **Catalog lines:** numbered parts are folded, so 118 periodic-table cells read
+  `cell-1-1…cell-7-18`. The standard anchors (center, top, bottom, left, right) are stated once
+  rather than on every line.
+- **Swap:** the circle-or-box-to-block swap matches ids before titles. In each case the first
+  block to claim a name keeps it.
+- **Gallery:** `/experiments/blocks?topic=<n>` shows one topic at a time.
+- **Moss:** rebuild the index after changing blocks, with
+  `npx tsx --env-file=.env.local scripts/moss-build-blocks.ts`.
+  - `scripts/test-moss-blocks.ts` checks 26 briefs across the three subjects.
+  - It also scores the keyword fallback on the same briefs, which needs no keys.
+- **Factories:** the presets also export factories such as `makeAtom({ protons })` and
+  `makeBeaker({ fill })`. The scene language can only place the default instances so far.
+
+
 Janani's biology blocks (hand-drawn line art with named parts and anchors) now render on our
 stage and are wired into the preset compiler and drawer prompt on branch
 `keyon/biology-blocks-b31bcc`. This note is for whoever merges that with the parallel-board /

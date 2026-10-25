@@ -1,10 +1,11 @@
 /**
  * POST /api/moss-blocks  { brief, k? }  →  the blocks Moss ranks for a beat brief, the query's
- * latency, and the drawer prompt's block section before (whole catalog) and after (just those).
+ * latency, the keyword fallback's pick for the same brief, and the drawer prompt's block section
+ * for Moss's pick.
  * For the dev page /experiments/moss. Waits for the index to load, unlike a live beat.
  */
 import { blockById } from "@/lib/blocks";
-import { blockLanguageFor, BLOCK_LANGUAGE } from "@/lib/blocks/catalog";
+import { blockLanguageFor, keywordBlocks } from "@/lib/blocks/catalog";
 import { BLOCK_INDEX, hasMossKeys, mossState, relevantBlocks, retrievalMode } from "@/lib/moss/blocks";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     loadMs: mossState()?.loadMs ?? null,
     ...retrieval,
     hits,
-    before: BLOCK_LANGUAGE,
+    keywords: keywordBlocks(brief, k).map((b) => b.id),
     after,
   });
 }
