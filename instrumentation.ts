@@ -5,6 +5,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { warmBlockIndex } = await import("@/lib/moss/blocks");
     warmBlockIndex();
+    // Learned blocks (slow mode's own drawings, lib/moss/learned.ts), so the first plan and beat list them.
+    const { loadLearned } = await import("@/lib/moss/learned");
+    void loadLearned();
     // And sessions made ahead for the first lesson's board and learner memory (lib/moss/session.ts).
     const { warmSessions } = await import("@/lib/moss/session");
     warmSessions();

@@ -24,7 +24,37 @@ export const blockKey = (id: string) => id.toLowerCase().replace(/[^a-z0-9]/g, "
 
 const byId = new Map(BLOCKS.map((b) => [blockKey(b.id), b]));
 
-/** The block with this id (spelling aside), or undefined. */
+/** The block with this id (spelling aside), or undefined: the catalog's, else a learned one. */
 export function blockById(id: string): Block | undefined {
-  return byId.get(blockKey(id));
+  const key = blockKey(id);
+  return byId.get(key) ?? store.byId.get(key);
 }
+
+/**
+ * Blocks a slow-mode lesson drew for itself and kept (lib/moss/learned.ts): registered on the server
+ * when they load from Moss, and in the browser when a draw response carries them, so they place and
+ * render like any catalog block. An id the catalog already has is never replaced. Held on globalThis
+ * so a dev hot reload of this module doesn't forget them.
+ */
+type LearnedStore = { list: Block[]; byId: Map<string, Block>; version: number };
+const gl = globalThis as typeof globalThis & { __chalkyLearnedBlocks?: LearnedStore };
+const store: LearnedStore = (gl.__chalkyLearnedBlocks ??= { list: [], byId: new Map(), version: 0 });
+
+export function registerBlocks(blocks: readonly Block[]): Block[] {
+  const added = blocks.filter((b) => {
+    const key = blockKey(b.id);
+    if (!key || byId.has(key) || store.byId.has(key)) return false;
+    store.byId.set(key, b);
+    store.list.push(b);
+    return true;
+  });
+  if (added.length) store.version++;
+  return added;
+}
+
+export const isLearned = (id: string) => store.byId.has(blockKey(id));
+export const learnedBlocks = (): readonly Block[] => store.list;
+/** The catalog plus every learned block. */
+export const allBlocks = (): Block[] => [...BLOCKS, ...store.list];
+/** Bumped whenever learned blocks are added, so caches built from allBlocks() know to rebuild. */
+export const blocksVersion = () => store.version;

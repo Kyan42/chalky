@@ -7,7 +7,7 @@
  * lib/moss/blocks.ts picks them with Moss, or with keywordBlocks() below when Moss is off, and
  * blockLanguageFor() writes the section for just those.
  */
-import { BLOCKS } from "./index";
+import { allBlocks, blocksVersion } from "./index";
 import type { Block } from "@/presets/types";
 
 const aspect = (b: Block) => {
@@ -61,14 +61,20 @@ const words = (s: string) =>
 
 type Indexed = { block: Block; name: Set<string>; tags: Set<string>; tagPhrases: string[]; describe: Set<string> };
 let indexed: Indexed[] | null = null;
-const index = () =>
-  (indexed ??= BLOCKS.map((block) => ({
+let indexedAt = -1;
+const index = () => {
+  if (indexedAt !== blocksVersion()) {
+    indexed = null;
+    indexedAt = blocksVersion();
+  }
+  return (indexed ??= allBlocks().map((block) => ({
     block,
     name: new Set([...words(block.id), ...words(block.title)]),
     tags: new Set(block.tags.flatMap(words)),
     tagPhrases: block.tags.filter((t) => t.includes(" ")).map((t) => t.toLowerCase()),
     describe: new Set(words(block.describe)),
   })));
+};
 
 /**
  * The k blocks whose name, tags and description share the most words with `query`, best first.

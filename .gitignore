@@ -30,3 +30,6 @@ npm-debug.log*
 
 # Janani's reference boards for /experiments/chalk, rebuilt from her presets branch
 /public/experiments/chalk-ref/
+
+# slow-mode learned blocks: a local copy of what the Moss block index holds
+/experiments/learned-blocks.json

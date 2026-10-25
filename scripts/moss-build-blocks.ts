@@ -1,6 +1,7 @@
 // npx tsx --env-file=.env.local scripts/moss-build-blocks.ts
 // Creates the Moss block index (one document per catalog block), or brings an existing one up to
-// date: upserts every block and deletes documents for blocks that no longer exist. Then loads it
+// date: upserts every block and deletes documents for blocks that no longer exist (learned blocks, which
+// fast-mode lessons add, are kept). Then loads it
 // and runs one query, so a green run means the live app can use it. Free plan: 3 indexes, so the
 // name stays fixed (MOSS_BLOCK_INDEX, default "chalky-blocks").
 import { MossClient } from "@moss-js/moss";
@@ -28,7 +29,8 @@ async function main() {
     const job = await client.addDocs(BLOCK_INDEX, docs, { upsert: true });
     console.log(`  upserted ${job.docCount} docs, ${since()}`);
     const ids = new Set(BLOCKS.map((b) => b.id));
-    const stale = (await client.getDocs(BLOCK_INDEX)).map((d) => d.id).filter((id) => !ids.has(id));
+    // Learned blocks (lib/moss/learned.ts) live only in the index: never stale.
+    const stale = (await client.getDocs(BLOCK_INDEX)).filter((d) => d.metadata?.learned !== "1").map((d) => d.id).filter((id) => !ids.has(id));
     if (stale.length) {
       await client.deleteDocs(BLOCK_INDEX, stale);
       console.log(`  deleted ${stale.length} stale docs: ${stale.join(", ")}`);

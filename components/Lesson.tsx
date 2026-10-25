@@ -36,6 +36,8 @@ import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
+import type { DrawMode } from "@/lib/lesson/language";
+import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
@@ -85,6 +87,19 @@ function voiceBargeInEnabled(): boolean {
     // Storage blocked (private window): fall back to the build's default.
   }
   return process.env.NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN === "1";
+}
+/**
+ * Draw mode, the "Slow mode" switch in the header (lib/lesson/language.ts DrawMode): fast, the default,
+ * draws every beat from presets; slow lets about one beat in five draw freely, and what it invents is
+ * kept for later lessons. Remembered in this browser; a change applies to the beats drawn after it.
+ */
+const SLOW_MODE_KEY = "chalky.slowMode";
+function savedDrawMode(): DrawMode {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(SLOW_MODE_KEY) === "1" ? "slow" : "fast";
+  } catch {
+    return "fast";
+  }
 }
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
 const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
@@ -711,6 +726,11 @@ export default function Lesson() {
   // Read after mount so the server render and the first client render agree.
   const [voiceBargeIn, setVoiceBargeIn] = useState(false);
   useEffect(() => setVoiceBargeIn(voiceBargeInEnabled()), []);
+  const [drawMode, setDrawMode] = useState<DrawMode>("fast");
+  /** Read by a running lesson's draws, so flipping the switch mid-lesson changes the beats still to draw. */
+  const drawModeRef = useRef<DrawMode>("fast");
+  drawModeRef.current = drawMode;
+  useEffect(() => setDrawMode(savedDrawMode()), []);
   /** Paused and not listening (Stop, Pause, a Space tap): nothing the learner says, types or draws is taken. */
   const [halted, setHalted] = useState(false);
   /** A label quiz: numbered markers over the board, each hiding its label until the answers are graded. */
@@ -1252,9 +1272,12 @@ export default function Lesson() {
       state.elements = null;
       const index = list.indexOf(state);
       const earlier = earlierOverride ?? list.filter((b, i) => i < index && b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
-      return post("/api/draw", { question: q, beat, earlier }, signal)
+      return post("/api/draw", { question: q, beat, earlier, mode: drawModeRef.current }, signal)
         .then((r) => r.json())
-        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[] }) => {
+        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[]; free?: boolean; learned?: string[]; blocks?: Block[] }) => {
+          // Learned blocks (slow mode's own drawings) render like catalog ones once the browser knows them.
+          if (r.blocks?.length) registerBlocks(r.blocks);
+          if (r.free) logEv({ kind: "free-beat", beatId: beat.id, learned: r.learned ?? [], blocks: (r.blocks ?? []).map((b) => b.id) });
           state.drawCalls = r.calls;
           state.elements = r.elements ?? [];
           state.draw = state.elements.length ? "ready" : "failed";
@@ -1864,9 +1887,10 @@ export default function Lesson() {
         const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual, mode: "draw", check: false, scene, region: { ...region, x: region.x - sceneX(scene) }, adds: ask.adds, points: [] };
         const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
         const t0 = performance.now();
-        sketchShown = post("/api/draw", { question: q, beat, earlier }, abort.signal)
+        sketchShown = post("/api/draw", { question: q, beat, earlier, mode: drawModeRef.current }, abort.signal)
           .then((r) => r.json())
-          .then(async (res: { elements?: PresetElement[]; error?: string | null }) => {
+          .then(async (res: { elements?: PresetElement[]; error?: string | null; blocks?: Block[] }) => {
+            if (res.blocks?.length) registerBlocks(res.blocks);
             const els = res.elements ?? [];
             console.info(`[sketch] ${els.length} element(s) in ${Math.round(performance.now() - t0)} ms${res.error ? ` (${res.error})` : ""}: ${ask.visual}`);
             if (!els.length) return;
@@ -2907,6 +2931,26 @@ export default function Lesson() {
               title="Talk over Chalky to interrupt it (best with headphones). Space always works."
             >
               Voice interrupt
+            </button>
+            <button
+              type="button"
+              className="debug-toggle"
+              aria-pressed={drawMode === "slow"}
+              onClick={() =>
+                setDrawMode((m) => {
+                  const next: DrawMode = m === "slow" ? "fast" : "slow";
+                  try {
+                    window.localStorage.setItem(SLOW_MODE_KEY, next === "slow" ? "1" : "0");
+                  } catch {
+                    // Not remembered (storage blocked); it still applies now.
+                  }
+                  return next;
+                })
+              }
+              data-testid="draw-mode-toggle"
+              title="Off (fast mode): Chalky draws only from its ready-made drawings. On: about one drawing in five is freer, and anything new it draws is kept for later lessons."
+            >
+              Slow mode
             </button>
             <button type="button" className="debug-toggle" aria-pressed={debug} onClick={() => setDebug((v) => !v)} data-testid="debug-toggle" title="Beats, timings, learner record and prefetch stats">
               Debug
