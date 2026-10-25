@@ -1,10 +1,44 @@
-:root {
-  --paper: #f7f5ef;
-  --ink: #1f2a44;
-  --muted: #8a8577;
-  --rule: #ddd8cb;
-  --accent: #e4572e;
-  --frame: #2b2b2b;
+/*
+ * The page follows the board's theme (lib/board/theme.ts), set on <html data-theme> by
+ * app/layout.tsx from NEXT_PUBLIC_CHALKY_THEME and by ?theme= in the browser. Each theme gives the
+ * same roles: the board colour (--paper), the chalk (--ink), a quieter chalk (--muted), rules, the
+ * red chalk (--accent), the blue, the yellow, and the frame around the board.
+ */
+:root, :root[data-theme="chalk"] {
+  --paper: #FBFAF7;
+  --ink: #23262F;
+  --muted: #8A8F9C;
+  --rule: #E2E3E8;
+  --accent: #E0474C;
+  --blue: #2F6FDB;
+  --yellow: #F5C518;
+  --field: #FFFFFF;
+  --on-ink: #FBFAF7;
+  --frame: #2B2B2B;
+}
+:root[data-theme="whiteboard"] {
+  --paper: #FBFAF7;
+  --ink: #23262F;
+  --muted: #8A8F9C;
+  --rule: #E2E3E8;
+  --accent: #E0474C;
+  --blue: #2F6FDB;
+  --yellow: #F5C518;
+  --field: #FFFFFF;
+  --on-ink: #FBFAF7;
+  --frame: #2B2B2B;
+}
+:root[data-theme="chalkboard"] {
+  --paper: #25332D;
+  --ink: #F1EEE4;
+  --muted: #AEB5AE;
+  --rule: #3C4C44;
+  --accent: #F28C82;
+  --blue: #8EC5EE;
+  --yellow: #F7DC6F;
+  --field: #1C2824;
+  --on-ink: #25332D;
+  --frame: #151D19;
 }
 
 * { box-sizing: border-box; }
@@ -33,7 +67,7 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .mic { font-size: clamp(10px, 1vw, 15px); color: var(--muted); display: flex; align-items: center; gap: 0.5em; }
 .mic .dot { width: 0.7em; height: 0.7em; border-radius: 50%; background: var(--rule); }
 .mic[data-state="speaking"] .dot { background: var(--accent); }
-.mic[data-state="paused"] .dot { background: #e0b100; }
+.mic[data-state="paused"] .dot { background: var(--yellow); }
 
 .stage { grid-area: stage; position: relative; display: grid; place-items: center;
   padding: 2%; transition: opacity 120ms linear, filter 120ms linear; }
@@ -47,7 +81,8 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 
 .caption { grid-area: caption; border-top: 1px solid var(--rule); display: flex; align-items: center;
   justify-content: center; padding: 0 3%; font-size: clamp(14px, 1.9vw, 30px); text-align: center; }
-.caption .word { color: var(--rule); transition: color 60ms linear; }
+.caption .word { color: var(--muted); opacity: 0.55; transition: color 60ms linear, opacity 60ms linear; }
+.caption .word[data-state="spoken"], .caption .word[data-state="now"] { opacity: 1; }
 .caption .word[data-state="spoken"] { color: var(--ink); }
 .caption .word[data-state="now"] { color: var(--accent); }
 
@@ -59,10 +94,10 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 /* Lesson page: question box and the planned beats. */
 .ask { display: flex; gap: 6px; align-items: center; flex: 1; justify-content: center; padding: 0 2%; }
 .ask input { width: min(520px, 100%); font: inherit; font-size: clamp(11px, 1vw, 15px); padding: 0.45em 0.8em;
-  border-radius: 6px; border: 1px solid var(--rule); background: #fff; color: var(--ink); }
+  border-radius: 6px; border: 1px solid var(--rule); background: var(--field); color: var(--ink); }
 .ask button { font: inherit; font-size: clamp(11px, 1vw, 14px); padding: 0.45em 0.9em; border-radius: 6px;
-  border: 1px solid var(--rule); background: var(--ink); color: #fff; cursor: pointer; }
-.ask button[data-testid="stop"] { background: #fff; color: var(--ink); }
+  border: 1px solid var(--rule); background: var(--ink); color: var(--on-ink); cursor: pointer; }
+.ask button[data-testid="stop"] { background: var(--field); color: var(--ink); }
 .lesson-error { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); background: #3a1d1d; color: #ffb4a8;
   padding: 6px 12px; border-radius: 6px; font-size: 13px; max-width: 70vw; }
 .lesson-beats ol { margin: 1em 0 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 0.7em; }
@@ -71,8 +106,8 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .lesson-beats li[data-state="done"] .beat-say { color: var(--ink); opacity: 0.6; }
 .beat-say { display: block; }
 .beat-meta { display: block; font-size: 0.85em; color: var(--muted); margin-top: 0.2em; }
-.ask button.continue { background: var(--accent); border-color: var(--accent); }
-.mic[data-state="waiting"] .dot { background: #e0b100; }
+.ask button.continue { background: var(--accent); border-color: var(--accent); color: var(--on-ink); }
+.mic[data-state="waiting"] .dot { background: var(--yellow); }
 .lesson-beats ol { overflow-y: auto; max-height: 82%; }
 
 /* Voice orb (ported from Janani's PR #2). */
@@ -88,8 +123,8 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .stage .welcome h2 { margin: 0; font-size: clamp(16px, 2.2vw, 34px); font-weight: 650; }
 .stage .welcome p { margin: 0; color: var(--muted); font-size: clamp(11px, 1.1vw, 17px); }
 .stage .welcome button { font: inherit; font-size: clamp(12px, 1.2vw, 17px); padding: 0.6em 1.4em; border-radius: 999px; border: 0;
-  background: var(--ink); color: #fff; cursor: pointer; }
-.caption .heard { color: #2E86E4; font-style: italic; }
+  background: var(--ink); color: var(--on-ink); cursor: pointer; }
+.caption .heard { color: var(--blue); font-style: italic; }
 .topic .orb { margin-left: 0.6em; }
 /* The topic written on the board while the first beat is planned. */
 .chalk-title { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 12%; text-align: center; pointer-events: none;

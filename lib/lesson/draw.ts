@@ -11,6 +11,7 @@
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
+import { asBlock } from "@/lib/blocks/swap";
 import { trackCall } from "./calllog";
 import { DRAW_SYSTEM, drawPrompt, PRESET_SCHEMA } from "./language";
 import { cleanId } from "./planner";
@@ -35,6 +36,8 @@ export interface DrawResult {
   outputTokens: number;
   /** Elements dropped because they referred to ids nobody declared or drew. */
   dropped: number;
+  /** Circles or boxes labelled with a block's name that were swapped for that block. */
+  swapped: number;
   error: string | null;
   /** Each model call made (a fallback adds a second). */
   calls?: CallLog[];
@@ -53,7 +56,7 @@ export function modelFor(beat: PlannedBeat): string {
  * or an element earlier in this answer; the compiler would only report it as
  * dangling otherwise.
  */
-function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]): { elements: PresetElement[]; dropped: number } {
+function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]): { elements: PresetElement[]; dropped: number; swapped: number } {
   const pointOnly = beat.mode === "point";
   const list = Array.isArray((raw as { elements?: unknown })?.elements) ? (raw as { elements: unknown[] }).elements : [];
   const known = new Set<string>([...earlier.flatMap((b) => b.adds.map((a) => a.id)), ...beat.adds.map((a) => a.id)]);
@@ -62,6 +65,7 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
   const knows = (id: string) => known.has(id) || parts.has(id.split(".")[0]) || (id.includes(".") && known.has(id.split(".")[0]));
   const out: PresetElement[] = [];
   let dropped = 0;
+  let swapped = 0;
   for (const item of list) {
     const e = item as Record<string, unknown>;
     const kind = String(e.kind ?? "");
@@ -75,7 +79,7 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
       dropped++;
       continue;
     }
-    out.push({
+    const element: PresetElement = {
       id,
       kind,
       at: num(e.at, 0),
@@ -84,12 +88,15 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
       args: Array.isArray(e.args) ? e.args.map((a) => num(a, 0)) : [],
       text: typeof e.text === "string" ? e.text : "",
       refs: refs.join(","),
-    });
+    };
+    const swap = asBlock(element);
+    if (swap) swapped++;
+    out.push(...(swap ?? [element]));
     known.add(id);
     if (WITH_PARTS.has(kind)) parts.add(id);
     if (out.length >= 14) break;
   }
-  return { elements: pointOnly ? out : fitToRegion(out, beat.region), dropped };
+  return { elements: pointOnly ? out : fitToRegion(out, beat.region), dropped, swapped };
 }
 
 async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal): Promise<DrawResult> {
@@ -98,7 +105,7 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
   const deadline = AbortSignal.timeout(timeoutMs);
   const abort = signal ? AbortSignal.any([signal, deadline]) : deadline;
   const tracked = trackCall("draw", model);
-  const fail = (error: string, outputTokens = 0): DrawResult => ({ elements: [], ms: ms(), model, outputTokens, dropped: 0, error, calls: [tracked.finish(error)] });
+  const fail = (error: string, outputTokens = 0): DrawResult => ({ elements: [], ms: ms(), model, outputTokens, dropped: 0, swapped: 0, error, calls: [tracked.finish(error)] });
   try {
     const message = await tracked
       .watch(tracked.client.messages.stream(
@@ -117,8 +124,9 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
     if (message.stop_reason === "refusal") return fail("refusal", outputTokens);
     if (message.stop_reason === "max_tokens") return fail("cut off at max_tokens", outputTokens);
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    const { elements, dropped } = cleanElements(JSON.parse(text), beat, earlier);
-    return { elements, ms: ms(), model, outputTokens, dropped, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
+    const { elements, dropped, swapped } = cleanElements(JSON.parse(text), beat, earlier);
+    if (swapped) console.log(`[draw] ${beat.id}: ${swapped} shape(s) labelled with a block's name swapped for the block (${model})`);
+    return { elements, ms: ms(), model, outputTokens, dropped, swapped, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
   } catch (e) {
     return fail(deadline.aborted ? `deadline (${timeoutMs} ms)` : String((e as Error)?.message ?? e).slice(0, 300));
   }

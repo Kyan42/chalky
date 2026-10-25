@@ -15,7 +15,7 @@
  */
 import type { Scene } from "@/experiments/visual-flex/doc";
 import { blockById } from "./index";
-import { renderBlock, renderLoop, renderTravel, ungx, ungy, type Box, type Pt, type Rendered } from "./render";
+import { placeBlock, renderBlock, renderLoop, renderTravel, ungx, ungy, type Box, type Pt, type Rendered } from "./render";
 import type { Block } from "./types";
 
 /** The compiler's placed element, structurally (lib/lesson/presets.ts `Placed`). */
@@ -46,6 +46,8 @@ export interface BlockContext {
   /** Marks a stage box as taken, so labels and free text avoid it. */
   occupy: (id: string, box: Box) => void;
   dangling: string[];
+  /** A stage offset that moves a block's box off labels and shapes already placed (lib/lesson/presets.ts). */
+  nudge?: (box: Box) => [number, number];
 }
 
 export const BLOCK_KINDS = ["block", "travel"] as const;
@@ -79,6 +81,12 @@ function drawBlock(ctx: BlockContext, e: ElementLike, at: number) {
   const halfX = (size * (w / Math.max(w, h))) / 2, halfY = (size * 1.5 * (h / Math.max(w, h))) / 2;
   cx = clamp(cx, 2 + halfX, 98 - halfX);
   cy = clamp(cy, 2 + halfY, 98 - halfY);
+  // A later block moves off the labels and drawings already there (a molecule landing on a label).
+  if (ctx.nudge) {
+    const [dx, dy] = ctx.nudge(placeBlock(block, { cx, cy, size }).box);
+    cx = clamp(cx + ungx(dx), 2 + halfX, 98 - halfX);
+    cy = clamp(cy + ungy(dy), 2 + halfY, 98 - halfY);
+  }
   const r = renderBlock(ctx.scene, block, { cx, cy, size, at, dur: e.dur > 0.3 ? e.dur : undefined, enter: a[3] === 1 ? "pop" : "draw" });
   const ids = [e.id];
   if (e.id !== block.id && !ctx.placed.has(block.id)) ids.push(block.id);
@@ -164,10 +172,10 @@ export function drawBlockElement(ctx: BlockContext, e: ElementLike, at: number) 
  * the soft yellow mark) and a bounce of the block (her script circles the leaves and pulses
  * the plant together). Returns false for anything else.
  */
-export function highlightBlock(ctx: BlockContext, target: PlacedLike, at: number, dur: number): boolean {
+export function highlightBlock(ctx: BlockContext, target: PlacedLike, at: number, dur: number, color = "red"): boolean {
   if (target.kind !== "block" && target.kind !== "part") return false;
   if (at < 0) return true; // an earlier beat's highlight is over
-  renderLoop(ctx.scene, target.box, { at, dur: 0.6, color: "red", until: at + Math.max(1.6, dur), pad: target.kind === "part" ? 10 : 16 });
+  renderLoop(ctx.scene, target.box, { at, dur: 0.6, color, until: at + Math.max(1.6, dur), pad: target.kind === "part" ? 10 : 16 });
   const owner = target.kind === "block" ? target.id : ownerOf.get(ctx.scene)?.get(target.id);
   if (owner) rendered.get(ctx.scene)?.get(owner)?.pulse(at + 0.35);
   return true;

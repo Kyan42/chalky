@@ -8,6 +8,7 @@
  */
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { Scene } from "@/experiments/visual-flex/doc";
+import type { Theme } from "@/lib/board/theme";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import { BLOCKS } from "./index";
 import { renderBlock } from "./render";
@@ -16,8 +17,8 @@ import { renderBlock } from "./render";
 export const PART_COLORS = ["red", "blue", "green", "purple", "yellow"];
 
 /** Every block five across; `overlay` adds part boxes (by colour, in part order) and anchor dots. */
-export function galleryDoc(overlay: boolean): AnimationDocument {
-  const s = new Scene();
+export function galleryDoc(overlay: boolean, theme?: Theme): AnimationDocument {
+  const s = new Scene(theme);
   BLOCKS.forEach((block, i) => {
     const cx = 10 + (i % 5) * 20, cy = 15 + Math.floor(i / 5) * 32;
     const at = overlay ? -1 : i * 0.25;
@@ -58,7 +59,7 @@ export const PHOTOSYNTHESIS: PresetElement[] = [
 ];
 
 /** The photosynthesis board as one beat (animating) or as an earlier beat (`finished`). */
-export function photosynthesisDoc(finished = false): { doc: AnimationDocument; report: LayoutReport } {
+export function photosynthesisDoc(finished = false, theme?: Theme): { doc: AnimationDocument; report: LayoutReport } {
   const groups = finished ? [PHOTOSYNTHESIS, []] : [PHOTOSYNTHESIS];
-  return compilePresetBoard(groups, groups.length - 1, finished ? "photosynthesis-still" : "photosynthesis");
+  return compilePresetBoard(groups, groups.length - 1, finished ? "photosynthesis-still" : "photosynthesis", theme);
 }
