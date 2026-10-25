@@ -18,12 +18,15 @@ explain a concept, so the model names `leaf` instead of drawing one stroke by st
 - `themes.ts` — how the board looks. `CHALK` (the default): chalk-textured outlines on white, no
   fills. `CHALKBOARD`: pastel chalk on green slate. `WHITEBOARD`: clean marker lines with pale fills.
   Pick one with `new Board({ theme })`. The chalk grain is a GPU shader, so render on a machine with a GPU.
-- `biology/` — sun, cloud, water drop, energy, leaf, plant, tree, cell, mitochondrion, DNA, neuron,
-  CO2, O2, H2O, glucose.
+- `biology/` — 100 blocks by topic (`BY_TOPIC` in `biology/index.ts`): light and water (4), plants and
+  fungi (19), cells and microbes (20), molecules (8, each a single coloured circle), organs (18), the body
+  (12) and animals (19).
+- `sheet.ts` — renders any module's blocks as a labelled sheet in any theme.
 
-Preview (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
+Sheets and previews (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
 
 ```bash
-npx tsx presets/preview.ts [chalk|whiteboard|chalkboard]   # presets/out/<theme>-gallery.json, -photosynthesis.json, -respiration.json
-npx clayzo export presets/out/chalk-photosynthesis.json presets/out/chalk-photosynthesis.mp4 --format mp4
+npx tsx presets/sheet.ts presets/biology/index.ts chalk          # all 100 blocks → presets/out/sheet-index-chalk.png
+npx tsx presets/sheet.ts presets/biology/organs.ts whiteboard    # one topic, another theme
+npx tsx presets/preview.ts chalk                                 # the photosynthesis and respiration lessons
 ```

@@ -1,10 +1,9 @@
-// Writes preview documents for a theme: every biology block on one board, and two lessons chained
-// from blocks.
+// Writes preview documents for a theme: two lessons chained from blocks.
 //   npx tsx presets/preview.ts [chalk|whiteboard|chalkboard|inkwash|doodle|silhouette]
-//   → presets/out/<theme>-gallery.json, -photosynthesis.json, -respiration.json
+//   → presets/out/<theme>-photosynthesis.json, -respiration.json
 // Labels need presets/out/fonts/Manrope.ttf (the font the app ships in public/fonts).
 import { mkdirSync, writeFileSync } from "node:fs";
-import { BIOLOGY, cell, co2, drop, energy, glucose, h2o, mitochondrion, o2, plant, sun } from "./biology";
+import { cell, co2, drop, energy, glucose, h2o, mitochondrion, o2, plant, sun } from "./biology";
 import { Board } from "./board";
 import { CHALK, CHALKBOARD, DOODLE, INKWASH, SILHOUETTE, WHITEBOARD } from "./themes";
 
@@ -15,16 +14,7 @@ const font = { uri: "fonts/Manrope.ttf", family: "Manrope" };
 const write = (name: string, b: Board, title: string) =>
   writeFileSync(new URL(`${theme.id}-${name}.json`, out), JSON.stringify(b.build(`${theme.id}-${name}`, title, { hold: 1.5 })));
 
-// Every block, five across, each drawn a beat after the last.
-{
-  const b = new Board({ font, theme });
-  BIOLOGY.forEach((block, i) => {
-    const x = 192 + (i % 5) * 384, y = 170 + Math.floor(i / 5) * 350;
-    b.place(block, { x, y, size: 190, ...(i ? { with: true, delay: 0.25 } : {}) });
-    b.label(block.title, { x, y: y + 140, size: 30, color: "grey", with: true, delay: 0.4 });
-  });
-  write("gallery", b, "Biology blocks");
-}
+// The block gallery is presets/sheet.ts now (all 100 blocks, any theme).
 
 // Photosynthesis: light, water and carbon dioxide go in; sugar and oxygen come out.
 {
