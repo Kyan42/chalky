@@ -16,7 +16,7 @@ import "server-only";
 import { allBlocks } from "@/lib/blocks";
 import { trackCall } from "./calllog";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
-import { withVoiceRules } from "./preference-prompt";
+import { socraticOn, withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
@@ -109,9 +109,21 @@ interface PlanState {
   dry?: number;
   /** The current section's title. */
   title?: string;
-  /** Quiz kinds so far, in order. */
+  /** Quiz kinds so far, in order (openers not counted). */
   kinds?: QuizKind[];
+  /** Ask me first (Socratic): sections open with a predict question; no predict quiz after a section. */
+  socratic?: boolean;
+  /** The current section has had its opening question. */
+  opened?: boolean;
+  /** The beat's place in its section (0: the section's first beat). */
+  inSection?: number;
 }
+
+/**
+ * Ask me first (Socratic, the learner's preference): appended to the planner's rules. The opener is a predict
+ * quiz the page already knows how to ask and grade (the rubric: the rest of its section).
+ */
+const SOCRATIC_RULES = `Ask me first (the learner's preference): each section lets them think before you explain it. The section's first beat (in the first section, its second beat, right after the first drawing) is a "talk" beat with "quiz": "predict", carrying the section's "section" title as usual: its "say" is one short setup line, then one question of the form "what do you think happens here, and why?", without giving the answer away. The rest of the section then teaches the answer, as its own beats. One such question per section, never two in a row; no other "predict" quiz (the label and sketch quizzes still end sections).`;
 
 const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 
@@ -122,7 +134,7 @@ const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 function quizKind(st: PlanState, asked: QuizKind | undefined, hasNext = true): QuizKind {
   const kinds = st.kinds ?? [];
   const last = kinds[kinds.length - 1];
-  const ok = (k: QuizKind) => k !== last && (hasNext || k !== "predict");
+  const ok = (k: QuizKind) => k !== last && (hasNext || k !== "predict") && !(st.socratic && k === "predict");
   const unused = QUIZ_KINDS.filter((k) => ok(k) && !kinds.includes(k));
   if (asked && ok(asked) && (!kinds.includes(asked) || !unused.length)) return asked;
   return unused[0] ?? QUIZ_KINDS.find(ok) ?? "sketch";
@@ -209,12 +221,17 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   if (section || index === 0) {
     st.sections = (st.sections ?? 0) + 1;
     st.quizzed = false;
+    st.opened = false;
     st.title = section ?? "";
-  }
-  // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
+    st.inSection = 0;
+  } else st.inSection = (st.inSection ?? 0) + 1;
   const asked = QUIZ_KINDS.includes(b.quiz as QuizKind) ? (b.quiz as QuizKind) : undefined;
-  const quiz = asked && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
-  if (quiz) {
+  // Socratic: a predict question in a section's first two beats opens it (never the lesson's very first beat).
+  const opener = !!st.socratic && asked === "predict" && !st.opened && index > 0 && (st.inSection ?? 0) <= 1;
+  if (opener) st.opened = true;
+  // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
+  const quiz = opener ? asked : asked && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
+  if (quiz && !opener) {
     if (quiz !== asked) console.info(`[plan] quiz ${asked} -> ${quiz} (kinds so far: ${(st.kinds ?? []).join(", ") || "none"})`);
     st.quizzed = true;
     st.kinds = [...(st.kinds ?? []), quiz];
@@ -223,7 +240,7 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
   const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
   const cite = citeN >= 1 && citeN <= 9 ? Math.round(citeN) : undefined;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(cite ? { cite } : {}) };
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(opener ? { opener } : {}), ...(cite ? { cite } : {}) };
 }
 
 /**
@@ -242,11 +259,12 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const tracked = trackCall("plan", MODEL);
+  const socratic = await socraticOn();
   const stream = tracked.client.messages.stream(
     {
       model: MODEL,
       max_tokens: 14000,
-      system: await plannerSystem(),
+      system: socratic ? `${await plannerSystem()}\n\n${SOCRATIC_RULES}` : await plannerSystem(),
       thinking: plannerThinking(MODEL),
       output_config: { effort },
       messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
@@ -256,7 +274,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
 
   let pending = "";
   let beats = 0;
-  const st: PlanState = { scene: 0, known: new Map() };
+  const st: PlanState = { scene: 0, known: new Map(), socratic };
   const lines: string[] = [];
   stream.on("text", (delta) => {
     tracked.firstToken();
@@ -427,11 +445,13 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const maxScene = Math.max(1, kept.reduce((m, b) => Math.max(m, b.scene || 0), 0));
   const newScene = r.op === "replace_from" ? maxScene : maxScene + 1;
   const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
+  // Openers are for a lesson's sections (a rewrite's too), not a detour's beats.
+  const socratic = r.op === "replace_from" && (await socraticOn());
   const stream = tracked.client.messages.stream(
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
-      system: await withVoiceRules(withBlocks(SYSTEM)),
+      system: socratic ? `${await withVoiceRules(withBlocks(SYSTEM))}\n\n${SOCRATIC_RULES}` : await withVoiceRules(withBlocks(SYSTEM)),
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       messages: [{ role: "user", content: amendPrompt(r, newScene) }],
@@ -450,14 +470,17 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     }
   });
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
-  const st: PlanState = { scene: maxScene, known: new Map() };
+  const st: PlanState = { scene: maxScene, known: new Map(), socratic };
   if (r.op === "replace_from") st.known.set(newScene, new Set(kept.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
   // Quiz cadence goes on from the kept beats: their sections and quiz kinds count.
   const keptSections = kept.filter((b, k) => k === 0 || b.section);
   st.sections = keptSections.length;
   st.title = [...kept].reverse().find((b) => b.section)?.section ?? "";
-  st.kinds = kept.flatMap((b) => (b.quiz ? [b.quiz] : []));
-  st.quizzed = kept.slice(kept.map((b, k) => (k === 0 || b.section ? k : -1)).reduce((a, b) => Math.max(a, b), 0)).some((b) => b.quiz);
+  st.kinds = kept.flatMap((b) => (b.quiz && !b.opener ? [b.quiz] : []));
+  const lastStart = kept.map((b, k) => (k === 0 || b.section ? k : -1)).reduce((a, b) => Math.max(a, b), 0);
+  st.quizzed = kept.slice(lastStart).some((b) => b.quiz && !b.opener);
+  st.opened = kept.slice(lastStart).some((b) => b.opener);
+  st.inSection = Math.max(0, kept.length - 1 - lastStart);
   const here = detourScene(r, maxScene);
   if (here.stay) st.known.set(here.scene, new Set(here.drawn.flatMap((b) => b.adds.map((a) => a.id))));
   /** The scene the detour's drawing beats use: decided by its first one (the same board, if allowed, or a clean one). */

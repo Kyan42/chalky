@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { LANGUAGES, parsePreferences } from "@/lib/preferences";
+import { LANGUAGES, parsePreferences, socratic } from "@/lib/preferences";
 import { withVoiceRules as baseRules } from "./voice";
 
 export async function withVoiceRules(system: string) {
@@ -14,4 +14,11 @@ export async function withVoiceRules(system: string) {
     p.pace === "stepwise" ? "Teach one small step at a time with frequent checks before moving on." : p.pace === "concise" ? "Keep explanations concise and move quickly through familiar basics." : "Use a comfortable teaching pace, adapting to the learner.",
   ];
   return `${baseRules(system)}\n\nLearner preferences (honor explicit requests in the conversation):\n${instructions.join("\n")}`;
+}
+
+/** "Ask me first" (Socratic) is on for this request's learner: sections open with a question (the planner's opener beats). */
+export async function socraticOn(): Promise<boolean> {
+  let raw: string | undefined;
+  try { raw = (await cookies()).get("chalky-preferences")?.value; } catch {}
+  return socratic(parsePreferences(raw));
 }

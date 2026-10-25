@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       });
       const rubric = predictRubric(after);
       if (!rubric.length) return Response.json({ error: "no next section to grade against" }, { status: 400 });
-      return Response.json({ ...(await gradePredict({ question: str(b.question, 300), ask: str(b.ask, 300), answer: str(b.answer, 600), rubric }, request.signal)), rubric });
+      return Response.json({ ...(await gradePredict({ question: str(b.question, 300), ask: str(b.ask, 300), answer: str(b.answer, 600), rubric, socratic: b.socratic === true }, request.signal)), rubric });
     }
     return Response.json({ error: "kind must be label, sketch or predict" }, { status: 400 });
   } catch (error) {

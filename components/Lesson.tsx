@@ -42,7 +42,7 @@ import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps 
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import type { DrawMode } from "@/lib/lesson/language";
-import { readPreferences } from "@/lib/preferences";
+import { readPreferences, socratic } from "@/lib/preferences";
 import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
@@ -1717,6 +1717,79 @@ export default function Lesson() {
       const { kind: quiz, ...rest } = r;
       logEv({ kind: "quiz-result", quiz, ...rest, feedback: grade.feedback ?? "", ms: grade.ms ?? null, model: grade.model ?? null, call: grade.call ?? null });
     };
+    /**
+     * Socratic ("Ask me first" in Preferences, the default): a section opens with the planner's opener, a predict
+     * question. Off for the rest of the lesson once they say "just explain"; never right after another question.
+     */
+    let socraticOff = !socratic(readPreferences(document.cookie));
+    const STOP_ASKING = /\b(just (explain|tell me|teach( me)?)|stop asking|don'?t ask|no more questions|tell me the answer|skip the questions)\b/i;
+    /** The beats of the section after `i` that teach (no quiz beats), in the order the predict rubric numbers them. */
+    const sectionBeats = (i: number) => {
+      const out: BeatState[] = [];
+      for (const [k, b] of list.slice(i + 1, i + 13).entries()) {
+        if (k > 0 && b.beat.section) break;
+        if (!b.beat.quiz) out.push(b);
+      }
+      return out.slice(0, 6);
+    };
+    /**
+     * The opener: setup and question, then their answer judged silently (the predict grader: right, partly or
+     * wrong, for the record) and one sentence back that reacts to the idea itself. If they clearly have it, the
+     * section's beats that would only repeat what they said are cut (drawings stay: later beats point at them);
+     * otherwise the section plays as planned after that sentence. "skip" or "I don't know": as planned.
+     */
+    const runOpener = async (i: number): Promise<void> => {
+      const beatId = list[i].beat.id;
+      const ask = list[i].beat.say;
+      const prev = list[i - 1]?.beat;
+      if (socraticOff || prev?.quiz) {
+        logEv({ kind: "socratic-skipped", beatId, why: socraticOff ? "questions are off" : `right after the ${prev!.quiz} quiz` });
+        // The setup line still introduces the section; only the question goes.
+        const setup = ask.split(/(?<=[.!?])\s+/).filter((t) => !t.trim().endsWith("?")).join(" ");
+        if (setup) {
+          setStatus("speaking");
+          await sayLine(setup);
+        }
+        return;
+      }
+      logEv({ kind: "quiz-start", quiz: "predict", socratic: true, ask, beatId });
+      setStatus("speaking");
+      await sayLine(ask);
+      setStatus("waiting");
+      const answer = await awaitTurn(abort.signal);
+      if (abort.signal.aborted) return;
+      if (answer !== null && STOP_ASKING.test(answer)) {
+        socraticOff = true;
+        logEv({ kind: "socratic-off", beatId, said: answer });
+        setStatus("speaking");
+        await sayLine("Sure, I'll just explain from here.");
+        return;
+      }
+      if (answer === null || SKIP_QUIZ.test(answer)) {
+        logEv({ kind: "quiz-skipped", quiz: "predict", socratic: true, beatId, said: answer ?? "" });
+        setStatus("speaking");
+        await sayLine("Okay, let's see.");
+        return;
+      }
+      logEv({ kind: "learner", via: inputViaRef.current, role: "socratic answer", beatId, text: answer });
+      setStatus("replying");
+      const g = await post("/api/quiz", { kind: "predict", socratic: true, question: q, ask, answer, after: beatsAfter(i) })
+        .then((r) => r.json())
+        .catch((e) => ({ error: String(e) }));
+      if (g.error || typeof g.feedback !== "string") {
+        logEv({ kind: "quiz-error", quiz: "predict", socratic: true, error: g.error ?? "no feedback" });
+        return;
+      }
+      setStatus("speaking");
+      const spoken = sayLine(g.feedback);
+      const section = sectionBeats(i);
+      const drop = g.verdict === "right" ? ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw") : [];
+      for (const b of drop) list.splice(list.indexOf(b), 1);
+      if (drop.length) setBeats([...list]);
+      await spoken;
+      logEv({ kind: "socratic-adjust", beatId, verdict: g.verdict, covered: g.covered ?? [], cut: drop.map((b) => b.beat.id), how: drop.length ? "cut what they already said" : "as planned" });
+      record({ kind: "predict", asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString(), verdict: g.verdict, socratic: true }, g);
+    };
     /** Skipped ("skip", "I don't know"): the answer in one line, and the record says so. */
     const skipQuiz = async (kind: QuizKind, ask: string, answer: string | null, beatId: string | null, line: string) => {
       logEv({ kind: "quiz-skipped", quiz: kind, beatId, said: answer ?? "" });
@@ -1751,7 +1824,8 @@ export default function Lesson() {
       }
       if (kind === "label" && items.length < 2) {
         // Nothing labelled to number here: a prediction (if a section follows and the last quiz wasn't one), or a drawing.
-        const to: QuizKind = hasNext && lastKind !== "predict" ? "predict" : "sketch";
+        // (Socratic: sections already open with a prediction, so never one after a section.)
+        const to: QuizKind = hasNext && lastKind !== "predict" && socraticOff ? "predict" : "sketch";
         logEv({ kind: "quiz-fallback", from: "label", to, why: `${items.length} labelled part(s) in view` });
         kind = to;
         ask = to === "predict" ? "Before I go on, a quick prediction: what do you think comes next, and why?" : "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
@@ -2727,7 +2801,8 @@ export default function Lesson() {
         setStatus("speaking");
         // A quiz beat asks, waits and grades; then the lesson goes on.
         if (list[i].beat.quiz) {
-          await runQuiz(list[i].beat.quiz!, list[i].beat.say, i);
+          if (list[i].beat.opener) await runOpener(i);
+          else await runQuiz(list[i].beat.quiz!, list[i].beat.say, i);
           if (abort.signal.aborted) break;
           said.push(list[i].beat.say);
           i++;

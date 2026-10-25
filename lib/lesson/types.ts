@@ -42,6 +42,8 @@ export interface PlannedBeat {
   quiz?: QuizKind;
   /** Taught from research material: the number of the paper this beat teaches from (its [n] in the material). */
   cite?: number;
+  /** Socratic ("Ask me first"): the predict question that opens its section, asked before the section teaches it. */
+  opener?: boolean;
   /** On a check-in beat: what Chalky says when the learner answers "got it" (no model call), naming what comes next. */
   bridge?: string;
 }
@@ -68,6 +70,8 @@ export interface QuizResult {
   verdict?: "right" | "partly" | "wrong";
   /** They skipped it ("skip", "I don't know"): told the answer in one line, scored 0. */
   skipped?: boolean;
+  /** The question that opened a section (Socratic, "Ask me first"): not a quiz; the verdict is never said. */
+  socratic?: boolean;
 }
 
 export interface LearnerRecord {

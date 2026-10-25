@@ -160,25 +160,34 @@ const PREDICT_SCHEMA = {
     verdict: { type: "string", enum: ["right", "partly", "wrong"] },
     right: { type: "array", items: { type: "string" } },
     missing: { type: "array", items: { type: "string" } },
+    covered: { type: "array", items: { type: "integer" } },
     feedback: { type: "string" },
   },
-  required: ["verdict", "right", "missing", "feedback"],
+  required: ["verdict", "right", "missing", "covered", "feedback"],
   additionalProperties: false,
 };
 
 /** The learner guessed what comes next; graded against what the next section actually says. */
-export async function gradePredict(o: { question: string; ask: string; answer: string; rubric: string[] }, signal?: AbortSignal): Promise<QuizGrade & { verdict: "right" | "partly" | "wrong" }> {
+/**
+ * `socratic`: the question that opens a section ("Ask me first"). The verdict is kept silent (the record and the
+ * page's adjustment use it); the spoken line is a reaction to their idea with no right or wrong in it, and
+ * `covered` lists the answer key's sentences (numbered from 1) their answer already says.
+ */
+export async function gradePredict(o: { question: string; ask: string; answer: string; rubric: string[]; socratic?: boolean }, signal?: AbortSignal): Promise<QuizGrade & { verdict: "right" | "partly" | "wrong"; covered: number[] }> {
   const t0 = performance.now();
+  const speak = o.socratic
+    ? `Then ONE short sentence Chalky, the teacher, says aloud before teaching this part: first person, warm, reacting to their idea itself (take it seriously, name what is interesting in it), leading into the explanation. Never say or imply right, wrong, correct, incorrect, close or exactly, and never give the answer away.`
+    : `Then ONE short sentence Chalky, the teacher, says aloud: first person, warm, specific about their guess, and it must not give away the rest of the answer (the lesson is about to show it).`;
   const system = await withVoiceRules(
-    `You grade a prediction in a lesson. Before the next part of the lesson, the learner was asked to predict what comes next. The answer key is what the next part actually says. Verdict: "right" when their prediction has the key idea (their own words, rough is fine), "partly" when it has part of it or the right direction without the reason, "wrong" when it misses it or says the opposite. "right" and "missing": the key ideas they got and missed, each in a few words. Then ONE short sentence Chalky, the teacher, says aloud: first person, warm, specific about their guess, and it must not give away the rest of the answer (the lesson is about to show it). Return JSON only.`,
+    `You grade a prediction in a lesson. Before the next part of the lesson, the learner was asked to predict what comes next. The answer key is what the next part actually says, sentence by sentence. Verdict: "right" when their prediction has the key idea (their own words, rough is fine), "partly" when it has part of it or the right direction without the reason, "wrong" when it misses it or says the opposite. "right" and "missing": the key ideas they got and missed, each in a few words. "covered": the numbers of the answer key's sentences whose point their answer already makes, so hearing them would only repeat it ([] if none). ${speak} Return JSON only.`,
   );
   const user = [
     `The lesson: ${o.question}`,
     `The prediction asked: ${o.ask}`,
-    `What the next part of the lesson says (the answer key):\n${o.rubric.map((r) => `- ${r}`).join("\n")}`,
+    `What the next part of the lesson says (the answer key):\n${o.rubric.map((r, k) => `${k + 1}. ${r}`).join("\n")}`,
     `What the learner predicted: "${o.answer}"`,
   ].join("\n");
-  const { out, call } = await json<{ verdict: "right" | "partly" | "wrong"; right: string[]; missing: string[]; feedback: string }>(CONVERSE_MODEL, "quiz-predict", system, user, PREDICT_SCHEMA, 400, signal);
+  const { out, call } = await json<{ verdict: "right" | "partly" | "wrong"; right: string[]; missing: string[]; covered: number[]; feedback: string }>(CONVERSE_MODEL, o.socratic ? "quiz-socratic" : "quiz-predict", system, user, PREDICT_SCHEMA, 400, signal);
   const verdict = out.verdict === "right" || out.verdict === "partly" ? out.verdict : "wrong";
   // One line: the next section is about to show the rest.
   const feedback = out.feedback.trim().split(/(?<=[.!?])\s+/)[0] ?? out.feedback.trim();
@@ -187,6 +196,7 @@ export async function gradePredict(o: { question: string; ask: string; answer: s
     score: verdict === "right" ? 1 : verdict === "partly" ? 0.5 : 0,
     right: out.right.slice(0, 4),
     missing: out.missing.slice(0, 4),
+    covered: [...new Set(out.covered.filter((n) => Number.isInteger(n) && n >= 1 && n <= o.rubric.length))].sort((a, b) => a - b),
     feedback,
     ms: Math.round(performance.now() - t0),
     model: CONVERSE_MODEL,
