@@ -4,6 +4,12 @@
  * with no cloud round trip; measured on this machine: creating one about 2 s (once), adding five
  * documents 15-30 ms, a query 5-8 ms. While a session is still being created, or without Moss keys,
  * the same documents are searched by plain word overlap, so a caller always gets an answer at once.
+ *
+ * Creating a session inside the dev server took 1-7 s (a live run logged "ready in 6826 ms"): the first
+ * one loads the embedding model, and any compile or busy stretch of the event loop adds to it. So the
+ * server keeps SPARE_SESSIONS made ahead (warmSessions(), called at startup), and a lesson's board or a
+ * learner's memory takes one that is already ready; the name a session was made with doesn't matter,
+ * sessions are found by the key in `sessions`.
  */
 import type { SessionIndex } from "@moss-js/moss";
 import { hasMossKeys, mossState } from "./blocks";
@@ -16,9 +22,32 @@ type Live = {
   createMs: number | null;
   used: number;
 };
-const g = globalThis as typeof globalThis & { __chalkySessions?: Map<string, Live> };
+const g = globalThis as typeof globalThis & { __chalkySessions?: Map<string, Live>; __chalkySpareSessions?: Promise<SessionIndex>[] };
 const sessions = (g.__chalkySessions ??= new Map());
 const MAX_SESSIONS = 24;
+/** One for a lesson's board and one for its learner's memory. */
+const SPARE_SESSIONS = 2;
+const spares = (g.__chalkySpareSessions ??= []);
+let spareCount = 0;
+
+/** Makes sessions ahead of need, up to SPARE_SESSIONS waiting. */
+export function warmSessions(): void {
+  const state = hasMossKeys() ? mossState() : null;
+  if (!state) return;
+  while (spares.length < SPARE_SESSIONS) {
+    const t0 = performance.now();
+    const made = state.client.session(`chalky-spare-${process.pid}-${++spareCount}`, "moss-minilm");
+    made.then(
+      () => console.info(`[moss] spare session ready in ${Math.round(performance.now() - t0)} ms`),
+      (e) => {
+        console.warn(`[moss] spare session failed: ${String((e as Error)?.message ?? e).slice(0, 200)}`);
+        const i = spares.indexOf(made);
+        if (i >= 0) spares.splice(i, 1);
+      },
+    );
+    spares.push(made);
+  }
+}
 
 function live(name: string): Live {
   let s = sessions.get(name);
@@ -36,14 +65,16 @@ function live(name: string): Live {
   if (state) {
     const t0 = performance.now();
     const made = s;
-    made.ready = state.client
-      .session(`chalky-${name}`.slice(0, 120), "moss-minilm")
+    const spare = spares.shift();
+    // Replace the one taken, in the background.
+    if (spare) setTimeout(warmSessions, 0);
+    made.ready = (spare ?? state.client.session(`chalky-${name}`.slice(0, 120), "moss-minilm"))
       .then(async (index) => {
         made.createMs = Math.round(performance.now() - t0);
         // Whatever arrived while it was being made goes in now.
         if (made.docs.size) await index.addDocs([...made.docs.entries()].map(([id, d]) => ({ id, text: d.text })));
         made.index = index;
-        console.info(`[moss] session ${name}: ready in ${made.createMs} ms (${made.docs.size} docs)`);
+        console.info(`[moss] session ${name}: ready in ${made.createMs} ms (${spare ? "a spare made ahead" : "made now"}, ${made.docs.size} docs)`);
       })
       .catch((e) => console.warn(`[moss] session ${name} failed: ${String((e as Error)?.message ?? e).slice(0, 200)}`));
   }
