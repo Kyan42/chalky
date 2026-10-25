@@ -4,6 +4,10 @@
 //   SCRIPT=b  a quick question first: a short spoken answer and no lesson; then "okay, teach me properly"
 //             starts one (a saved plan, ?firstturn=1).
 //   SCRIPT=c  a remark mid-lesson ("huh, that's cool", Space held): a one-liner, and the lesson goes on.
+//   SCRIPT=d  three scenes in, "show me where the diagram of the two waves was": the camera goes back to
+//             scene 1 (go_to, maybe by way of delegate) and the cursor circles it.
+//   SCRIPT=e  two lessons for one learner (one browser, one learner cookie): the first gets stuck on violet
+//             light; the second's first reply (the intake) brings that up, from the Convex memory.
 //   BASE_URL=http://localhost:3006 LIVE_RUNS=<that server's experiments/live-runs> SCRIPT=b node scripts/e2e-actions.mjs
 import { chromium } from "playwright";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -19,6 +23,8 @@ const LINES = {
   a: { learn: "I want to learn photosynthesis.", intake: "I know plants need sunlight, but not much else." },
   b: { quick: "Is the sky blue because it reflects the ocean?", more: "Okay, teach me properly." },
   c: { remark: "Huh, that's cool." },
+  d: { back: "Wait, show me where the diagram of the two waves was." },
+  e: { learn: "I want to learn why the sky is blue.", intake: "I always get confused about why it isn't violet.", lost: "I still don't get why the sky isn't violet.", next: "Can you teach me how rainbows work?" },
 }[SCRIPT];
 const clips = Object.fromEntries(await Promise.all(Object.entries(LINES).map(async ([k, v]) => [k, await clip(`act-${SCRIPT}-${k}`, v)])));
 
@@ -87,7 +93,10 @@ const waitReplies = async (n, ms) => {
 const names = (r) => (r?.actions ?? []).map((a) => (a.type === "amend" ? `amend:${a.op}` : a.type)).join(", ");
 
 try {
-  const url = SCRIPT === "a" ? `${BASE}/lesson` : SCRIPT === "b" ? `${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=4&firstturn=1` : `${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=5&intake=0`;
+  const url =
+    SCRIPT === "a" ? `${BASE}/lesson`
+    : SCRIPT === "b" || SCRIPT === "e" ? `${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=${SCRIPT === "e" ? 6 : 4}&firstturn=1`
+    : `${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=${SCRIPT === "d" ? 10 : 5}&intake=0`;
   await page.goto(url);
   await page.click('[data-testid="start-talking"]');
   await waitFor((s) => s.status === "Listening", 20000);
@@ -122,6 +131,84 @@ try {
     // The intake, if the model asked one: let silence skip it.
     const b1 = await waitFor((s) => s.beat === "b1" && s.status === "Speaking", 40000);
     check("the lesson's first beat plays", !!b1);
+  } else if (SCRIPT === "d") {
+    await page.fill('[data-testid="question"]', "Why is the sky blue?");
+    await page.click('[data-testid="ask"]');
+    await page.click("body", { position: { x: 5, y: 400 } });
+    // Through the check-ins to scene 3.
+    const until = Date.now() + 240000;
+    let s3 = null;
+    while (Date.now() < until && !s3) {
+      const s = await st();
+      if (s.status === "Your turn") await page.click('[data-testid="continue"]').catch(() => {});
+      const scene = await page.evaluate(() => Number(document.querySelector(".board")?.dataset.scene ?? 0));
+      if (scene >= 3 && s.status === "Speaking" && s.word >= 3) s3 = s;
+      await page.waitForTimeout(250);
+    }
+    check("the lesson reached scene 3", !!s3, s3?.beat ?? "");
+    await page.keyboard.down("Space");
+    const sec = await say("back");
+    await page.waitForTimeout(sec * 1000 + 150);
+    await page.keyboard.up("Space");
+    const [r1] = await waitReplies(1, 40000);
+    console.log(`        reply: "${r1?.text}" [${names(r1)}]`);
+    // A delegate's actions arrive after the reply.
+    const back = await (async () => {
+      const until2 = Date.now() + 25000;
+      while (Date.now() < until2) {
+        const b = await page.evaluate(() => ({ scene: Number(document.querySelector(".board")?.dataset.scene ?? 0), view: document.querySelector(".board")?.dataset.view }));
+        if (b.scene === 1) return b;
+        await page.waitForTimeout(250);
+      }
+      return null;
+    })();
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: join(process.cwd(), "experiments/conversation-e2e/clips/../d-went-back.png") });
+    const t = transcript();
+    const ev = (k) => t?.events.filter((e) => e.kind === k) ?? [];
+    console.log(`        retrieval: ${JSON.stringify(ev("retrieval").at(-1))}`);
+    console.log(`        go-to: ${JSON.stringify(ev("go-to").at(-1))}; delegated: ${JSON.stringify(ev("delegated").at(-1) ?? null)}; highlight: ${JSON.stringify(ev("highlight").at(-1) ?? null)}`);
+    check("the camera went back to scene 1", !!back, back ? `view ${back.view}` : "still elsewhere");
+    check("and the cursor circled it", ev("highlight").length > 0 || /point/.test(names(r1)), JSON.stringify(ev("highlight").at(-1)?.targets ?? null));
+    const idx = ev("board-index");
+    if (idx.length) console.log(`        board index updates: ${idx.map((e) => `${e.added} doc(s) ${e.ms} ms (${e.status})`).join(", ")}`);
+  } else if (SCRIPT === "e") {
+    // Lesson 1: stuck on violet.
+    await say("learn");
+    await waitReplies(1, 30000);
+    await waitFor((s) => s.status === "Your turn", 20000);
+    await say("intake");
+    await waitFor((s) => s.beat === "b2" && s.status === "Speaking" && s.word >= 3, 90000);
+    await page.keyboard.down("Space");
+    const sec = await say("lost");
+    await page.waitForTimeout(sec * 1000 + 150);
+    await page.keyboard.up("Space");
+    const rs = await waitReplies(2, 40000);
+    console.log(`        lesson 1 reply to "${LINES.lost}": "${rs[1]?.text}" [${names(rs[1])}]`);
+    await page.waitForTimeout(4000); // the transcript (with the learner record) reaches Convex
+    const first = transcript();
+    console.log(`        lesson 1 learner record: ${JSON.stringify(first?.learner ? { level: first.learner.level, prior: first.learner.prior, focus: first.learner.focus, confusions: first.learner.confusions } : null)}`);
+    // Lesson 2, same browser (same learner cookie).
+    await page.goto(url);
+    await page.click('[data-testid="start-talking"]');
+    await waitFor((s) => s.status === "Listening", 20000);
+    const t2 = Date.now();
+    await say("next");
+    let r2 = null;
+    const until = Date.now() + 40000;
+    while (Date.now() < until && !r2) {
+      const f = readdirSync(DIR).map((f) => ({ f, m: statSync(join(DIR, f)).mtimeMs })).filter((x) => x.m >= t2).sort((a, b) => b.m - a.m)[0];
+      const t = f ? JSON.parse(readFileSync(join(DIR, f.f), "utf8")) : null;
+      if (t && t.question !== first?.question) {
+        r2 = { reply: t.events.find((e) => e.kind === "reply"), retrieval: t.events.find((e) => e.kind === "retrieval") };
+        if (!r2.reply) r2 = null;
+      }
+      await page.waitForTimeout(500);
+    }
+    console.log(`        lesson 2 first reply: "${r2?.reply?.text}" [${names(r2?.reply)}]`);
+    console.log(`        lesson 2 memory: ${JSON.stringify(r2?.retrieval?.memory ?? null)}`);
+    check("lesson 2 had the learner's earlier lines in its prompt", (r2?.retrieval?.memory?.lines?.length ?? 0) > 0, r2?.retrieval?.memory?.status ?? "no retrieval");
+    check("and its intake reply brings up what lesson 1 got stuck on", /violet|last time|before|earlier/i.test(r2?.reply?.text ?? ""), r2?.reply?.text ?? "");
   } else {
     await page.fill('[data-testid="question"]', "Why is the sky blue?");
     await page.click('[data-testid="ask"]');
