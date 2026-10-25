@@ -26,7 +26,8 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 const transcript = () => {
-  const f = readdirSync(DIR).map((n) => ({ n, m: statSync(join(DIR, n)).mtimeMs })).filter((x) => x.m >= t0).sort((a, b) => b.m - a.m)[0];
+  // Only finished files: the log route writes a temp file and renames it.
+  const f = readdirSync(DIR).filter((n) => n.endsWith(".json")).flatMap((n) => { try { return [{ n, m: statSync(join(DIR, n)).mtimeMs }]; } catch { return []; } }).filter((x) => x.m >= t0).sort((a, b) => b.m - a.m)[0];
   try {
     return f ? JSON.parse(readFileSync(join(DIR, f.n), "utf8")) : null;
   } catch {
