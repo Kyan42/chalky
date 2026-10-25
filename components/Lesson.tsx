@@ -1615,18 +1615,24 @@ export default function Lesson() {
     };
   }, [interrupt, pausePlayback, resumePlayback]);
 
-  // A Space tap while paused resumes. (While Chalky talks, Space is the hybrid mic's: it pauses, and holding it talks.)
+  // Space is a toggle: a tap while Chalky talks pauses, a tap while paused resumes. With the mic on, the
+  // hybrid mic sees Space first (it pauses on key down, and holding it talks); without it, this does.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat || e.defaultPrevented || !pausedRef.current) return;
+      if (e.code !== "Space" || e.repeat || e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "TEXTAREA" || el.isContentEditable || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "checkbox"))) return;
-      e.preventDefault();
-      resumePlayback();
+      if (pausedRef.current) {
+        e.preventDefault();
+        resumePlayback();
+      } else if (statusRef.current === "speaking" || statusRef.current === "replying") {
+        e.preventDefault();
+        pausePlayback();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resumePlayback]);
+  }, [resumePlayback, pausePlayback]);
 
   const startTalking = useCallback(async () => {
     try {
