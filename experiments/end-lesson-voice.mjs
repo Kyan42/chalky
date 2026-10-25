@@ -6,9 +6,10 @@ import { join } from "node:path";
 import { speechWav } from "../scripts/fake-mic.mjs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3006";
-const clip = async (name, text) => readFileSync((await speechWav(join(process.cwd(), `experiments/conversation-e2e/clips/${name}.wav`), [{ silence: 0.2 }, { say: text }, { silence: 0.4 }])).path).toString("base64");
-const ask = await clip("cadence-ask-fixture", "Why is the sky blue?");
-const done = await clip("end-lesson-done", "I'm done, let's end the lesson here.");
+// A longer lead-in so the first word is heard.
+const clip = async (name, text) => readFileSync((await speechWav(join(process.cwd(), `experiments/conversation-e2e/clips/${name}.wav`), [{ silence: 0.6 }, { say: text }, { silence: 0.4 }])).path).toString("base64");
+const ask = await clip("end-lesson-ask-lead", "Why is the sky blue?");
+const done = await clip("end-lesson-done-lead", "I'm done, let's end the lesson here.");
 const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
 const context = await browser.newContext({ viewport: { width: 1400, height: 800 } });
 await context.addInitScript(() => {
@@ -39,6 +40,8 @@ const waitFor = async (pred, ms) => {
 await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-quizzes&intake=0&debug=1`);
 await page.click('[data-testid="start-talking"]');
 await waitFor((s) => s.mic === "open", 30_000);
+// The speech recognizer is still connecting the moment the mic opens.
+await page.waitForTimeout(1500);
 await page.evaluate((x) => window.__say(x), ask);
 const playing = await waitFor((s) => s.beat === "b2" && s.status === "speaking", 90_000);
 console.log("playing:", JSON.stringify(playing));
@@ -55,7 +58,59 @@ while (Date.now() < until) {
 await page.waitForTimeout(2000);
 const final = await st();
 await page.screenshot({ path: "experiments/end-lesson-voice.png" });
-await browser.close();
 console.log("seen:", seen.join(" -> "));
 console.log("final:", JSON.stringify(final));
 console.log(playing && final.status === "idle" && !final.beat && final.start ? "PASS  \"I'm done\" ends the lesson and returns to the start screen" : "FAIL");
+
+// The recap (learning history): what was covered, the board, a reflection and how it felt.
+const recap = page.locator(".lesson-ending-panel");
+const shown = await recap.waitFor({ state: "visible", timeout: 15_000 }).then(() => true, () => false);
+const covered = shown ? await recap.locator(".session-recap ul").first().locator("li").allInnerTexts() : [];
+const board = shown ? await recap.locator("img.history-board").count() : 0;
+console.log(`        recap: ${shown ? "shown" : "missing"}; covered ${covered.length}: ${JSON.stringify(covered.map((c) => c.slice(0, 80)))}; board image: ${board}`);
+console.log(shown && covered.length ? "PASS  the recap appears with what was covered" : "FAIL  the recap appears with what was covered");
+let reflected = "";
+if (shown) {
+  await recap.locator("textarea").fill("Blue light scatters more because its wavelength is shorter.");
+  await recap.getByRole("button", { name: "Still unsure" }).click();
+  await recap.getByRole("button", { name: "Save reflection" }).click();
+  reflected = await recap.getByText("Reflection saved.").waitFor({ timeout: 10_000 }).then(() => "saved", () => "not saved");
+  await page.screenshot({ path: "experiments/end-lesson-recap.png" });
+}
+// The record: the lesson's transcript gets the reflection lines (what Convex and the next lesson's memory read).
+await page.waitForTimeout(3000);
+const runs = join(process.cwd(), "experiments/live-runs");
+const { readdirSync, statSync } = await import("node:fs");
+const latest = readdirSync(runs).filter((n) => n.endsWith(".json")).map((n) => ({ n, m: statSync(join(runs, n)).mtimeMs })).sort((a, b) => b.m - a.m)[0];
+const t = latest ? JSON.parse(readFileSync(join(runs, latest.n), "utf8")) : null;
+const lines = (t?.learner?.confusions ?? []).filter((c) => /^(reflection|felt):/.test(c));
+console.log(`        reflection ${reflected}; record lines: ${JSON.stringify(lines)}; transcript ${t?.id}`);
+console.log(reflected === "saved" && lines.length === 2 ? "PASS  a reflection can be saved, and goes on the learner record" : "FAIL  a reflection can be saved, and goes on the learner record");
+
+// Learning history in Settings lists it; Continue learning starts a lesson from the continuation prompt.
+if (shown) await recap.getByRole("button", { name: "Done for now" }).click();
+await page.locator(".preferences-gear").click();
+await page.locator('[data-testid="history-tab"]').click();
+// The list loads from IndexedDB.
+await page.locator(".history-list li, .history-empty").first().waitFor({ timeout: 10_000 }).catch(() => {});
+const items =await page.locator(".history-list li").allInnerTexts().catch(() => []);
+console.log(`        history: ${JSON.stringify(items.map((x) => x.replace(/\s+/g, " ").slice(0, 80)))}`);
+console.log(items.length ? "PASS  History lists the lesson" : "FAIL  History lists the lesson");
+let continued = null;
+if (items.length) {
+  await page.locator(".history-list li button").first().click();
+  const t0 = Date.now();
+  await page.getByRole("button", { name: "Continue learning" }).click();
+  // Stop as soon as the new lesson has its first turn (no planner run needed to check the prompt).
+  for (let k = 0; k < 40 && !continued; k++) {
+    await page.waitForTimeout(500);
+    const f = readdirSync(runs).filter((n) => n.endsWith(".json")).map((n) => ({ n, m: statSync(join(runs, n)).mtimeMs })).filter((x) => x.m >= t0).sort((a, b) => b.m - a.m)[0];
+    const n = f ? JSON.parse(readFileSync(join(runs, f.n), "utf8")) : null;
+    const first = n?.events?.find((e) => e.kind === "learner");
+    if (first && n.id !== t?.id) continued = { id: n.id, question: n.question, said: first.text };
+  }
+}
+console.log(`        continued: ${JSON.stringify(continued && { ...continued, said: continued.said.slice(0, 160) })}`);
+console.log(continued && /^I'd like to continue learning about/.test(continued.said) ? "PASS  Continue learning starts a lesson with the continuation prompt" : "FAIL  Continue learning starts a lesson with the continuation prompt");
+await page.goto("about:blank").catch(() => {});
+await browser.close();

@@ -28,7 +28,8 @@ export function historyFromTranscript(t: HistoryTranscript): LearningSession {
   // Only speech that actually finished: speculative plans are deliberately excluded.
   const speech = [
     ...t.beats.filter(b => !b.interrupted).map(b => b.say),
-    ...t.events.filter(e => e.kind === 'reply').map(e => e.text),
+    // Not the goodbye of an ended lesson ("Sure, let's stop here."): it covered nothing.
+    ...t.events.filter(e => e.kind === 'reply' && !(Array.isArray(e.actions) && e.actions.some(a => (a as { type?: string })?.type === 'end_lesson'))).map(e => e.text),
   ].filter((s): s is string => typeof s === 'string');
   const statements = speech.flatMap(s => s.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [])
     .map(s => s.trim()).filter(s => s.length > 10 && !s.endsWith('?'));
