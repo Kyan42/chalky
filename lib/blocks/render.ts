@@ -33,7 +33,7 @@ import {
 } from "@clayzo/animation/authoring";
 import { END, H, hatchContour, Scene, safeId, tick, W, type Box } from "@/experiments/visual-flex/doc";
 import { DEFAULT_THEME, themeHex, tintHex, type Theme } from "@/lib/board/theme";
-import type { Block, Paint, Shape } from "./types";
+import type { Block, Paint, Shape } from "@/presets/types";
 
 // ---- Units ----
 

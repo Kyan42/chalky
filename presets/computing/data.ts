@@ -257,7 +257,7 @@ export function makeTreeStructure({ children = 3, depth = 2, color = "blue" }: T
   const xs = levels.flat().map((n) => n.x);
   const bottom = levels.filter((l) => l.length).length - 1;
   return finish(
-    { id: "tree-structure", title: "Tree", describe: "a general tree (like folders): a root with some children, each branching unevenly; set children (2-4) and depth (1-3); anchors root, node-L-I", tags: ["tree", "hierarchy", "folders", "node", "root", "data structure"] },
+    { id: "tree-structure", title: "Tree Structure", describe: "a general tree (like folders): a root with some children, each branching unevenly; set children (2-4) and depth (1-3); anchors root, node-L-I", tags: ["tree", "hierarchy", "folders", "node", "root", "data structure"] },
     sk, [Math.min(...xs) - half, -half, Math.max(...xs) + half, bottom * dy + half],
   );
 }

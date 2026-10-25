@@ -5,13 +5,15 @@
  *
  * Env: MOSS_PROJECT_ID and MOSS_PROJECT_KEY (portal.usemoss.dev); CHALKY_BLOCK_RETRIEVAL=moss|all
  * (default moss when the keys are set); MOSS_BLOCK_INDEX (default "chalky-blocks"). Without keys,
- * or when Moss is still loading, slow or failing, every caller gets null and keeps the full catalog.
+ * or when Moss is still loading, slow or failing, a beat gets keywordBlocks() instead: the catalog is
+ * about 300 blocks, too big to list whole.
  *
  * No "server-only" here: scripts/moss-build-blocks.ts and scripts/test-moss-blocks.ts import it
  * under tsx. The index is built by `npx tsx --env-file=.env.local scripts/moss-build-blocks.ts`.
  */
 import { MossClient, type DocumentInfo } from "@moss-js/moss";
 import { BLOCKS, blockById, type Block } from "@/lib/blocks";
+import { keywordBlocks } from "@/lib/blocks/catalog";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
 export const BLOCK_INDEX = process.env.MOSS_BLOCK_INDEX || "chalky-blocks";
@@ -114,24 +116,32 @@ export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?:
 /** What a beat asks Moss: the planned drawing plus what each new id is. */
 export const beatQuery = (beat: Pick<PlannedBeat, "visual" | "adds">) => [beat.visual, ...beat.adds.map((a) => a.what)].filter(Boolean).join(". ");
 
-/** Blocks a beat names outright: an add whose id is a block id, or starts with one ("co2-in"). */
+/** Blocks a beat names outright: an add whose id is a block id, or starts with one ("co2-in", "neural-net-1"). */
 export function namedBlocks(beat: Pick<PlannedBeat, "adds">): Block[] {
   return beat.adds.flatMap((a) => {
-    const b = blockById(a.id) ?? blockById(a.id.split(/[-_.]/)[0]);
-    return b ? [b] : [];
+    const words = a.id.split(/[-_.]/);
+    for (let n = words.length; n > 0; n--) {
+      const b = blockById(words.slice(0, n).join("-"));
+      if (b) return [b];
+    }
+    return [];
   });
 }
 
 /**
- * The blocks one beat's drawer prompt lists, or null for the whole catalog (retrieval off, no key,
- * index loading or failing, or a point beat that adds nothing). Logs the pick and its latency.
+ * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches,
+ * or keyword matches when Moss is off, keyless, loading or failing. A point beat adds nothing, so
+ * it gets none. Logs the pick and its latency.
  */
-export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[] | null; retrieval: Retrieval }> {
-  if (beat.mode === "point") return { blocks: null, retrieval: { status: "off", hits: null, ms: 0 } };
-  const retrieval = await relevantBlocks(beatQuery(beat), BEAT_K);
+export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[]; retrieval: Retrieval }> {
+  if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
+  const query = beatQuery(beat);
+  const retrieval = await relevantBlocks(query, BEAT_K);
   if (!retrieval.hits) {
-    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; full catalog`);
-    return { blocks: null, retrieval };
+    const blocks = [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])];
+    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; keyword match`);
+    console.log(`[blocks] ${beat.id}: keywords -> ${blocks.map((b) => b.id).join(", ") || "none"}`);
+    return { blocks, retrieval };
   }
   const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!)])];
   console.log(`[moss] ${beat.id}: ${retrieval.ms} ms -> ${blocks.map((b) => b.id).join(", ")} (${retrieval.hits.map((h) => `${h.id} ${h.score}`).join(", ")})`);

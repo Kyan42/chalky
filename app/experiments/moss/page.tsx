@@ -4,7 +4,7 @@
  * Which blocks Moss hands the drawer: /experiments/moss
  *
  * Type a beat's visual brief; see the blocks Moss ranks for it with their scores and the query's
- * latency, and the drawer prompt's block section before (whole catalog) and after (just those).
+ * latency, the keyword fallback's pick for comparison, and the drawer prompt's block section.
  * Backed by POST /api/moss-blocks; lib/moss/blocks.ts does the work.
  */
 import { useState } from "react";
@@ -20,7 +20,7 @@ type Answer = {
   mossMs?: number;
   loadMs: number | null;
   hits: Hit[];
-  before: string;
+  keywords: string[];
   after: string | null;
 };
 
@@ -102,12 +102,12 @@ export default function MossBlocksPage() {
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, marginTop: 12 }}>
             <div style={box}>
-              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Before: whole catalog ({answer.before.length} chars)</h2>
-              <pre style={pre}>{answer.before}</pre>
+              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Keyword fallback (used when Moss is off or not ready)</h2>
+              <pre style={pre}>{answer.keywords.join("\n") || "No keyword match."}</pre>
             </div>
             <div style={box}>
-              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>After: retrieved blocks {answer.after ? `(${answer.after.length} chars)` : ""}</h2>
-              <pre style={pre}>{answer.after ?? "No retrieval, so the drawer keeps the whole catalog (left)."}</pre>
+              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Drawer prompt for Moss's pick {answer.after ? `(${answer.after.length} chars)` : ""}</h2>
+              <pre style={pre}>{answer.after ?? "No Moss result, so the drawer uses the keyword pick (left)."}</pre>
             </div>
           </div>
         </>

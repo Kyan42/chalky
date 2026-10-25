@@ -10,20 +10,24 @@ import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { Scene } from "@/experiments/visual-flex/doc";
 import type { Theme } from "@/lib/board/theme";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import { BLOCKS } from "./index";
+import { BLOCKS, type Block } from "./index";
 import { renderBlock } from "./render";
 
 /** Colours for part boxes in the overlay, in part order. */
 export const PART_COLORS = ["red", "blue", "green", "purple", "yellow"];
 
-/** Every block five across; `overlay` adds part boxes (by colour, in part order) and anchor dots. */
-export function galleryDoc(overlay: boolean, theme?: Theme): AnimationDocument {
+/**
+ * Blocks five across (a topic's worth: up to 20 fit), rows shrinking to fit the board; `overlay`
+ * adds part boxes (by colour, in part order) and anchor dots.
+ */
+export function galleryDoc(overlay: boolean, theme?: Theme, blocks: Block[] = BLOCKS.slice(0, 20)): AnimationDocument {
   const s = new Scene(theme);
-  BLOCKS.forEach((block, i) => {
-    const cx = 10 + (i % 5) * 20, cy = 15 + Math.floor(i / 5) * 32;
+  const dy = Math.min(32, 96 / Math.ceil(blocks.length / 5)), size = Math.min(11, dy / 2.4);
+  blocks.forEach((block, i) => {
+    const cx = 10 + (i % 5) * 20, cy = 2 + dy * (Math.floor(i / 5) + 0.4);
     const at = overlay ? -1 : i * 0.25;
-    const r = renderBlock(s, block, { cx, cy, size: 11, at });
-    s.text(block.title, (cx / 100) * 1200, ((cy + 13.5) / 100) * 800, { at: overlay ? -1 : at + 0.4, size: 22, color: "grey", width: 230 });
+    const r = renderBlock(s, block, { cx, cy, size, at });
+    s.text(block.title, (cx / 100) * 1200, ((cy + size * 1.22) / 100) * 800, { at: overlay ? -1 : at + 0.4, size: 20, color: "grey", width: 230 });
     if (!overlay) return;
     block.parts.forEach((p, k) => {
       const b = r.parts[p.id];

@@ -13,7 +13,7 @@
 import { checkCoverage, createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BLOCKS } from "@/lib/blocks";
+import { TOPICS } from "@/lib/blocks";
 import { galleryDoc, PART_COLORS, PHOTOSYNTHESIS, photosynthesisDoc } from "@/lib/blocks/demo";
 import { currentTheme, envTheme, THEMES, type Theme } from "@/lib/board/theme";
 
@@ -86,13 +86,20 @@ export default function BlocksPage() {
   const [theme, setTheme] = useState<Theme>(envTheme);
   useEffect(() => setTheme(currentTheme()), []);
   const players = useRef(new Map<string, PlayerHandle>());
-  const gallery = useMemo(() => galleryDoc(overlay, theme), [overlay, theme]);
+  // ?topic=<n> picks which topic's blocks the gallery shows (lib/blocks TOPICS).
+  const [topic, setTopic] = useState(0);
+  useEffect(() => {
+    const n = Number(new URLSearchParams(window.location.search).get("topic"));
+    if (Number.isInteger(n) && n >= 0 && n < TOPICS.length) setTopic(n);
+  }, []);
+  const blocks = TOPICS[topic].blocks;
+  const gallery = useMemo(() => galleryDoc(overlay, theme, blocks), [overlay, theme, blocks]);
   const photo = useMemo(() => photosynthesisDoc(false, theme), [theme]);
   const dark = theme.id === "chalkboard";
   const ink = theme.colors.ink, muted = theme.colors.grey, board = theme.colors.board;
   const page = dark ? "#1B2622" : "#EFECE4";
   // Plain links (no other query parameters), so the server and the browser render the same href.
-  const themeHref = (id: string) => `?theme=${id}`;
+  const themeHref = (id: string) => `?theme=${id}&topic=${topic}`;
 
   const register = useCallback((key: string, p: PlayerHandle | null) => {
     if (p) players.current.set(key, p);
@@ -120,7 +127,7 @@ export default function BlocksPage() {
       <header style={styles.header}>
         <div>
           <div style={{ ...styles.kicker, color: muted }}>Chalky · experiments · theme <b data-testid="theme">{theme.id}</b></div>
-          <h1 style={styles.title}>Janani&apos;s biology blocks on our board</h1>
+          <h1 style={styles.title}>Janani&apos;s blocks on our board</h1>
         </div>
         <div style={styles.controls}>
           <span style={{ fontSize: 14, color: muted }}>
@@ -128,6 +135,11 @@ export default function BlocksPage() {
               <a key={t.id} href={themeHref(t.id)} data-testid={`theme-${t.id}`} style={{ marginRight: 10, color: t.id === theme.id ? ink : muted, fontWeight: t.id === theme.id ? 700 : 400 }}>{t.id}</a>
             ))}
           </span>
+          <select data-testid="topic" value={topic} onChange={(e) => { const n = Number(e.target.value); setTopic(n); window.history.replaceState(null, "", `?theme=${theme.id}&topic=${n}`); }} style={{ fontSize: 14 }}>
+            {TOPICS.map((t, i) => (
+              <option key={t.name} value={i}>{t.name} ({t.blocks.length})</option>
+            ))}
+          </select>
           <label style={styles.toggle}>
             <input type="checkbox" data-testid="overlay" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} /> Show part boxes and anchors
           </label>
@@ -135,7 +147,7 @@ export default function BlocksPage() {
         </div>
       </header>
       <section style={styles.boards}>
-        <Board doc={gallery} label={overlay ? "All 15 blocks (parts and anchors)" : "All 15 blocks"} register={register} theme={theme} />
+        <Board doc={gallery} label={`${TOPICS[topic].name}: ${blocks.length} blocks${overlay ? " (parts and anchors)" : ""}`} register={register} theme={theme} />
         <Board doc={photo.doc} label="Photosynthesis, through the preset compiler" register={register} theme={theme} />
       </section>
       <section style={styles.notes}>
@@ -143,7 +155,7 @@ export default function BlocksPage() {
           <h2 style={styles.h2}>Parts and anchors</h2>
           <table style={styles.table}>
             <tbody>
-              {BLOCKS.map((b) => (
+              {blocks.map((b) => (
                 <tr key={b.id}>
                   <td style={styles.td}><b>{b.id}</b></td>
                   <td style={styles.td}>
