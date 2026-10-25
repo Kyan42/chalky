@@ -1,0 +1,35 @@
+{
+  "question": "who won the 2026 Nobel in physics and for what",
+  "query": "who won the 2026 Nobel in physics and for what",
+  "recent": true,
+  "status": "ready",
+  "items": [
+    {
+      "n": 1,
+      "title": "Nobel Prize in Physics - Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nobel_Prize_in_Physics",
+      "site": "en.wikipedia.org",
+      "published": "2026-10-14",
+      "key": [
+        "For specific awards, see List of Nobel laureates in Physics.",
+        "The Nobel Prize in Physics is an annual award given by the Royal Swedish Academy of Sciences for those who have made the most outstanding contributions to humankind in the field of physics.",
+        "During the first stage which begins in September, a group of about 3,000 selected university professors, Nobel Laureates in Physics and Chemistry, and others are sent confidential nomination forms."
+      ]
+    },
+    {
+      "n": 2,
+      "title": "Press release: Nobel Prize in Physics 2026 - NobelPrize.org",
+      "url": "https://www.nobelprize.org/prizes/physics/2026/press-release/",
+      "site": "nobelprize.org",
+      "published": "2026-10-06",
+      "key": [
+        "The Nobel Prize in Physics 2026 was awarded to Francis Halzen \"for decisive contributions to the IceCube Neutrino Observatory and the discovery of high-energy neutrinos of astrophysical origin\".",
+        "His tenacity and scientific vision has paved the way for a new kind of astronomy,” says Mark Pearce, Chair of the Nobel Committee for Physics."
+      ]
+    }
+  ],
+  "material": "Recent web pages for \"who won the 2026 Nobel in physics and for what\" (searched 2026-10-25). Cite them as [1] to [2].\n\n[1] Nobel Prize in Physics - Wikipedia (en.wikipedia.org, 2026-10-14)\nFor specific awards, see List of Nobel laureates in Physics. The Nobel Prize in Physics is an annual award given by the Royal Swedish Academy of Sciences for those who have made the most outstanding contributions to humankind in the field of physics. During the first stage which begins in September, a group of about 3,000 selected university professors, Nobel Laureates in Physics and Chemistry, and others are sent confidential nomination forms.\n\n[2] Press release: Nobel Prize in Physics 2026 - NobelPrize.org (nobelprize.org, 2026-10-06)\nThe Nobel Prize in Physics 2026 was awarded to Francis Halzen \"for decisive contributions to the IceCube Neutrino Observatory and the discovery of high-energy neutrinos of astrophysical origin\". His tenacity and scientific vision has paved the way for a new kind of astronomy,” says Mark Pearce, Chair of the Nobel Committee for Physics.",
+  "startedAt": "2026-10-25T07:59:56.664Z",
+  "fetchedAt": "2026-10-25T08:00:01.967Z",
+  "ms": 5301
+}
