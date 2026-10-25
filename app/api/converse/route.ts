@@ -57,8 +57,18 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
   // A JPEG of the board, base64: under about 1 MB, or it is dropped.
   const image = typeof inkBody?.image === "string" && inkBody.image.length < 1_400_000 && /^[A-Za-z0-9+/=]+$/.test(inkBody.image) ? inkBody.image : undefined;
   const loose = int(inkBody?.loose, 0);
+  const scenes = Array.isArray(body.scenes)
+    ? body.scenes.slice(0, 20).flatMap((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        const scene = int(o.scene, 0);
+        const ids = Array.isArray(o.ids) ? o.ids.filter((i): i is string => typeof i === "string").slice(0, 40).map((i) => i.slice(0, 60)) : [];
+        return scene > 0 ? [{ scene, title: str(o.title, 120), ids }] : [];
+      })
+    : [];
   return {
     utterance,
+    ...(int(body.scene, 0) > 0 ? { scene: int(body.scene, 0) } : {}),
+    ...(scenes.length ? { scenes } : {}),
     question: str(body.question, 500),
     beats,
     beatIndex: Math.min(beats.length - 1, int(body.beatIndex, -1)),
