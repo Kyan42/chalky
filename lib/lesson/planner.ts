@@ -272,6 +272,8 @@ export interface AmendRequest {
   /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
   intake?: boolean;
   learner?: LearnerRecord;
+  /** The research material the lesson is taught from, if any: a change keeps teaching from it and citing it. */
+  material?: string;
   /** Sketches answers drew on the board so far (scene, scene-local region, adds): drawings like any other. */
   sketches?: PlannedBeat[];
 }
@@ -320,6 +322,11 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     r.op === "replace_from" ? scenesRule : "",
     r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
     `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
+    r.material ? `${MATERIAL_RULES}
+
+<material>
+${r.material}
+</material>` : "",
     describeLearner(r.learner),
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,

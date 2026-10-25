@@ -113,7 +113,8 @@ console.log(`        research: ${JSON.stringify(research)}; requests: ${polls.jo
 console.log(`        planned: ${planned.map((e) => `${e.beatId}${e.cite ? `[${e.cite}]` : ""}`).join(" ")}`);
 console.log(`        lit while speaking: ${JSON.stringify(litByBeat)}`);
 check("the first reply asks for recent papers", (reply?.actions ?? []).some((a) => a.type === "research"));
-check("the page showed Finding papers and polled until ready", sawBadge && polls.some((p) => p.startsWith("GET")) && research?.papers > 0, `${research?.papers} papers via ${research?.via}`);
+// A cached topic is ready at once (no badge to see, no polling); a fresh one shows the badge and polls.
+check("the research came back ready (cached at once, or polled until ready with Finding papers shown)", research?.papers > 0 && (research.cached || (sawBadge && polls.some((p) => p.startsWith("GET")))), `${research?.papers} papers via ${research?.via}${research?.cached ? ", cached" : ""}`);
 check("the intake was asked and answered meanwhile", ev("intake-asked").length === 1 && ev("intake-decision").length === 1);
 const cited = planned.filter((e) => e.cite);
 check("the planner taught from the papers: beats carry cite", cited.length >= 3 && new Set(cited.map((e) => e.cite)).size >= 2, `${cited.length} cited beats`);

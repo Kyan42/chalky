@@ -1282,6 +1282,7 @@ export default function Lesson() {
             // Taught from recent papers when the first reply asked for them; from memory if none came back.
             const found = researchJob ? await researchJob : null;
             const material = found?.papers.length && found.material ? found.material : null;
+            lessonMaterial = material;
             if (researchJob && !material)
               researchNote = found && found.status === "ready" ? "I couldn't find any recent papers on that, so I'll teach you the fundamentals from what I know." : "I couldn't pull up the recent papers just now, so I'll teach it from what I know.";
             return post("/api/plan", { question: q, ...(material ? { material } : {}) });
@@ -1343,6 +1344,8 @@ export default function Lesson() {
     if (direct) startPlanning();
     /** Recent papers asked for by the first reply's "research" action: the planner waits for their material. */
     let researchJob: Promise<ResearchRecord | null> | null = null;
+    /** The research material the plan was made from: every change to the plan keeps teaching from it. */
+    let lessonMaterial: string | null = null;
     /** Said before beat 1 when the research came back empty or failed (the lesson is taught from memory). */
     let researchNote: string | null = null;
     const startResearch = (r: NonNullable<ConverseTrailer["research"]>) => {
@@ -1744,7 +1747,7 @@ export default function Lesson() {
       const scene = list[at - 1]?.beat.scene;
       const onBoard = list.slice(0, at).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
       const beats = (async () => {
-        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
+        const res = await post("/api/amend", { question: q, ...(lessonMaterial ? { material: lessonMaterial } : {}), beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
@@ -1776,7 +1779,7 @@ export default function Lesson() {
       amending++;
       const prefix = `r${++amendCount}`;
       void (async () => {
-        const res = await post("/api/amend", { question: q, beats: before, sketches: list.slice(0, from).flatMap((s) => s.sketchBeats ?? []), op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
+        const res = await post("/api/amend", { question: q, ...(lessonMaterial ? { material: lessonMaterial } : {}), beats: before, sketches: list.slice(0, from).flatMap((s) => s.sketchBeats ?? []), op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
