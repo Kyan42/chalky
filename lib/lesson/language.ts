@@ -8,6 +8,7 @@
  * Shared by the live /api/draw route and the board-layout experiment.
  */
 import { PALETTE } from "@/experiments/visual-flex/doc";
+import { BLOCKS } from "@/lib/blocks";
 import { BLOCK_LANGUAGE } from "@/lib/blocks/catalog";
 import { PRESET_KINDS } from "@/lib/lesson/presets";
 import type { PlannedBeat } from "@/lib/lesson/types";
@@ -22,7 +23,7 @@ Every element has: id (short unique name, e.g. "sun", "leaf", "co2-in"), kind, a
 
 ${BLOCK_LANGUAGE}
 
-Shapes (give them a text label; the renderer puts it inside or on the free side):
+Shapes (give them a text label; the renderer puts it inside or on the free side). Not for anything that has a block: ${BLOCKS.map((b) => b.id).join(", ")} are drawn with block (above), and a circle or box labelled "leaf", "cell" or "sun" is wrong, not a simpler version.
 - circle: args cx, cy, r (radius in x units, 3-15 is typical), filled (1 or 0). text = label.
 - box: args x, y, w, h (top-left corner and size), filled (1 or 0). text = label.
 Connections (snap to the shapes they join; never give coordinates for these):

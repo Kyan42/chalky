@@ -94,8 +94,33 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     report.shapes.push({ id: p.id, box: p.box });
   };
   // Janani's blocks (lib/blocks): `block` and `travel` register their boxes, parts and anchors here.
-  const blocks: BlockContext = { scene: s, placed, register, occupy: (id, box) => occupy(id, box), dangling: report.dangling };
   const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b) * 4;
+
+  /**
+   * Moves a later arrival off what is already there, the way free text is nudged: a shape off
+   * the labels it would cover (shapes may overlap shapes on purpose, a dot inside a cell), a
+   * block off labels and other shapes too. Tries a ring of small offsets and keeps the cheapest;
+   * the stage offset [dx, dy] is [0, 0] when the spot was free. Counted in `report.nudged`.
+   */
+  const nudge = (b: Box, o: { shapes: boolean }): [number, number] => {
+    const price = (box: Box) => occupied.reduce((sum, c) => sum + (c.text ? 3 : o.shapes ? 1 : 0) * overlap(grow(box, 6), c.box), 0) + outside(box) * 4;
+    const here = price(b);
+    if (here === 0) return [0, 0];
+    // Up to 144 px (12 grid units) away, nearer spots first; a longer move costs a little extra.
+    const step = 24;
+    let best: { d: [number, number]; k: number } = { d: [0, 0], k: here };
+    for (let ring = 1; ring <= 6; ring++) {
+      for (const [ux, uy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const d: [number, number] = [ux * step * ring, uy * step * ring];
+        const k = price({ x1: b.x1 + d[0], y1: b.y1 + d[1], x2: b.x2 + d[0], y2: b.y2 + d[1] }) + Math.hypot(d[0], d[1]) * 2;
+        if (k < best.k - 1) best = { d, k };
+      }
+      if (best.k <= step * ring * 2) break;
+    }
+    if (best.d[0] || best.d[1]) report.nudged++;
+    return best.d;
+  };
+  const blocks: BlockContext = { scene: s, placed, register, occupy: (id, box) => occupy(id, box), dangling: report.dangling, nudge: (box) => nudge(box, { shapes: true }) };
 
   /** Places a text at the cheapest candidate centre; shrinks once if every spot collides. */
   const placeText = (id: string, str: string, candidates: Pt[], size: number, o: { at: number; color: string }, ignore: Set<string>, owner?: string) => {
@@ -171,7 +196,9 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         drawBlockElement(blocks, { ...e, id }, at);
         return;
       case "circle": {
-        const cx = sx(a[0]), cy = sy(a[1]), r = Math.max(8, (a[2] / 100) * W);
+        const r = Math.max(8, (a[2] / 100) * W);
+        const [ncx, ncy] = nudge({ x1: sx(a[0]) - r, y1: sy(a[1]) - r, x2: sx(a[0]) + r, y2: sy(a[1]) + r }, { shapes: false });
+        const cx = sx(a[0]) + ncx, cy = sy(a[1]) + ncy;
         const filled = a[3] !== 0;
         s.circle(cx, cy, r, { at, color: col, filled, dur });
         const box = { x1: cx - r, y1: cy - r, x2: cx + r, y2: cy + r };
@@ -184,7 +211,9 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         return;
       }
       case "box": {
-        const x = sx(a[0]), y = sy(a[1]), w = Math.max(16, sx(a[2])), h = Math.max(16, sy(a[3]));
+        const w = Math.max(16, sx(a[2])), h = Math.max(16, sy(a[3]));
+        const [nx, ny] = nudge({ x1: sx(a[0]), y1: sy(a[1]), x2: sx(a[0]) + w, y2: sy(a[1]) + h }, { shapes: false });
+        const x = sx(a[0]) + nx, y = sy(a[1]) + ny;
         const filled = a[4] === 1;
         s.box(x, y, w, h, { at, color: col, filled, dur });
         const box = { x1: x, y1: y, x2: x + w, y2: y + h };
