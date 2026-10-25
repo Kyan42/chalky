@@ -146,13 +146,15 @@ The whole photosynthesis script from her `presets/preview.ts`, as one beat, is
 - Board: 1200x800 stage units on a 100x100 grid instead of 1920x1080 pixels. `size` is the
   block's longer side in grid x units; the block keeps its aspect, so it spans 1.5x as many grid
   y units.
-- Marker: 4 stage px (hers 5 px on 1920, which would be about 3 px here); draw speed 940 px/s
-  (her 1500 px/s scaled to our width).
+- Marker: the theme's (lib/board/theme.ts: WHITEBOARD 4, CHALK and CHALKBOARD 4.5 stage px; hers
+  5 / 6 px on 1920); draw speed 940 px/s (her 1500 px/s scaled to our width).
 - Time: 60 fps and 240 ticks/s instead of 30 fps; 20 s documents with time 0 at the anchor word.
 - Pop: a cubic overshoot on the 60 fps grid (as our `Scene` pops) instead of her spring ease.
-- Colours: our `PALETTE` for ink, red, blue, green, yellow, purple, grey; orange and brown kept
-  as hex in `lib/blocks/render.ts`; every `-tint` is its colour mixed 80% toward our paper;
-  `board` is our paper. Nothing was added to `doc.ts`.
+- Colours and fills: her themes verbatim (lib/board/theme.ts), read from the scene's theme:
+  on CHALK and CHALKBOARD a `-tint` becomes the board colour arriving as the outline starts, on
+  WHITEBOARD the wash fades in, on a hatch theme her scribble is clipped to the shape; the chalk
+  grain goes over the whole drawing in `Scene.build`.
 - Labels use our Inter through the compiler's own label placement, not her Manrope labels.
-- Highlights are her loop in our red; she also has a highlighter style, not ported.
+- Highlights are her chalk loop (`Scene.loop`), the same one the compiler draws around any
+  shape or label; her highlighter swipe was removed on her side too.
 - Not ported: her `Board` class and timeline (`with`, `delay`), `move`, `remove`.
