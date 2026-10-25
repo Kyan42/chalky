@@ -50,7 +50,7 @@ export interface ConverseTrailer {
    * the picture follows the question. What to draw, and the new elements it
    * introduces (ids later turns can point at). Null: the board stays as it is.
    */
-  sketch: { visual: string; adds: { id: string; what: string }[] } | null;
+  sketch: { visual: string; adds: { id: string; what: string }[]; near: string | null; side: SketchSide } | null;
 }
 
 export interface ConverseBeat {
@@ -63,7 +63,12 @@ export interface BoardElementRef {
   id: string;
   kind: string;
   label: string;
+  /** Where it is, on the board's grid (0..100 is the visible board before any zooming out; y down). */
+  box?: { x: number; y: number; w: number; h: number };
 }
+
+/** Where an answer's sketch goes: on one side of an element already drawn, or on it (to mark the thing itself). */
+export type SketchSide = "above" | "below" | "left" | "right" | "on";
 
 export interface Exchange {
   who: "learner" | "chalky";
@@ -118,7 +123,7 @@ How to reply:
 
 End the spoken reply with a short check question when you explained something ("Does that part make sense?", "Want me to go on?"); set resume to "wait" in that case. Set resume to "replay_beat" if you were cut off mid-beat and your answer was a quick aside, so the beat is said again from its start. Set resume to "continue" when the learner confirmed and the lesson can simply go on.
 
-When the learner asks a question, the board should change with your answer, the way a teacher adds to the board while answering. So for level "answer", always add a sketch: one sentence saying what to draw, plus the new elements it introduces with short ids (one to three simple things that build on what is there: the part they asked about, a comparison, what happens next). It is drawn in a free area of the same board while you speak, so talk about it as it appears ("here's the prism..."). Use null only when they did not ask anything (they just reacted or agreed), or asked you to repeat something that is already drawn exactly; then point at that instead. A detour draws its own pictures: no sketch for "detour" or "replan".
+When the learner asks a question, the board should change with your answer, the way a teacher adds to the board while answering. So for level "answer", always add a sketch: one sentence saying what to draw, plus the new elements it introduces with short ids (one to three simple things that build on what is there: the part they asked about, a comparison, what happens next). Say where it goes with "near" (an element already on the board) and "side" (above, below, left, right, or on). Put it where it would really be, read from the positions above: the sun, clouds and rain above the ground and the plants, roots and soil below the ground line, the sea below the sky, a part inside or on the thing it belongs to. Things that are not touching in real life must not overlap: use "on" only to mark or annotate that element itself (arrows into a leaf, a label on a part). The board is extended (it zooms out) if there is no room on that side, so never move a thing somewhere wrong to make it fit. It is drawn while you speak, so talk about it as it appears ("here's the prism..."). Use null only when they did not ask anything (they just reacted or agreed), or asked you to repeat something that is already drawn exactly; then point at that instead. A detour draws its own pictures: no sketch for "detour" or "replan".
 
 While you speak, a cursor (a teacher's hand) can point at, circle, or sweep between elements already on the board. Add a cursor cue for each element you mention, anchored to the exact word of your reply where you mention it (write the word as it appears; add #2 if it's the second occurrence of that word, e.g. "orbit#2"). Only use element ids from the board list. "sweep" needs "to": another element id. No cues if nothing on the board fits.
 
@@ -127,12 +132,13 @@ The learner can draw on the board with a pen (blue, green, orange or dark stroke
 Everything before the trailer line is spoken aloud to the learner, word for word. Start speaking to them at once: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there; that all goes in the JSON.
 
 Output format, exactly: the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next", "sketch": {"visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}]} | null}
+{"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next", "sketch": {"visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}], "near": "element-id", "side": "above" | "below" | "left" | "right" | "on"} | null}
 Nothing else: no code fences, no commentary.`;
 
 const LEVELS = new Set<ConverseLevel>(["answer", "detour", "replan"]);
 const RESUMES = new Set<ConverseResume>(["replay_beat", "continue", "wait"]);
 const GESTURES = new Set<CursorGesture>(["point", "circle", "sweep"]);
+const SIDES = new Set<SketchSide>(["above", "below", "left", "right", "on"]);
 
 function context(o: ConverseInput): string {
   const beats = o.beats.length
@@ -144,13 +150,14 @@ function context(o: ConverseInput): string {
     const words = now.say.split(/\s+/);
     where = `You were cut off mid-beat after saying: "${words.slice(0, o.wordIndex + 1).join(" ")}" (the rest of the beat was not said).`;
   }
-  const board = o.board.length ? o.board.map((e) => `- ${e.id}: ${e.kind}${e.label ? ` "${e.label}"` : ""}`).join("\n") : "(the board is empty)";
+  const at = (b: BoardElementRef["box"]) => (b ? `, at x ${Math.round(b.x)}..${Math.round(b.x + b.w)}, y ${Math.round(b.y)}..${Math.round(b.y + b.h)}` : "");
+  const board = o.board.length ? o.board.map((e) => `- ${e.id}: ${e.kind}${e.label ? ` "${e.label}"` : ""}${at(e.box)}`).join("\n") : "(the board is empty)";
   const history = o.history.length ? o.history.map((h) => `${h.who === "learner" ? "Learner" : "You"}: ${h.text}`).join("\n") : "(none)";
   return [
     `The lesson answers: ${o.question}`,
     `The lesson's beats so far:\n${beats}`,
     where,
-    `Elements on the board (ids you can point at):\n${board}`,
+    `Elements on the board (ids you can point at), with where they are (x right, y down; small y is the top):\n${board}`,
     `Earlier exchanges in this conversation:\n${history}`,
     describeLearner(o.learner),
     `Escalation already reached for this confusion: ${o.escalation} (0 none, 1 a brief answer was given, 2 a detour was given).`,
@@ -278,7 +285,9 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       .slice(0, 4)
       .map((a) => ({ id: cleanId((a as Record<string, unknown>)?.id), what: String((a as Record<string, unknown>)?.what ?? "").trim().slice(0, 80) }))
       .filter((a) => a.id && !ids.has(a.id));
-    sketch = { visual, adds };
+    const near = typeof sk?.near === "string" && ids.has(sk.near.trim()) ? sk.near.trim() : null;
+    const side = SIDES.has(sk?.side as SketchSide) ? (sk!.side as SketchSide) : "right";
+    sketch = { visual, adds, near, side };
   }
   return { level, resume, cursor: groundCues(cursor, spoken, input.board), check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "", sketch };
 }

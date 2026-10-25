@@ -74,11 +74,15 @@ function textSize(str: string, size: number) {
   return { w: Math.max(size, str.length * size * 0.56), h: size * 1.25 };
 }
 
-function outside(b: Box) {
-  return area(b) - overlap(b, STAGE);
+function outside(b: Box, stage: Box = STAGE) {
+  return area(b) - overlap(b, stage);
 }
 
-export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string): { doc: AnimationDocument; report: LayoutReport } {
+/**
+ * `stage` (board pixels) is the area labels must stay inside: the whole board
+ * by default, or more of it when the lesson has zoomed out to make room.
+ */
+export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, stage: Box = STAGE): { doc: AnimationDocument; report: LayoutReport } {
   const s = new Scene();
   const placed = new Map<string, Placed>();
   const occupied: { id: string; box: Box; text: boolean }[] = [];
@@ -92,7 +96,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
   };
   // Janani's blocks (lib/blocks): `block` and `travel` register their boxes, parts and anchors here.
   const blocks: BlockContext = { scene: s, placed, register, occupy: (id, box) => occupy(id, box), dangling: report.dangling };
-  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b) * 4;
+  const cost = (b: Box, ignore: Set<string>) => occupied.reduce((sum, o) => (ignore.has(o.id) ? sum : sum + overlap(grow(b, 6), o.box) * (o.text ? 3 : 1)), 0) + outside(b, stage) * 4;
 
   /** Places a text at the cheapest candidate centre; shrinks once if every spot collides. */
   const placeText = (id: string, str: string, candidates: Pt[], size: number, o: { at: number; color: string }, ignore: Set<string>, owner?: string) => {

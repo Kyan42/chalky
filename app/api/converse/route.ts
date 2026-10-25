@@ -29,7 +29,10 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     ? body.board.slice(0, 80).flatMap((e) => {
         const o = (e ?? {}) as Record<string, unknown>;
         const id = str(o.id, 60).trim();
-        return id ? [{ id, kind: str(o.kind, 30) || "element", label: str(o.label, 120) }] : [];
+        const b = (o.box ?? null) as Record<string, unknown> | null;
+        const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+        const box = b && [b.x, b.y, b.w, b.h].every((v) => num(v) !== null) ? { x: num(b.x)!, y: num(b.y)!, w: num(b.w)!, h: num(b.h)! } : undefined;
+        return id ? [{ id, kind: str(o.kind, 30) || "element", label: str(o.label, 120), ...(box ? { box } : {}) }] : [];
       })
     : [];
   const history = Array.isArray(body.history)

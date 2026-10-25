@@ -25,16 +25,16 @@
  * The mic is half-duplex: it isn't sent while Chalky is speaking.
  */
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
-import type { AnimationDocument } from "@clayzo/animation/authoring";
-import { INK_COLORS, InkLayer, snapshotBoard } from "@/components/InkLayer";
+import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
+import { INK_COLORS, InkLayer, NO_ZOOM, snapshotBoard, type InkCamera } from "@/components/InkLayer";
 import { readInk, type InkStroke } from "@/lib/lesson/ink";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
-import { H, W } from "@/experiments/visual-flex/doc";
+import { END, finishDocument, H, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
-import type { ConverseEvent, ConverseTrailer, Exchange } from "@/lib/lesson/converse";
+import type { ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
@@ -173,16 +173,19 @@ const sceneAdds = (list: BeatState[], scene: number) =>
  * of a few sizes that touches nothing drawn, nearest to what is there so it
  * reads as part of the same picture. Null when nothing fits.
  */
-function freeRegion(boxes: Record<string, GridBox>): Region | null {
+function freeRegion(boxes: Record<string, GridBox>, view: Region = FULL_VIEW): Region | null {
   const taken = Object.values(boxes).filter((b) => b.w * b.h >= 0.3);
   const cx = taken.length ? taken.reduce((a, b) => a + b.x + b.w / 2, 0) / taken.length : 50;
   const cy = taken.length ? taken.reduce((a, b) => a + b.y + b.h / 2, 0) / taken.length : 50;
   const clear = (x: number, y: number, w: number, h: number) =>
     taken.every((b) => x + w + 3 <= b.x || b.x + b.w + 3 <= x || y + h + 3 <= b.y || b.y + b.h + 3 <= y);
-  for (const [w, h] of [[42, 42], [36, 40], [40, 32], [32, 32], [28, 30], [24, 24]]) {
+  const k = view.w / 100;
+  const step = 4 * k;
+  for (const [sw, sh] of [[42, 42], [36, 40], [40, 32], [32, 32], [28, 30], [24, 24]]) {
+    const w = sw * k, h = sh * k;
     let best: { r: Region; d: number } | null = null;
-    for (let x = 4; x + w <= 96; x += 4) {
-      for (let y = 8; y + h <= 96; y += 4) {
+    for (let x = view.x + step; x + w <= view.x + view.w - step; x += step) {
+      for (let y = view.y + 2 * step; y + h <= view.y + view.h - step; y += step) {
         if (!clear(x, y, w, h)) continue;
         const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy);
         if (!best || d < best.d) best = { r: { x, y, w, h }, d };
@@ -193,22 +196,146 @@ function freeRegion(boxes: Record<string, GridBox>): Region | null {
   return null;
 }
 
-function compileScene(groups: PresetElement[][]): { doc: AnimationDocument; report: LayoutReport } | null {
+/** The whole board, on the 100x100 grid: a scene's view before any zooming out. */
+const FULL_VIEW: Region = { x: 0, y: 0, w: 100, h: 100 };
+/** How far one zoom-out grows the view, and the most it ever shows (2.4x the board). */
+const ZOOM_STEP = 1.4;
+const MAX_VIEW = 240;
+const ZOOM_SECONDS = 0.9;
+/** The zoom's easing: the board's camera and the learner's ink both follow it. */
+const GLIDE: CubicBezier = { x1: 0.65, y1: 0, x2: 0.35, y2: 1 };
+
+/** A view as the camera that shows it. */
+const cameraFor = (v: Region): InkCamera => ({ cx: v.x + v.w / 2, cy: v.y + v.h / 2, s: 100 / v.w });
+/** The camera `u` (0..1) of the way through a zoom from `a` to `b`, on the board's own curve. */
+function cameraBetween(a: Region, b: Region, u: number): InkCamera {
+  const e = easeAt(GLIDE, Math.max(0, Math.min(1, u)));
+  const p = cameraFor(a), q = cameraFor(b);
+  return { cx: p.cx + (q.cx - p.cx) * e, cy: p.cy + (q.cy - p.cy) * e, s: p.s + (q.s - p.s) * e };
+}
+
+/**
+ * Compiles a scene. Its drawing lives in world space (the 100x100 grid, and
+ * beyond it once the lesson has zoomed out); `camera.view` is the part of the
+ * world the board shows. Zooming out from `camera.from` animates over the
+ * document's first second, like an infinite canvas making room.
+ */
+function compileScene(groups: PresetElement[][], camera: { view: Region; from?: Region } = { view: FULL_VIEW }): { doc: AnimationDocument; report: LayoutReport } | null {
   if (!groups.some((g) => g.length)) return null;
-  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`);
+  const { view, from } = camera;
+  const stage = { x1: (view.x / 100) * W + 14, y1: (view.y / 100) * H + 14, x2: ((view.x + view.w) / 100) * W - 14, y2: ((view.y + view.h) / 100) * H - 14 };
+  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`, stage);
   if (report.dangling.length) console.info(`[board] dangling refs: ${report.dangling.join("; ")}`);
-  return { doc, report };
+  const zoomed = view.w !== 100 || view.x !== 0 || view.y !== 0 || (from && (from.w !== view.w || from.x !== view.x || from.y !== view.y));
+  return { doc: zoomed ? withCamera(doc, view, from) : doc, report };
+}
+
+/** Wraps a board's drawing (not its paper) in a camera group that shows `view`, gliding there from `from`. */
+function withCamera(doc: AnimationDocument, view: Region, from?: Region): AnimationDocument {
+  const comp = doc.compositions[doc.rootCompositionId];
+  const content = comp.rootNodeIds.filter((id) => id !== "paper");
+  // The view's centre goes to the board's centre, scaled so the view fills the board.
+  const pose = (v: Region) => ({ anchor: { x: ((v.x + v.w / 2) / 100) * W, y: ((v.y + v.h / 2) / 100) * H, z: 0 }, scale: { x: 100 / v.w, y: 100 / v.h, z: 1 } });
+  const to = pose(view);
+  const start = from ? pose(from) : to;
+  const glide = GLIDE;
+  const t1 = Math.round(ZOOM_SECONDS * TPS / FRAME_TICKS) * FRAME_TICKS;
+  const camera: SceneNode = {
+    ...base("camera", {
+      outTick: END,
+      x: W / 2,
+      y: H / 2,
+      anchor: from ? keyed("camera.anchor", [[0, start.anchor, glide], [t1, to.anchor]]) : constant(to.anchor),
+      scale: from ? keyed("camera.scale", [[0, start.scale, glide], [t1, to.scale]]) : constant(to.scale),
+    }),
+    type: "group",
+    children: content,
+  };
+  return finishDocument(`${doc.id}-cam`, doc.name, { ...comp.nodes, camera }, ["paper", "camera"]);
+}
+
+/** A board box (world grid) as it appears on screen through `view`. */
+function onScreen(b: GridBox, view: Region): GridBox {
+  return { x: ((b.x - view.x) / view.w) * 100, y: ((b.y - view.y) / view.h) * 100, w: (b.w / view.w) * 100, h: (b.h / view.h) * 100 };
+}
+const screenBoxes = (boxes: Record<string, GridBox>, view: Region) =>
+  view === FULL_VIEW ? boxes : Object.fromEntries(Object.entries(boxes).map(([id, b]) => [id, onScreen(b, view)]));
+
+/**
+ * The view zoomed out one step, growing to the right and down from where the
+ * drawing is, like adding canvas beside your work: the drawing keeps its place
+ * and one strip of free space opens wide enough for a sketch. Stays square on
+ * the grid so nothing stretches. Null at the most it zooms out.
+ */
+function zoomOut(view: Region, boxes: Record<string, GridBox>): Region | null {
+  const size = Math.min(MAX_VIEW, view.w * ZOOM_STEP);
+  if (size <= view.w + 1) return null;
+  const all = Object.values(boxes);
+  const left = all.length ? Math.min(view.x, ...all.map((b) => b.x - 4)) : view.x;
+  const top = all.length ? Math.min(view.y, ...all.map((b) => b.y - 4)) : view.y;
+  return { x: left, y: top, w: size, h: size };
+}
+
+/** The smallest square view that still shows all of `view` and `region` (plus a margin), or null past MAX_VIEW. */
+function viewFor(view: Region, region: Region): Region | null {
+  const m = 4;
+  const x0 = Math.min(view.x, region.x - m), y0 = Math.min(view.y, region.y - m);
+  const x1 = Math.max(view.x + view.w, region.x + region.w + m), y1 = Math.max(view.y + view.h, region.y + region.h + m);
+  const size = Math.max(x1 - x0, y1 - y0);
+  if (size > MAX_VIEW) return null;
+  if (size <= view.w && x0 >= view.x && y0 >= view.y) return view;
+  return { x: x0 - (size - (x1 - x0)) / 2, y: y0 - (size - (y1 - y0)) / 2, w: size, h: size };
+}
+
+/**
+ * Where an answer's sketch goes: on the side of `near` the reply asked for,
+ * slid along that side (and then further out) until it touches nothing drawn,
+ * zooming the view out to include it when it falls off the board. "on" marks
+ * the element itself. Null when no such spot fits; the caller then takes any
+ * free space.
+ */
+function placeSketch(boxes: Record<string, GridBox>, view: Region, near: string | null, side: SketchSide): { region: Region; view: Region } | null {
+  const ref = near ? boxes[near] : undefined;
+  if (!ref) return null;
+  if (side === "on") {
+    const region = { x: ref.x - 2, y: ref.y - 2, w: ref.w + 4, h: ref.h + 4 };
+    const v = viewFor(view, region);
+    return v ? { region, view: v } : null;
+  }
+  // About the size of what it sits next to, within limits, so it reads at the same scale.
+  const w = Math.max(24, Math.min(40, ref.w * 0.9)), h = Math.max(22, Math.min(36, ref.h * 0.9));
+  const gap = 4;
+  const taken = Object.values(boxes).filter((b) => b.w * b.h >= 0.3);
+  const clear = (r: Region) => taken.every((b) => r.x + r.w + 2 <= b.x || b.x + b.w + 2 <= r.x || r.y + r.h + 2 <= b.y || b.y + b.h + 2 <= r.y);
+  const vertical = side === "above" || side === "below";
+  for (let out = 0; out <= 3; out++) {
+    for (const slide of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
+      const push = out * (vertical ? h * 0.6 : w * 0.6);
+      const r: Region =
+        side === "above" ? { x: ref.x + ref.w / 2 - w / 2 + slide * w, y: ref.y - gap - h - push, w, h }
+        : side === "below" ? { x: ref.x + ref.w / 2 - w / 2 + slide * w, y: ref.y + ref.h + gap + push, w, h }
+        : side === "left" ? { x: ref.x - gap - w - push, y: ref.y + ref.h / 2 - h / 2 + slide * h, w, h }
+        : { x: ref.x + ref.w + gap + push, y: ref.y + ref.h / 2 - h / 2 + slide * h, w, h };
+      if (!clear(r)) continue;
+      const v = viewFor(view, r);
+      if (v) return { region: r, view: v };
+    }
+  }
+  return null;
 }
 
 /** The board as the cursor and the conversation layer see it: element boxes on the 100x100 grid, and a named list. */
 interface BoardView {
+  /** Element boxes in world space (the grid the drawing is laid out on). */
   boxes: Record<string, GridBox>;
   list: { id: string; kind: string; label: string }[];
+  /** The part of the world the board shows; FULL_VIEW until the scene zooms out. */
+  view: Region;
 }
-const EMPTY_BOARD: BoardView = { boxes: {}, list: [] };
+const EMPTY_BOARD: BoardView = { boxes: {}, list: [], view: FULL_VIEW };
 
 /** Turns the compiler's report (stage pixels) into grid boxes, and names every element once for /api/converse. */
-function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[]): BoardView {
+function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[], view: Region = FULL_VIEW): BoardView {
   const boxes: Record<string, GridBox> = {};
   const list: BoardView["list"] = [];
   const grid = (b: { x1: number; y1: number; x2: number; y2: number }): GridBox => ({ x: (b.x1 / W) * 100, y: (b.y1 / H) * 100, w: ((b.x2 - b.x1) / W) * 100, h: ((b.y2 - b.y1) / H) * 100 });
@@ -233,7 +360,7 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
     boxes[t.id] = grid(t.box);
     list.push({ id: t.id, kind: "text", label: byId.get(t.id)?.text || t.id });
   }
-  return { boxes, list };
+  return { boxes, list, view };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -317,9 +444,14 @@ export default function Lesson() {
   const [lastReplyMs, setLastReplyMs] = useState<number | null>(null);
   const [board, setBoard] = useState<BoardView>(EMPTY_BOARD);
   const boardRef = useRef<BoardView>(EMPTY_BOARD);
+  /** The board's camera as the ink reads it; follows the view, and animates with it during a zoom. */
+  const cameraRef = useRef<InkCamera>(NO_ZOOM);
+  const zoomingRef = useRef(false);
+  const readCamera = useCallback(() => cameraRef.current, []);
   const showBoard = useCallback((view: BoardView) => {
     boardRef.current = view;
     setBoard(view);
+    if (!zoomingRef.current) cameraRef.current = cameraFor(view.view);
   }, []);
   /** The learner's pen strokes on the board; cleared when the lesson moves on from their turn. */
   const [ink, setInk] = useState<InkStroke[]>([]);
@@ -863,6 +995,9 @@ export default function Lesson() {
     let escalation: 0 | 1 | 2 = 0;
     /** Answers that drew a sketch so far, for unique beat ids. */
     let sketchCount = 0;
+    /** Each scene's view of the board: the whole board, until answers needed room and it zoomed out. */
+    const views = new Map<number, Region>();
+    const viewOf = (scene: number) => views.get(scene) ?? FULL_VIEW;
     const history: Exchange[] = [];
     let amendCount = 0;
     /** A detour planned (and drawn) in the background after a brief answer, in case the learner is still lost. */
@@ -948,7 +1083,7 @@ export default function Lesson() {
         const labels = Object.fromEntries(view.list.map((e) => [e.id, e.label]));
         const read = readInk(strokes, view.boxes, labels, { w: W, h: H });
         await finished?.catch(() => {});
-        const image = snapshotBoard(canvasRef.current, strokes, W, H);
+        const image = snapshotBoard(canvasRef.current, strokes, W, H, cameraRef.current);
         inkPayload = { ...read, ...(image ? { image } : {}) };
         console.info(`[ink] ${strokes.length} stroke(s): ${read.marks.map((m) => `${m.how} ${m.id}`).join(", ") || "nothing marked"}${read.loose ? `, ${read.loose} loose` : ""}`);
       }
@@ -965,20 +1100,36 @@ export default function Lesson() {
        */
       let sketchStart = -1;
       let sketchSeeking = false;
+      let zoomFrom: Region = FULL_VIEW, zoomTo: Region = FULL_VIEW;
       let sketchShown: Promise<void> = Promise.resolve();
       let replyLive = true;
       const startSketch = (t: ConverseTrailer) => {
         const owner = list[i];
         const ask = t.sketch;
         if (!ask || !owner) return;
-        const region = freeRegion(boardRef.current.boxes);
+        const scene = owner.beat.scene;
+        const before = viewOf(scene);
+        // Where the reply says it belongs (zooming out toward it if that is off the board); else any free space.
+        const placed = placeSketch(boardRef.current.boxes, before, ask.near, ask.side);
+        let view = placed?.view ?? before;
+        let region = placed?.region ?? freeRegion(boardRef.current.boxes, view);
+        if (placed) console.info(`[sketch] ${ask.side} ${ask.near}`);
+        else if (ask.near) console.info(`[sketch] no room ${ask.side} ${ask.near}; using free space`);
+        while (!region) {
+          const wider = zoomOut(view, boardRef.current.boxes);
+          if (!wider) break;
+          view = wider;
+          region = freeRegion(boardRef.current.boxes, view);
+        }
         if (!region) {
-          console.info("[sketch] no free space on the board; skipped");
+          console.info("[sketch] no free space even zoomed out; skipped");
           return;
         }
-        const scene = owner.beat.scene;
+        if (view !== before) console.info(`[sketch] zoomed out to ${Math.round(view.w)}% of the board to make room`);
         const say = sentences.map((x) => x.text).join(" ");
-        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual: ask.visual, mode: "draw", check: false, scene, region, adds: ask.adds, points: [] };
+        // Everything stays inside the region: a line out to the rest of the board would cut across what is drawn there.
+        const visual = `${ask.visual} Keep every shape, label and arrow inside your region; no arrows or connectors out to the rest of the board.`;
+        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual, mode: "draw", check: false, scene, region, adds: ask.adds, points: [] };
         const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
         const t0 = performance.now();
         sketchShown = post("/api/draw", { question: q, beat, earlier }, abort.signal)
@@ -991,14 +1142,24 @@ export default function Lesson() {
             const base = sceneGroups(list, i, owner.beat.mode === "draw" ? (owner.elements ?? []) : []);
             owner.sketches = [...(owner.sketches ?? []), ...els];
             owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
+            views.set(scene, view);
             if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
-            const compiled = compileScene([...base, els]);
+            const compiled = compileScene([...base, els], { view, from: before });
             if (!compiled) return;
-            showBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene)));
+            // The ink stays where it was until the zoom starts, then moves with the board.
+            zoomFrom = before;
+            zoomTo = view;
+            zoomingRef.current = view !== before;
+            cameraRef.current = cameraFor(before);
+            showBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene), view));
             await showDocument(compiled.doc);
             const a = audio as StreamPlayer | null;
             if (a && !a.drained) sketchStart = a.position();
-            else await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+            else {
+              await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+              zoomingRef.current = false;
+              cameraRef.current = cameraFor(view);
+            }
           })
           .catch((e) => console.warn("[sketch]", e));
       };
@@ -1033,7 +1194,7 @@ export default function Lesson() {
             beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode })),
             beatIndex: i,
             wordIndex,
-            board: boardRef.current.list,
+            board: boardRef.current.list.map((e) => ({ ...e, ...(boardRef.current.boxes[e.id] ? { box: boardRef.current.boxes[e.id] } : {}) })),
             history: history.slice(-6),
             escalation,
             learner,
@@ -1067,7 +1228,12 @@ export default function Lesson() {
           raf = requestAnimationFrame(frame);
           const t = audio?.position() ?? -1;
           if (t >= 0) setWordIndexNow(wordAt(t, all));
-          // The sketch draws on the reply's clock, so Stop freezes it too.
+          // The sketch (and any zoom) draws on the reply's clock, so Stop freezes it too.
+          if (sketchStart >= 0 && t >= 0 && zoomingRef.current) {
+            const u = (t - sketchStart) / ZOOM_SECONDS;
+            cameraRef.current = cameraBetween(zoomFrom, zoomTo, u);
+            if (u >= 1) zoomingRef.current = false;
+          }
           const player = playerRef.current;
           if (sketchStart >= 0 && t >= 0 && player && !sketchSeeking) {
             sketchSeeking = true;
@@ -1116,6 +1282,10 @@ export default function Lesson() {
           sketchStart = -1;
           await playerRef.current?.seek(DOC_END - FRAME_TICKS);
         }
+        if (zoomingRef.current) {
+          zoomingRef.current = false;
+          cameraRef.current = cameraFor(zoomTo);
+        }
         if (signal.aborted || !trailer) return null;
         setWordIndexNow(all.words.length);
         return { trailer, said: sentences.map((x) => x.text).join(" ") };
@@ -1128,6 +1298,11 @@ export default function Lesson() {
       } finally {
         cancelAnimationFrame(raf);
         replyLive = false;
+        // Cut off mid-zoom: land where the board is going.
+        if (zoomingRef.current) {
+          zoomingRef.current = false;
+          cameraRef.current = cameraFor(zoomTo);
+        }
         abort.signal.removeEventListener("abort", onStop);
         if (replyAbortRef.current === replyAbort) replyAbortRef.current = null;
         if (signal.aborted) audio?.stop();
@@ -1315,10 +1490,11 @@ export default function Lesson() {
             ? null
             : (currentElements) => {
                 const groups = sceneGroups(list, bi, currentElements);
-                const compiled = compileScene(groups);
-                if (!compiled) return null;
                 const scene = list[bi].beat.scene;
-                showBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene)));
+                const view = viewOf(scene);
+                const compiled = compileScene(groups, { view });
+                if (!compiled) return null;
+                showBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene), view));
                 return compiled.doc;
               };
         const beatAbort = new AbortController();
@@ -1459,6 +1635,7 @@ export default function Lesson() {
   };
 
   const waitingForLearner = status === "waiting" || status === "listening";
+  const onScreenBoxes = useMemo(() => screenBoxes(board.boxes, board.view), [board]);
   /** The pen works once something is on the board and a lesson is running; drawing while Chalky talks pauses it. */
   const penReady = !halted && board.list.length > 0 && ["speaking", "waiting", "listening", "replying"].includes(status);
   const busy = ["planning", "speaking", "waiting", "listening", "replying"].includes(status) && !!question;
@@ -1533,13 +1710,14 @@ export default function Lesson() {
               enabled={penReady}
               strokes={ink}
               color={inkColor}
+              camera={readCamera}
               onPenDown={() => {
                 // Drawing while Chalky talks is cutting in, like Space.
                 if (lessonBusyRef.current()) pauseRef.current();
               }}
               onStroke={(stroke) => showInk([...inkRef.current, stroke])}
             />
-            <ChalkyCursor boxes={board.boxes} script={cursorScript} clock={cursorClock} />
+            <ChalkyCursor boxes={onScreenBoxes} script={cursorScript} clock={cursorClock} />
             {penReady && (
               <div className="pen" data-testid="pen">
                 {INK_COLORS.map((c) => (
