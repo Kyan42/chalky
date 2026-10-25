@@ -29,6 +29,9 @@ export type MicMode = "off" | "paused" | "open" | "muted" | "held" | "tail" | "v
 /** Sounds that aren't words: they never count toward a voice barge-in. */
 const FILLERS = new Set(["um", "umm", "uh", "uhh", "uhm", "er", "erm", "ah", "oh", "mm", "mhm", "hmm", "huh", "uh-huh"]);
 
+/** A turn that opens with one of these is a barge-in on that word alone, without waiting for a second. */
+const COMMAND_WORD = /^(stop|wait|pause|hold on)\b/i;
+
 /** Real words in a transcript: at least two letters, not a filler. */
 export function realWords(text: string): number {
   return text
@@ -167,8 +170,9 @@ export function useHybridMic(options: HybridMicOptions) {
         onUpdate: (t) => {
           lastPartial.current = t;
           if (held.current && t.trim()) held.current.words = true;
-          // Voice barge-in: the first partial with two real words while Chalky talks pauses it at once.
-          if (turnWhileSpeaking.current && !voiceBarged.current && realWords(t) >= 2) {
+          // Voice barge-in: the first partial with two real words while Chalky talks pauses it at once;
+          // a turn that opens with "stop", "wait", "pause" or "hold on" counts on that one word (Leo's fast path).
+          if (turnWhileSpeaking.current && !voiceBarged.current && (realWords(t) >= 2 || COMMAND_WORD.test(t.trim()))) {
             voiceBarged.current = true;
             opts.current.onVoiceBargeIn?.(t);
             opts.current.onBargeIn?.();

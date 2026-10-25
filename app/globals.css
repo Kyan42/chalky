@@ -176,103 +176,133 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .stage .pen button:not(.swatch) { font: inherit; font-size: 0.8em; border: 0; background: none; cursor: pointer; padding: 0.2em 0.4em; }
 .stage .pen button:disabled { opacity: 0.4; cursor: default; }
 
-/* ---- Leo's tutor interface (codex/chalky-tutor-ui-and-icons), re-applied on the action-model page ---- */
+/* ---- Leo's tutor interface (codex/chalky-tutor-ui-and-icons at bbc2285), re-applied on the action-model page ---- */
 .tutor-wrap { background: var(--paper); }
-.board.tutor-board {
-  position: relative; width: 100%; height: 100dvh; aspect-ratio: auto;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "topic" "stage";
-}
-.tutor-board .topic { gap: 14px; padding: 12px 2.5%; border-bottom: 1px solid var(--rule); position: relative; z-index: 4; }
-.tutor-board .topic h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(22px, 2.4vw, 36px); letter-spacing: 0;
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topic-right { display: flex; align-items: center; gap: 12px; margin-left: auto; flex: none; }
-.tutor-board .mic { white-space: nowrap; font-size: clamp(12px, 1vw, 15px); }
-.tutor-board .mic[data-state="speaking"] .dot { background: var(--ochre); }
+.board.tutor-board { position: relative; display: block; width: 100%; height: 100dvh; aspect-ratio: auto; font-family: "Instrument Sans", sans-serif; }
+/* The stage is the whole board; the wordmark, the top-right controls, the mascot and the dock sit over it. */
+.tutor-board .stage { position: absolute; inset: 0; padding: 5% 12% 170px; min-height: 0; min-width: 0; container-type: size; }
+.tutor-board .stage .visual { width: min(100%, calc((100cqh - 210px) * 1.5)); max-height: calc(100cqh - 210px); aspect-ratio: 3 / 2; }
+.tutor-board .stage[data-dimmed="true"] { opacity: 1; filter: none; }
+
+/* Compact brand signature, independent of the lesson controls; it is the way back to the start. */
+.chalky-wordmark { position: absolute; top: 26px; left: 38px; z-index: 5; display: flex; align-items: center; gap: 6px; cursor: pointer; text-decoration: none; color: var(--ink); }
+.chalky-wordmark img { width: 40px; height: 57px; object-fit: contain; }
+.chalky-wordmark span { font: 400 44px/1 "Instrument Serif", Georgia, serif; letter-spacing: -.025em; }
+.chalky-wordmark:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 4px; }
+
+/* Top right, over the stage: the voice switch, the badges and the status with its orb, small and muted. */
+.tutor-controls { position: absolute; top: 30px; right: 32px; z-index: 5; display: flex; align-items: center; gap: 10px; }
+.tutor-controls .mic { white-space: nowrap; font-size: 12px; color: var(--muted); }
+.tutor-controls .mic[data-state="speaking"] .dot { background: var(--ochre); }
+.tutor-controls .voice-badge { margin-right: 0; }
 .debug-toggle { font: 400 12px "Instrument Sans", sans-serif; border: 1px solid var(--rule); border-radius: 999px; background: transparent;
   color: var(--muted); padding: 0.25em 0.7em; cursor: pointer; }
 .debug-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
 
-/* The stage holds the board; the dock and the mascot sit over it. */
-.tutor-board .stage { min-height: 0; min-width: 0; container-type: size; padding: 2% 10% 180px; }
-.tutor-board .stage .visual { width: min(100%, calc((100cqh - 190px) * 1.5)); max-height: calc(100cqh - 190px); aspect-ratio: 3 / 2; }
-.tutor-board .stage[data-dimmed="true"] { opacity: 1; filter: none; }
+/* The mascot: chalk in hand, centred, on the start screen; small at bottom left while teaching. Transparent videos, no blend. */
+.tutor-character { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 336px; height: 336px; pointer-events: none; background: transparent; }
+.tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tutor-character.teaching { width: 220px; height: 220px; top: auto; bottom: 32px; left: 28px; right: auto; transform: none; z-index: 2; }
 
-/* The mascot: seated on the welcome screen, with a speech bubble; small at bottom left while teaching. */
-.tutor-character, .stage .welcome.tutor-character { position: absolute; inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(336px, 60cqh); height: min(336px, 60cqh);
-  display: block; padding: 0; gap: 0; pointer-events: none; }
-.tutor-character .tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; }
-/* The welcome PNG is a cutout (public/mascot/seated-cutout.png, keyed from his seated.png); the videos keep a white backdrop, so they multiply onto the paper. */
-.tutor-character video.tutor-mascot { mix-blend-mode: multiply; }
-:root[data-theme="chalkboard"] .tutor-character video.tutor-mascot { mix-blend-mode: normal; background: #FBFAF7; border-radius: 24px; }
-.tutor-bubble { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(460px, 86vw);
-  padding: 18px 26px; border: 1px solid var(--bubble-rule); border-radius: 18px; background: var(--bubble); box-shadow: 0 4px 12px #46351a09;
-  font-family: "Instrument Serif", Georgia, serif; text-align: center; pointer-events: auto; }
-.tutor-bubble::after { content: ""; position: absolute; bottom: -7px; left: calc(50% - 7px); width: 12px; height: 12px; transform: rotate(45deg);
-  background: var(--bubble); border-right: 1px solid var(--bubble-rule); border-bottom: 1px solid var(--bubble-rule); }
-.tutor-bubble h2, .stage .welcome .tutor-bubble h2 { margin: 0; font-weight: 400; font-size: clamp(24px, 2.4vw, 34px); line-height: 1.2; color: var(--ink); }
-.tutor-bubble p, .stage .welcome .tutor-bubble p { margin: 8px 0 0; font-family: "Instrument Sans", sans-serif; font-size: clamp(13px, 1.1vw, 16px); color: var(--muted); }
-.tutor-character.teaching { background: var(--paper); width: 200px; height: 200px; top: auto; bottom: 24px; left: 20px; right: auto; transform: none; z-index: 2; }
-.tutor-character.teaching .tutor-mascot { background: transparent; }
+/* The welcome scenery enters on the first audio chunk, never on mic activation. */
+.welcome-tree-ground { position: absolute; left: 0; bottom: 8px; width: min(32vw, 480px); aspect-ratio: 782 / 1005; overflow: hidden; pointer-events: none; }
+.welcome-tree-rise { width: 100%; height: 100%; animation: welcome-tree-rise 1.6s cubic-bezier(.22,.7,.2,1) both; }
+.welcome-tree-rise img { display: block; width: 200.128%; height: 100%; max-width: none; transform-origin: 25% 100%; animation: welcome-tree-sway 7s ease-in-out 1.6s infinite; }
+@keyframes welcome-tree-rise { from { transform: translateY(105%); } to { transform: translateY(0); } }
+@keyframes welcome-tree-sway {
+  0%, 50%, 100% { transform: skewX(0deg); }
+  25% { transform: skewX(.45deg); }
+  75% { transform: skewX(-.45deg); }
+}
+.welcome-stone-ground { left: auto; right: 0; }
+.welcome-stone-rise { animation-delay: 1.6s; }
+.welcome-stone-rise img { margin-left: -100%; animation: welcome-stone-idle 8s ease-in-out 3.2s infinite; transform-origin: 75% 100%; }
+@keyframes welcome-stone-idle { 0%, 100% { transform: skewX(0deg); } 50% { transform: skewX(.2deg); } }
+@media (prefers-reduced-motion: reduce) { .welcome-tree-rise, .welcome-tree-rise img, .welcome-stone-rise img { animation: none; } }
 
-/* The conversation dock: one shared transcript line, the voice actions, the hint, and the typing box. */
-.conversation-dock { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(680px, 88%); text-align: center; z-index: 3; }
-.shared-transcript { min-height: 58px; max-height: 120px; overflow-y: auto; margin: 0 0 12px; color: var(--ink); }
-.transcript-speaker { display: block; font: 500 11px "Instrument Sans", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-/* The transcript line keeps the caption class (scripts read .caption .word), so the old caption strip's layout is reset here. */
-.shared-transcript p, .shared-transcript p.caption { grid-area: auto; display: block; border: 0; padding: 0; margin: 4px 0 0; text-align: center;
-  font: 400 clamp(17px, 1.6vw, 23px)/1.45 "Instrument Sans", sans-serif; }
-.shared-transcript .word { color: var(--muted); opacity: 0.55; transition: color 60ms linear, opacity 60ms linear; }
-.shared-transcript .word[data-state="spoken"], .shared-transcript .word[data-state="now"] { opacity: 1; }
-.shared-transcript .word[data-state="spoken"] { color: var(--ink); }
-.shared-transcript .word[data-state="now"] { color: var(--ochre-ink); background: var(--ochre-wash); border-radius: 4px; padding: 1px 2px; }
-.shared-transcript .heard { color: var(--ink); font-style: normal; }
-.shared-transcript .heard .learner-word { color: var(--learner-ink); background: var(--learner-wash); border-radius: 4px; padding: 1px 2px; }
+/* Paper-cut pieces travel around the topic (in the chalk title) without crossing its readable area. */
+.chalk-title { display: flex; align-items: center; justify-content: center; }
+.thinking-topic { position: relative; width: fit-content; max-width: 100%; padding: 12px 8px; }
+.thinking-shapes { position: absolute; inset: -42px -48px; pointer-events: none; }
+.thinking-shape { position: absolute; display: block; width: 24px; height: 26px; background: var(--ochre);
+  offset-path: inset(0 round 999px); offset-anchor: center; offset-rotate: auto;
+  animation: thinking-orbit 12s linear infinite; }
+.shape-diamond { clip-path: polygon(45% 0,100% 46%,56% 100%,0 57%); }
+.shape-triangle { width: 28px; background: #d3a332; clip-path: polygon(42% 0,100% 93%,0 100%); }
+.shape-block { width: 22px; height: 22px; background: #ad6448; clip-path: polygon(4% 0,100% 7%,91% 100%,0 92%); }
+.shape-pentagon { width: 29px; height: 29px; clip-path: polygon(43% 0,100% 37%,79% 94%,23% 100%,0 38%); }
+.shape-sliver { width: 12px; height: 29px; background: #d3a332; clip-path: polygon(30% 0,100% 9%,66% 100%,0 84%); }
+.thinking-shape:nth-child(2) { animation-delay: -1.5s; offset-distance: 12.5%; }
+.thinking-shape:nth-child(3) { animation-delay: -3s; offset-distance: 25%; }
+.thinking-shape:nth-child(4) { animation-delay: -4.5s; offset-distance: 37.5%; }
+.thinking-shape:nth-child(5) { animation-delay: -6s; offset-distance: 50%; }
+.thinking-shape:nth-child(6) { animation-delay: -7.5s; offset-distance: 62.5%; }
+.thinking-shape:nth-child(7) { animation-delay: -9s; offset-distance: 75%; }
+.thinking-shape:nth-child(8) { animation-delay: -10.5s; offset-distance: 87.5%; }
+@keyframes thinking-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+.thinking-shapes[data-paused="true"] .thinking-shape { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .thinking-shape { animation: none; } }
+
+/* The conversation dock: one shared transcript line, the voice actions, and the typing box behind its toggle. */
+.conversation-dock { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: min(640px, 90%); text-align: center; z-index: 3; }
+/* Reserved caption space, so line wrapping never shifts the controls. */
+.shared-transcript, .shared-transcript.caption { grid-area: auto; border: 0; padding: 0; height: 90px; min-height: 90px; max-height: 90px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; margin: 0 0 20px; color: var(--ink); font-size: inherit; }
+.shared-transcript p { margin: 0; width: 100%; text-wrap: pretty; font: 400 clamp(22px, calc(1.7vw + 4px), 28px)/1.45 "Instrument Serif", Georgia, serif; }
+.shared-transcript.caption .word, .shared-transcript.caption .transcript-word { color: var(--ink); opacity: 1; }
+.transcript-word.current { border-radius: 4px; padding: 1px 2px; }
+.shared-transcript.caption .word.chalky-word, .chalky-word { color: var(--ochre-ink); background: var(--ochre-wash); }
+.learner-word { color: var(--learner-ink); background: var(--learner-wash); }
 .voice-actions { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
 .start-voice { display: inline-flex; align-items: center; justify-content: center; gap: 12px; font: 500 16px "Instrument Sans", sans-serif;
-  padding: 16px 28px; border: 1px solid var(--charcoal); border-radius: 0; color: var(--on-ink); background: var(--charcoal); cursor: pointer;
-  transition: background 160ms ease, transform 160ms ease; }
+  padding: 18px 30px; border: 1px solid var(--charcoal); border-radius: 0; color: var(--on-ink); background: var(--charcoal); cursor: pointer;
+  box-shadow: none; transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
 .start-voice svg { color: var(--ochre); }
 .start-voice:hover:not(:disabled) { background: #443a2b; border-color: #443a2b; }
 .start-voice:active:not(:disabled) { transform: translateY(1px); }
 .start-voice:disabled { cursor: default; opacity: .8; }
-.start-voice.listening { background: var(--ochre-wash); border-color: var(--ochre); color: var(--ochre-ink); opacity: 1; }
-.listening-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ochre); }
-.quiet-action { font: 400 14px "Instrument Sans", sans-serif; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 6px 4px; }
-.quiet-action:hover { color: var(--ink); }
-.quiet-action[aria-expanded="true"] { color: var(--ink); }
-.voice-hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
-.start-voice:focus-visible, .quiet-action:focus-visible, .debug-toggle:focus-visible { outline: 2px solid var(--ochre); outline-offset: 4px; }
+/* Leo's terracotta start button; it is also the Mute / Unmute toggle once the mic is on. */
+.start-voice[data-testid="start-talking"] { background: #ad6448; border-color: #ad6448; color: #fffaf0; border-radius: 8px; }
+.start-voice[data-testid="start-talking"] svg { color: #fffaf0; }
+.start-voice[data-testid="start-talking"]:hover:not(:disabled) { background: #99573e; border-color: #99573e; }
+.start-voice[data-testid="start-talking"][aria-pressed="true"] { background: var(--ochre-wash); border-color: var(--ochre); color: var(--ochre-ink); }
+.start-voice[data-testid="start-talking"][aria-pressed="true"] svg { color: var(--ochre-ink); }
+.quiet-action { font: 400 14px "Instrument Sans", sans-serif; border: 0; background: transparent; color: #776443; cursor: pointer; padding: 6px 4px; }
+:root[data-theme="chalkboard"] .quiet-action { color: var(--muted); }
+.quiet-action:hover, .quiet-action[aria-expanded="true"] { color: var(--ink); }
+.quiet-action.start { color: var(--ink); font-weight: 500; }
+.start-voice:focus-visible, .quiet-action:focus-visible, .debug-toggle:focus-visible { outline: 2px solid var(--ochre); outline-offset: 5px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .conversation-dock .ask { margin-top: 10px; padding: 0; flex: initial; justify-content: center; }
 .conversation-dock .ask input { font-family: "Instrument Sans", sans-serif; font-size: 15px; padding: 0.55em 0.9em; border-radius: 8px; }
 .conversation-dock .ask button { font-family: "Instrument Sans", sans-serif; font-size: 14px; padding: 0.55em 1em; border-radius: 8px; background: var(--charcoal); border-color: var(--charcoal); }
 .conversation-dock .ask[hidden] { display: none; }
 
-/* Telemetry: the beat list, timings, learner record and prefetch stats, behind ?debug=1 (or the Debug toggle). */
+/* Telemetry: the beat list, timings, learner record and prefetch stats, behind ?debug=1. */
 .tutor-board .evidence { display: none; }
-.tutor-board[data-debug="1"] .evidence { display: block; position: absolute; right: 12px; top: 64px; bottom: 12px; width: min(380px, 40%); z-index: 5;
+.tutor-board[data-debug="1"] .evidence { display: block; position: absolute; right: 12px; top: 72px; bottom: 12px; width: min(380px, 40%); z-index: 5;
   padding: 12px 14px; border: 1px solid var(--rule); border-left: 1px solid var(--rule); border-radius: 10px; background: var(--bubble);
   overflow-y: auto; font-size: 12px; box-shadow: 0 8px 28px #1f2a4418; }
 .tutor-board[data-debug="1"] .lesson-beats ol { max-height: none; overflow: visible; }
 
-/* Phone and short windows: a smaller mascot, a tighter dock, the orb hidden. */
+/* Phone and short windows: smaller wordmark and mascot, a tighter dock, the orb hidden. */
 @media (max-width: 600px), (max-height: 600px) {
-  .tutor-board .topic { gap: 6px; padding: 8px 3%; }
-  .tutor-board .topic h1 { font-size: 19px; }
-  .tutor-board .mic .orb { display: none; }
-  .tutor-board .stage { padding: 4% 3% 150px; }
+  .chalky-wordmark { top: 18px; left: 24px; gap: 5px; }
+  .chalky-wordmark img { width: 32px; height: 46px; }
+  .chalky-wordmark span { font-size: 35px; }
+  .tutor-controls { top: 22px; right: 16px; gap: 6px; }
+  .tutor-controls .mic .orb { display: none; }
+  .tutor-board .stage { padding: 6% 4% 150px; }
   .tutor-board .stage .visual { width: min(100%, calc((100cqh - 150px) * 1.5)); max-height: calc(100cqh - 150px); }
-  .tutor-character, .stage .welcome.tutor-character { width: min(220px, 40cqh); height: min(220px, 40cqh); top: 56%; }
-  .tutor-bubble { padding: 12px 16px; max-width: 92vw; }
-  .tutor-bubble h2, .stage .welcome .tutor-bubble h2 { font-size: 20px; }
-  .tutor-bubble p, .stage .welcome .tutor-bubble p { font-size: 13px; }
-  .tutor-character.teaching { width: 110px; height: 110px; left: 8px; top: auto; bottom: 150px; transform: none; }
-  .conversation-dock { bottom: 10px; width: 94%; }
-  .shared-transcript { min-height: 40px; max-height: 72px; margin-bottom: 8px; }
-  .shared-transcript p { font-size: 15px; }
+  .tutor-character { width: 240px; height: 240px; }
+  .tutor-character.teaching { width: 154px; height: 154px; left: 10px; right: auto; bottom: 150px; }
+  .thinking-shapes { inset: -34px -23px; }
+  .thinking-shape { scale: .7; animation-duration: 12s; }
+  .conversation-dock { bottom: 20px; width: 94%; }
+  .shared-transcript, .shared-transcript.caption { height: 72px; min-height: 72px; max-height: 72px; margin-bottom: 10px; }
+  .shared-transcript p { font-size: 17px; }
   .start-voice { padding: 12px 20px; font-size: 14px; }
   .voice-actions { gap: 8px; }
   .conversation-dock .ask input { width: 100%; }
-  .tutor-board[data-debug="1"] .evidence { left: 8px; right: 8px; width: auto; top: 52px; bottom: 170px; }
+  .tutor-board[data-debug="1"] .evidence { left: 8px; right: 8px; width: auto; top: 60px; bottom: 170px; }
 }
