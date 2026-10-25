@@ -524,6 +524,11 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     const days = /\bthis week\b/i.test(input.utterance) ? 7 : /\bthis month\b/i.test(input.utterance) ? 30 : /\bthis year\b/i.test(input.utterance) ? 90 : 14;
     research = { topic: researchQuery(input.utterance, null, lesson.question), days };
   }
+  // The reverse: a lookup before any lesson is a lesson about what it finds, even when the model left out
+  // start_lesson (it said "let me check…" and stopped, and the sources arrived with nothing to use them).
+  if (!input.beats.length && research && !lesson) {
+    lesson = { question: research.topic, focus: "", level: "unknown" };
+  }
   // Mid-lesson, a question about something recent that the model handed to the board helper (which knows only
   // the lesson) is a lookup: "who won the 2026 Nobel?" is research, not delegate. Questions about the board stay delegated.
   if (input.beats.length && !research && delegate && RECENT.test(input.utterance) && !BOARD_WORDS.test(input.utterance)) {
@@ -531,7 +536,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     delegate = null;
   }
   // A lookup takes a while: a lesson started on one always asks the intake question meanwhile.
-  if (research && lesson && !check && !input.beats.length) check = `While I find those, how much do you already know about ${research.topic}?`;
+  if (research && lesson && !check && !input.beats.length) check = `While I find those, how much do you already know about ${research.topic.charAt(0).toLowerCase()}${research.topic.slice(1)}?`;
   // The check is the question the learner actually heard: the reply's own question when it asked one
   // (the page looks for the check in what was said, and says it again only when it is missing).
   if (check) {
@@ -599,6 +604,8 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (research && !actions.some((x) => x.type === "research")) actions.push({ type: "research", ...research });
   if (cues.length && !actions.some((x) => x.type === "point")) actions.push({ type: "point", cues });
   if (lesson && !actions.some((x) => x.type === "start_lesson")) actions.push({ type: "start_lesson", ...lesson });
+  // The intake the server added (a lookup before a lesson) is an ask too, so the page asks it and waits.
+  if (check && !input.beats.length && lesson && !actions.some((x) => x.type === "ask")) actions.push({ type: "ask", question: check });
   if (amend && !actions.some((x) => x.type === "amend")) actions.push({ type: "amend", ...amend });
   actions.push({ type: "resume", how: resume, ...(resumeWhy ? { why: resumeWhy } : {}) });
   return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate, ...(cut ? { cut } : {}), quiz: escalated ? null : quiz, research };
