@@ -94,12 +94,12 @@ const look = ev("research-ready")[0] ?? ev("research-none")[0];
 const planned = ev("planned").filter((e) => e.by);
 console.log(`        reply: "${reply?.text}" [${(reply?.actions ?? []).map((a) => a.type).join(", ")}]`);
 console.log(`        lookup: ${JSON.stringify(look && { kind: look.kind, items: look.items, ms: look.ms, cached: look.cached, titles: look.titles, error: look.error })}`);
-console.log(`        detour: ${ev("detour").map((d) => d.beats.map((b) => b.beatId).join(",")).join(" ")}; cites: ${JSON.stringify(ev("planned").filter((e) => /^d/.test(e.beatId)).map((e) => `${e.beatId}:${e.cite ?? "-"}`))}`);
+console.log(`        detour: ${ev("detour").map((d) => d.beats.map((b) => b.beatId).join(",")).join(" ")}; cites: ${JSON.stringify(ev("detour").flatMap((d) => d.beats).map((e) => `${e.beatId}:${e.cite ?? "-"}`))}`);
 console.log(`        page: ${seen.join(" -> ")}`);
 check("the reply chose a lookup", (reply?.actions ?? []).some((a) => a.type === "research"));
 if (MODE === "ready") {
   check("the lookup was ready", look?.kind === "research-ready" && look.items > 0, `${look?.items} items, ${look?.ms} ms`);
-  const dBeats = ev("planned").filter((e) => /^d\d+-/.test(e.beatId));
+  const dBeats = ev("detour").flatMap((d) => d.beats);
   check("the answer came as a detour whose beats cite what was found", dBeats.length >= 2 && dBeats.some((e) => e.cite), dBeats.map((e) => `${e.beatId}:${e.cite ?? "-"}`).join(" "));
   check("the source card opened during the detour", seen.some((x) => /d\d+-\d.*card \d/.test(x)), seen.join(" | "));
 } else {

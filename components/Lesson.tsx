@@ -1888,7 +1888,7 @@ export default function Lesson() {
           if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
-          logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say });
+          logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say, ...(ev.beat.cite ? { cite: ev.beat.cite } : {}), ...(ev.beat.quiz ? { quiz: ev.beat.quiz } : {}) });
           list.push(state);
           if (ev.beat.mode !== "talk") state.ready = startDraw(state);
           setBeats([...list]);
@@ -2447,7 +2447,7 @@ export default function Lesson() {
           if (firstBeat) {
             const detour = d.out.slice();
             const done = d.beats.then(
-              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say })) }),
+              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say, ...(x.beat.cite ? { cite: x.beat.cite } : {}) })) }),
               () => {},
             );
             const g = { last: detour[detour.length - 1], done };
