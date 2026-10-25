@@ -608,6 +608,8 @@ export default function Lesson() {
     const t0 = performance.now();
     const since = () => Math.round(performance.now() - t0);
     setHeardNote(null);
+    // The planning filler counts silence from the question, not from page load.
+    lastSpokeRef.current = performance.now();
     let heard = false;
     const onFirstSound = () => {
       if (heard) return;
