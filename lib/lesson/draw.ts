@@ -16,6 +16,8 @@ import { DRAW_SYSTEM, drawPrompt, PRESET_SCHEMA } from "./language";
 import { cleanId } from "./planner";
 import { fitToRegion, PRESET_KINDS, type PresetElement } from "./presets";
 import type { CallLog, PlannedBeat } from "./types";
+import type { Block } from "@/lib/blocks";
+import { blocksForBeat } from "@/lib/moss/blocks";
 
 const FAST_MODEL = process.env.DRAW_FAST_MODEL || "claude-haiku-5-5";
 const MODEL = process.env.DRAW_MODEL || "claude-sonnet-5-5";
@@ -38,6 +40,8 @@ export interface DrawResult {
   error: string | null;
   /** Each model call made (a fallback adds a second). */
   calls?: CallLog[];
+  /** The blocks Moss listed in the prompt; absent when it listed the whole catalog. */
+  blockIds?: string[];
 }
 
 const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -92,7 +96,7 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
   return { elements: pointOnly ? out : fitToRegion(out, beat.region), dropped };
 }
 
-async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal): Promise<DrawResult> {
+async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks?: Block[] | null): Promise<DrawResult> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -106,7 +110,7 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
           model,
           max_tokens: 4000,
           system: DRAW_SYSTEM,
-          messages: [{ role: "user", content: drawPrompt(question, beat, earlier) }],
+          messages: [{ role: "user", content: drawPrompt(question, beat, earlier, blocks) }],
           thinking: { type: "adaptive" },
           output_config: { effort: "low", format: { type: "json_schema", schema: PRESET_SCHEMA } },
         } as Anthropic.MessageStreamParams,
@@ -125,9 +129,12 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
 }
 
 export async function drawBeat(question: string, beat: PlannedBeat, earlier: PlannedBeat[], signal?: AbortSignal, model = modelFor(beat)): Promise<DrawResult> {
-  const first = await attempt(question, beat, earlier, model, TIMEOUT_MS, signal);
+  // Moss picks the catalog blocks this beat's prompt lists (null: all of them).
+  const { blocks } = await blocksForBeat(beat);
+  const blockIds = blocks?.map((b) => b.id);
+  const first = { ...(await attempt(question, beat, earlier, model, TIMEOUT_MS, signal, blocks)), blockIds };
   if (first.elements.length || model === FAST_MODEL || signal?.aborted) return first;
   // Sonnet missed its deadline or came back unusable: one quick Haiku try before giving up.
-  const second = await attempt(question, beat, earlier, FAST_MODEL, FALLBACK_TIMEOUT_MS, signal);
-  return { ...second, ms: first.ms + second.ms, calls: [...(first.calls ?? []), ...(second.calls ?? [])], error: second.error ? `${first.error}; fallback: ${second.error}` : `${first.model} failed (${first.error}), fell back to ${FAST_MODEL}` };
+  const second = await attempt(question, beat, earlier, FAST_MODEL, FALLBACK_TIMEOUT_MS, signal, blocks);
+  return { ...second, blockIds, ms: first.ms + second.ms, calls: [...(first.calls ?? []), ...(second.calls ?? [])], error: second.error ? `${first.error}; fallback: ${second.error}` : `${first.model} failed (${first.error}), fell back to ${FAST_MODEL}` };
 }
