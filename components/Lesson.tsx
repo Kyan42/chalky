@@ -34,7 +34,7 @@ import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseEvent, ConverseTrailer, Exchange } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
+import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
@@ -83,6 +83,8 @@ interface BeatState {
   drawMs?: number;
   model?: string;
   dropped?: number;
+  /** The drawing's model calls, measured. */
+  drawCalls?: CallLog[];
   error?: string | null;
   /** Seconds after its anchor word the drawing arrived; unset when it was in time. */
   lateSec?: number;
@@ -431,7 +433,7 @@ export default function Lesson() {
    * the scene's document around this beat's elements (null: leave the board).
    * Resolves when the speech has played.
    */
-  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void }) => {
+  const playBeat = useCallback(async (state: BeatState, signal: AbortSignal, compile: Compile | null, onFirstSound?: () => void, speech?: { prefetch?: Prefetch | null; onStreamed?: () => void; onHeld?: (ms: number, fromMemory: boolean) => void; onSpeechDone?: (sonic: { firstAudioMs: number | null; totalMs: number; kb: number; audioSeconds: number }) => void }) => {
     const ctx = await unlockAudio();
     // The safety net: Chalky never speaks of itself in the third person ("Chalky's board" -> "my board").
     const voiced = firstPerson(state.beat.say);
@@ -542,6 +544,7 @@ export default function Lesson() {
           }
         } else if (event.type === "done") {
           streamDone = true;
+          speech?.onSpeechDone?.({ firstAudioMs: event.stats.firstAudioMs, totalMs: event.tMs, kb: Math.round(event.stats.bytes / 1024), audioSeconds: +event.stats.audioSeconds.toFixed(2) });
           // This beat's speech is all here: the next beat's can download now without competing with it.
           speech?.onStreamed?.();
           // Every word is timed now: place a point beat's highlights exactly.
@@ -646,7 +649,7 @@ export default function Lesson() {
         ? Promise.resolve(null)
         : post("/api/converse", { intent: "intake_ask", question: q })
             .then((r) => r.json())
-            .then((r: { say?: string; kind?: string; ms?: number; model?: string }) => (typeof r.say === "string" && r.say ? r : null))
+            .then((r: { say?: string; kind?: string; ms?: number; model?: string; call?: CallLog }) => (typeof r.say === "string" && r.say ? r : null))
             .catch(() => null);
     /** What the lesson knows about the learner; goes to every reply and plan change. */
     const learner: LearnerRecord = { ...NEW_LEARNER, confusions: [], replies: [] };
@@ -763,7 +766,8 @@ export default function Lesson() {
       const earlier = earlierOverride ?? list.filter((b, i) => i < index && b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
       return post("/api/draw", { question: q, beat, earlier }, signal)
         .then((r) => r.json())
-        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null }) => {
+        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[] }) => {
+          state.drawCalls = r.calls;
           state.elements = r.elements ?? [];
           state.draw = state.elements.length ? "ready" : "failed";
           state.drawMs = r.ms;
@@ -816,6 +820,7 @@ export default function Lesson() {
           logEv({ kind: "plan-title", title: event.title });
           voice.setKeyterms([...BASE_KEYTERMS, ...[...event.title.split(/\s+/), ...q.split(/\s+/)].filter((w) => w.length > 4)]);
         } else if (event.type === "error") throw new Error(`planner: ${event.message}`);
+        else if (event.type === "done") logEv({ kind: "plan-done", inputTokens: event.inputTokens, outputTokens: event.outputTokens, call: event.call ?? null });
         else if (event.type === "beat") {
           if (planReplaced) continue;
           const beat = event.beat;
@@ -844,6 +849,7 @@ export default function Lesson() {
         const r = await post("/api/layout", { question: q, beats: list.map((s) => s.beat), fixed })
           .then((x) => x.json())
           .catch(() => null);
+        logEv({ kind: "layout", ms: Math.round(performance.now() - t1), ok: !!r?.beats, error: r?.error ?? null, call: r?.call ?? null });
         if (r?.beats) applyLayout(r.beats);
         setLayoutMs(r?.beats ? Math.round(performance.now() - t1) : null);
       }
@@ -883,6 +889,7 @@ export default function Lesson() {
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
+          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
           const earlier = out.filter((b) => b.beat.scene === ev.beat.scene && b.beat.mode === "draw").map((b) => b.beat);
@@ -911,6 +918,7 @@ export default function Lesson() {
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
+          if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
           logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say });
@@ -949,6 +957,8 @@ export default function Lesson() {
       let trailer: ConverseTrailer | null = null;
       let modelCues: unknown[] = [];
       let firstSoundMs: number | null = null;
+      let replyCalls: CallLog[] = [];
+      const sonicPerSentence: { sentence: number; firstAudioMs: number | null; totalMs: number; kb: number }[] = [];
       const sentences: { text: string; tts?: Promise<Response> }[] = [];
       // Speech for the sentence playing and one ahead only: Sonic slows down when many streams run at once.
       let playingIndex = 0;
@@ -996,6 +1006,8 @@ export default function Lesson() {
               sentences.push({ text: voicedSentence.text });
               if (sentences.length - 1 <= playingIndex + 1) ensure(sentences.length - 1);
               wake();
+            } else if (ev.type === "done") {
+              replyCalls = ev.calls ?? [];
             } else if (ev.type === "level") {
               onLevel?.(ev.level);
             } else if (ev.type === "trailer") {
@@ -1049,6 +1061,8 @@ export default function Lesson() {
               all = mergeTimestamps(all, { words: ev.words, start: ev.start.map((x) => x + offset), end: ev.end.map((x) => x + offset) });
               setWords(all.words);
               cue();
+            } else if (ev.type === "done") {
+              sonicPerSentence.push({ sentence: k + 1, firstAudioMs: ev.stats.firstAudioMs, totalMs: ev.tMs, kb: Math.round(ev.stats.bytes / 1024) });
             } else if (ev.type === "error") throw new Error(`Sonic: ${ev.message}`);
           }
         }
@@ -1069,6 +1083,8 @@ export default function Lesson() {
           escalationBefore: escalation,
           cuesKept: t.cursor,
           cuesFromModel: modelCues,
+          calls: replyCalls,
+          sonic: sonicPerSentence,
           firstSoundMs,
           totalMs: Math.round(performance.now() - t1),
         });
@@ -1212,7 +1228,7 @@ export default function Lesson() {
       const iq = await intakeAsk;
       if (iq?.say && !abort.signal.aborted) {
         const tAsk = performance.now();
-        logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms });
+        logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms, call: iq.call ?? null });
         setStatus("speaking");
         await playBeat(line(iq.say), abort.signal, null, onFirstSound);
         setStatus("waiting");
@@ -1264,7 +1280,7 @@ export default function Lesson() {
           Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
           noteLearner();
           const decideMs = Math.round(performance.now() - tDecide);
-          logEv({ kind: "intake-decision", skipped: false, amend: !!decision.amend, note: decision.note ?? "", learner: decision.learner ?? null, error: decision.error ?? null, decideMs, intakeMs: Math.round(performance.now() - tAsk) });
+          logEv({ kind: "intake-decision", skipped: false, amend: !!decision.amend, note: decision.note ?? "", learner: decision.learner ?? null, call: decision.call ?? null, error: decision.error ?? null, decideMs, intakeMs: Math.round(performance.now() - tAsk) });
           if (decision.amend && decision.note && !abort.signal.aborted) {
             // Beat 1 plays as planned; everything after it is rewritten for this learner.
             let release: () => void = () => {};
@@ -1343,6 +1359,9 @@ export default function Lesson() {
             },
             {
               prefetch: pre,
+              onSpeechDone: (sonic) => {
+                timing.sonic = sonic;
+              },
               onStreamed: () => {
                 timing.streamedMs = Math.round(performance.now() - tBeat);
                 prefetchNext(bi2);
@@ -1369,6 +1388,7 @@ export default function Lesson() {
           drawModel: list[i].model ?? null,
           drawLateSec: list[i].lateSec ?? null,
           drawError: list[i].error ?? null,
+          drawCalls: list[i].drawCalls ?? null,
         });
         transcript.beats.push(timing);
         logEv({ kind: "beat", ...timing });

@@ -11,10 +11,10 @@
  */
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
 import { isResume } from "./resume";
 import { NOTE_RULES, withVoiceRules } from "./voice";
-import { describeLearner, type BeatMode, type LearnerRecord } from "./types";
+import { describeLearner, type BeatMode, type CallLog, type LearnerRecord } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
 export const CONVERSE_FALLBACK_MODEL = process.env.CONVERSE_FALLBACK_MODEL || "claude-sonnet-5-5";
@@ -91,7 +91,7 @@ export type ConverseEvent =
   | { type: "level"; level: ConverseLevel; tMs: number }
   | { type: "sentence"; text: string; tMs: number }
   | { type: "trailer"; trailer: ConverseTrailer; tMs: number; modelCues?: unknown[] }
-  | { type: "done"; tMs: number; model: string; inputTokens: number; outputTokens: number; fellBack: boolean }
+  | { type: "done"; tMs: number; model: string; inputTokens: number; outputTokens: number; fellBack: boolean; calls?: CallLog[] }
   | { type: "error"; message: string; tMs: number };
 
 export { isResume };
@@ -322,9 +322,10 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
     return;
   }
 
-  const client = anthropic();
+  const calls: CallLog[] = [];
   let model = CONVERSE_MODEL;
   let fellBack = false;
+  let callsInFlight: ReturnType<typeof trackCall> | null = null;
   for (let attempt = 0; ; attempt++) {
     yield { type: "start", model, local: false, tMs: ms() };
     let sentences = 0;
@@ -352,7 +353,9 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       return { type: "sentence", text, tMs: ms() };
     };
     try {
-      const stream = client.messages.stream(params(model, input), { signal });
+      const tracked = trackCall("converse", model);
+      callsInFlight = tracked;
+      const stream = tracked.watch(tracked.client.messages.stream(params(model, input), { signal }));
       for await (const event of stream) {
         if (signal.aborted) break;
         if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
@@ -427,7 +430,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         trailer = fallbackTrailer(input, spoken);
       }
       yield { type: "trailer", trailer, tMs: ms(), modelCues };
-      yield { type: "done", tMs: ms(), model, inputTokens: usage.input, outputTokens: usage.output, fellBack };
+      calls.push(tracked.finish());
+      yield { type: "done", tMs: ms(), model, inputTokens: usage.input, outputTokens: usage.output, fellBack, calls };
       return;
     } catch (error) {
       if (signal.aborted) return;
@@ -435,6 +439,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       if (attempt === 0 && sentences === 0 && model !== CONVERSE_FALLBACK_MODEL) {
         const why = error instanceof Anthropic.APIError ? `${error.status} ${error.message}` : String((error as Error)?.message ?? error);
         console.warn(`[converse] ${model} failed before the first sentence (${why}); falling back to ${CONVERSE_FALLBACK_MODEL}`);
+        if (callsInFlight) calls.push(callsInFlight.finish(error));
         model = CONVERSE_FALLBACK_MODEL;
         fellBack = true;
         continue;

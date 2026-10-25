@@ -11,11 +11,11 @@
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
 import { DRAW_SYSTEM, drawPrompt, PRESET_SCHEMA } from "./language";
 import { cleanId } from "./planner";
 import { fitToRegion, PRESET_KINDS, type PresetElement } from "./presets";
-import type { PlannedBeat } from "./types";
+import type { CallLog, PlannedBeat } from "./types";
 
 const FAST_MODEL = process.env.DRAW_FAST_MODEL || "claude-haiku-5-5";
 const MODEL = process.env.DRAW_MODEL || "claude-sonnet-5-5";
@@ -36,6 +36,8 @@ export interface DrawResult {
   /** Elements dropped because they referred to ids nobody declared or drew. */
   dropped: number;
   error: string | null;
+  /** Each model call made (a fallback adds a second). */
+  calls?: CallLog[];
 }
 
 const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -95,10 +97,11 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(timeoutMs);
   const abort = signal ? AbortSignal.any([signal, deadline]) : deadline;
-  const fail = (error: string, outputTokens = 0): DrawResult => ({ elements: [], ms: ms(), model, outputTokens, dropped: 0, error });
+  const tracked = trackCall("draw", model);
+  const fail = (error: string, outputTokens = 0): DrawResult => ({ elements: [], ms: ms(), model, outputTokens, dropped: 0, error, calls: [tracked.finish(error)] });
   try {
-    const message = await anthropic()
-      .messages.stream(
+    const message = await tracked
+      .watch(tracked.client.messages.stream(
         {
           model,
           max_tokens: 4000,
@@ -108,14 +111,14 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
           output_config: { effort: "low", format: { type: "json_schema", schema: PRESET_SCHEMA } },
         } as Anthropic.MessageStreamParams,
         { signal: abort },
-      )
+      ))
       .finalMessage();
     const outputTokens = message.usage.output_tokens;
     if (message.stop_reason === "refusal") return fail("refusal", outputTokens);
     if (message.stop_reason === "max_tokens") return fail("cut off at max_tokens", outputTokens);
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
     const { elements, dropped } = cleanElements(JSON.parse(text), beat, earlier);
-    return { elements, ms: ms(), model, outputTokens, dropped, error: elements.length ? null : "no usable elements" };
+    return { elements, ms: ms(), model, outputTokens, dropped, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
   } catch (e) {
     return fail(deadline.aborted ? `deadline (${timeoutMs} ms)` : String((e as Error)?.message ?? e).slice(0, 300));
   }
@@ -126,5 +129,5 @@ export async function drawBeat(question: string, beat: PlannedBeat, earlier: Pla
   if (first.elements.length || model === FAST_MODEL || signal?.aborted) return first;
   // Sonnet missed its deadline or came back unusable: one quick Haiku try before giving up.
   const second = await attempt(question, beat, earlier, FAST_MODEL, FALLBACK_TIMEOUT_MS, signal);
-  return { ...second, ms: first.ms + second.ms, error: second.error ? `${first.error}; fallback: ${second.error}` : `${first.model} failed (${first.error}), fell back to ${FAST_MODEL}` };
+  return { ...second, ms: first.ms + second.ms, calls: [...(first.calls ?? []), ...(second.calls ?? [])], error: second.error ? `${first.error}; fallback: ${second.error}` : `${first.model} failed (${first.error}), fell back to ${FAST_MODEL}` };
 }

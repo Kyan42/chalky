@@ -7,10 +7,10 @@
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
 import { NOTE_RULES, withVoiceRules } from "./voice";
 import { CONVERSE_MODEL } from "./converse";
-import type { LearnerRecord } from "./types";
+import type { CallLog, LearnerRecord } from "./types";
 
 export type IntakeKind = "prior" | "focus";
 
@@ -19,6 +19,7 @@ export interface IntakeQuestion {
   say: string;
   ms: number;
   model: string;
+  call?: CallLog;
 }
 
 export interface IntakeDecision {
@@ -29,6 +30,7 @@ export interface IntakeDecision {
   learner: Pick<LearnerRecord, "level" | "prior" | "focus">;
   ms: number;
   model: string;
+  call?: CallLog;
 }
 
 /** Shape-based fallback when the model is slow or fails, so the intake never blocks first sound. */
@@ -65,8 +67,11 @@ const DECIDE_SCHEMA = {
   additionalProperties: false,
 };
 
-async function json<T>(system: string, user: string, schema: object, maxTokens: number, signal?: AbortSignal): Promise<T> {
-  const message = await anthropic().messages.create(
+async function json<T>(system: string, user: string, schema: object, maxTokens: number, signal?: AbortSignal, onCall?: (c: CallLog) => void): Promise<T> {
+  const tracked = trackCall("intake-decide", CONVERSE_MODEL);
+  let message;
+  try {
+    message = await tracked.client.messages.create(
     {
       model: CONVERSE_MODEL,
       max_tokens: maxTokens,
@@ -76,7 +81,10 @@ async function json<T>(system: string, user: string, schema: object, maxTokens: 
       messages: [{ role: "user", content: user }],
     } as Anthropic.MessageCreateParamsNonStreaming,
     { signal },
-  );
+    );
+  } finally {
+    onCall?.(tracked.finish());
+  }
   if (message.stop_reason === "refusal") throw new Error("refused");
   const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
   return JSON.parse(text) as T;
@@ -91,8 +99,9 @@ export async function intakeQuestion(question: string, signal?: AbortSignal, bud
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(budgetMs);
+  const tracked = trackCall("intake-ask", CONVERSE_MODEL);
   try {
-    const message = await anthropic().messages.create(
+    const message = await tracked.client.messages.create(
       {
         model: CONVERSE_MODEL,
         max_tokens: 60,
@@ -109,16 +118,17 @@ export async function intakeQuestion(question: string, signal?: AbortSignal, bud
     const r = { kind: m[1].toLowerCase() as IntakeKind, say: m[2] };
     const say = r.say.trim();
     if (!say.endsWith("?") || say.split(/\s+/).length > 20) throw new Error(`not one short question: ${say}`);
-    return { kind: r.kind === "focus" ? "focus" : "prior", say, ms: ms(), model: CONVERSE_MODEL };
+    return { kind: r.kind === "focus" ? "focus" : "prior", say, ms: ms(), model: CONVERSE_MODEL, call: tracked.finish() };
   } catch (e) {
     if (signal?.aborted) throw e;
     console.warn(`[intake] fell back to a template (${deadline.aborted ? `over ${budgetMs} ms` : String((e as Error)?.message ?? e).slice(0, 120)})`);
-    return { ...fallbackIntake(question), ms: ms(), model: "template" };
+    return { ...fallbackIntake(question), ms: ms(), model: "template", call: tracked.finish(e) };
   }
 }
 
 export async function decideIntake(o: { question: string; asked: string; answer: string; beats: string[] }, signal?: AbortSignal): Promise<IntakeDecision> {
   const t0 = performance.now();
+  let call: CallLog | undefined;
   const user = [
     `The learner asked: "${o.question}"`,
     o.beats.length ? `The plan so far starts:\n${o.beats.map((b, i) => `${i + 1}. ${b}`).join("\n")}` : "",
@@ -127,12 +137,13 @@ export async function decideIntake(o: { question: string; asked: string; answer:
   ]
     .filter(Boolean)
     .join("\n\n");
-  const r = await json<{ amend: boolean; note: string; level: LearnerRecord["level"]; prior: string; focus: string }>(`${DECIDE_SYSTEM}\n\n${NOTE_RULES}`, user, DECIDE_SCHEMA, 300, signal);
+  const r = await json<{ amend: boolean; note: string; level: LearnerRecord["level"]; prior: string; focus: string }>(`${DECIDE_SYSTEM}\n\n${NOTE_RULES}`, user, DECIDE_SCHEMA, 300, signal, (c) => (call = c));
   return {
     amend: r.amend === true && r.note.trim().length > 0,
     note: r.note.trim(),
     learner: { level: r.level, prior: r.prior.trim(), focus: r.focus.trim() },
     ms: Math.round(performance.now() - t0),
     model: CONVERSE_MODEL,
+    call,
   };
 }

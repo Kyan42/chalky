@@ -84,9 +84,38 @@ export function cleanLearner(raw: unknown): LearnerRecord | undefined {
   return { level, prior: str(o.prior), focus: str(o.focus), confusions: list(o.confusions), replies: list(o.replies) };
 }
 
+/** One HTTP attempt of a model call (the SDK retries 408/409/429/5xx on its own). */
+export interface CallAttempt {
+  n: number;
+  /** HTTP status, or null when the request failed before a response (network, abort, timeout). */
+  status: number | null;
+  /** Time from this attempt's start to its response headers. */
+  headersMs: number;
+  /** When this attempt started, after the call began (shows retry backoff). */
+  atMs: number;
+  requestId: string | null;
+  retryAfter?: string;
+  /** anthropic-ratelimit-* headers, kept on non-200 responses. */
+  rateLimit?: Record<string, string>;
+  error?: string;
+}
+
+/** One model call, measured (lib/lesson/calllog.ts). */
+export interface CallLog {
+  name: string;
+  model: string;
+  maxRetries: number;
+  /** Time to the first content token (streams only). */
+  ttftMs: number | null;
+  totalMs: number | null;
+  retries: number;
+  attempts: CallAttempt[];
+  error: string | null;
+}
+
 /** NDJSON events from POST /api/plan. */
 export type PlanEvent =
   | { type: "title"; title: string; tMs: number }
   | { type: "beat"; beat: PlannedBeat; tMs: number }
-  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number }
+  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number; call?: CallLog }
   | { type: "error"; message: string; tMs: number };

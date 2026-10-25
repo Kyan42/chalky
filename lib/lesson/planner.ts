@@ -14,7 +14,7 @@
  */
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
-import { anthropic } from "./anthropic";
+import { trackCall } from "./calllog";
 import { withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
@@ -137,7 +137,8 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  const stream = anthropic().messages.stream(
+  const tracked = trackCall("plan", MODEL);
+  const stream = tracked.client.messages.stream(
     {
       model: MODEL,
       max_tokens: 14000,
@@ -154,6 +155,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   const st: PlanState = { scene: 0, known: new Map() };
   const lines: string[] = [];
   stream.on("text", (delta) => {
+    tracked.firstToken();
     pending += delta;
     let nl: number;
     while ((nl = pending.indexOf("\n")) >= 0) {
@@ -192,7 +194,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this question");
   if (!beats) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
 }
 
 /**
@@ -263,7 +265,8 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
   // The intake rewrite continues on beat 1's board; every other change starts on a clean one.
   const newScene = r.intake ? Math.max(1, maxScene) : maxScene + 1;
-  const stream = anthropic().messages.stream(
+  const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
+  const stream = tracked.client.messages.stream(
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
@@ -277,6 +280,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   let pending = "";
   const lines: string[] = [];
   stream.on("text", (delta) => {
+    tracked.firstToken();
     pending += delta;
     let nl: number;
     while ((nl = pending.indexOf("\n")) >= 0) {
@@ -329,5 +333,5 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
 }
