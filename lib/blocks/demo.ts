@@ -19,11 +19,14 @@ export const PART_COLORS = ["red", "blue", "green", "purple", "yellow"];
 /** Every block five across; `overlay` adds part boxes (by colour, in part order) and anchor dots. */
 export function galleryDoc(overlay: boolean, theme?: Theme): AnimationDocument {
   const s = new Scene(theme);
+  // Five across for Janani's fifteen; six across (and four rows) once the scenery blocks are in.
+  const cols = BLOCKS.length > 15 ? 6 : 5, rows = Math.ceil(BLOCKS.length / cols), rowH = 100 / rows;
+  const size = Math.min(11, rowH * 0.42);
   BLOCKS.forEach((block, i) => {
-    const cx = 10 + (i % 5) * 20, cy = 15 + Math.floor(i / 5) * 32;
+    const cx = (100 / cols) * ((i % cols) + 0.5), cy = rowH * (Math.floor(i / cols) + 0.42);
     const at = overlay ? -1 : i * 0.25;
-    const r = renderBlock(s, block, { cx, cy, size: 11, at });
-    s.text(block.title, (cx / 100) * 1200, ((cy + 13.5) / 100) * 800, { at: overlay ? -1 : at + 0.4, size: 22, color: "grey", width: 230 });
+    const r = renderBlock(s, block, { cx, cy, size, at });
+    s.text(block.title, (cx / 100) * 1200, ((cy + size * 1.15 + 2) / 100) * 800, { at: overlay ? -1 : at + 0.4, size: 20, color: "grey", width: 190 });
     if (!overlay) return;
     block.parts.forEach((p, k) => {
       const b = r.parts[p.id];
