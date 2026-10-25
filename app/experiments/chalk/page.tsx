@@ -9,6 +9,11 @@
  * per-frame `effectsApplied` and `unsupported` counts, so "draws", "passed through" and "breaks
  * playback" can be told apart.
  *
+ * Second row: every kind of the scene language (circle, box, flow, cycle, equation, arrow, line,
+ * plot, bar, move, text, connect, rays, label) through the live preset compiler in the page's theme
+ * (?theme=), with a highlight on a shape, on an equation and on a label, and a dim: what a lesson
+ * draws, kind by kind. Add ?t=<seconds> to pause everything at that time.
+ *
  * Below: her own documents, built by her presets/board.ts (scratchpad copy, Inter instead of
  * Manrope) and played in the same WebGL player: ?ref=photosynthesis|gallery|respiration.
  */
@@ -17,6 +22,8 @@ import { base, constant, fill, hex, type AnimationDocument, type SceneNode } fro
 import { useEffect, useMemo, useRef, useState } from "react";
 import { END, finishDocument, Scene } from "@/experiments/visual-flex/doc";
 import { CHALK_SKSL, chalkEffect } from "@/lib/board/chalk";
+import { CHALK, currentTheme, envTheme, THEMES, type Theme } from "@/lib/board/theme";
+import { compilePresetBoard, type PresetElement } from "@/lib/lesson/presets";
 
 const fontLoader = (() => {
   let bytes: Promise<Uint8Array> | null = null;
@@ -25,8 +32,39 @@ const fontLoader = (() => {
 
 type Variant = "grain" | "grain-noscale" | "off";
 
+const el = (id: string, kind: string, at: number, args: number[], text = "", refs = "", color = "ink", dur = 0.6): PresetElement => ({ id, kind, at, dur, color, args, text, refs });
+
+/** Every kind, as two beats: the first drawn still, the second animating with highlights and a dim. */
+const KINDS: PresetElement[][] = [
+  [
+    el("sun", "circle", 0, [12, 22, 7, 1], "Sun", "", "yellow", 0.8),
+    el("cell", "box", 0.3, [30, 10, 24, 22, 1], "Cell", "", "blue", 0.8),
+    el("hole", "circle", 0.6, [68, 20, 6, 0], "Pore", "", "green", 0.6),
+    el("steps", "flow", 1, [4, 72, 50, 16], "Light|Sugar|Energy", "", "ink", 1.2),
+    el("ring", "cycle", 1.2, [84, 30, 9], "Day|Night|Dawn", "", "purple", 1.2),
+    el("eq", "equation", 2, [76, 62, 30], "6 CO2 + 6 H2O -> sugar + 6 O2", "", "ink", 0.6),
+    el("bar1", "bar", 2.2, [60, 96, 7, 22], "before", "", "green", 0.6),
+    el("bar2", "bar", 2.5, [70, 96, 7, 34], "after", "", "red", 0.6),
+    el("wave", "plot", 2.8, [80, 78, 18, 14, 0, 1], "sin(x*12)", "", "blue", 1),
+    el("path", "line", 3.2, [6, 50, 16, 44, 24, 54], "a path", "", "brown", 0.6),
+    el("to", "arrow", 3.6, [30, 40, 50, 56], "to", "", "orange", 0.6),
+    el("dot", "move", 4, [30, 44, 50, 60, 1.4], "", "", "red", 1),
+    el("note", "text", 4.2, [60, 46, 26], "free text", "", "grey", 0.4),
+  ],
+  [
+    el("sun-cell", "connect", 0, [], "warms", "sun,cell", "orange", 0.6),
+    el("light", "rays", 0.3, [3], "", "sun,hole", "yellow", 0.8),
+    el("cell-label", "label", 0.6, [], "a plant cell", "cell", "blue"),
+    el("h1", "highlight", 1, [], "", "sun", "yellow", 1.8),
+    el("d1", "dim", 1.5, [], "", "steps", "ink", 0.5),
+    el("h2", "highlight", 2.2, [], "", "eq", "yellow", 1.8),
+    el("h3", "highlight", 3.4, [], "", "cell-label", "blue", 1.8),
+    el("h4", "highlight", 4.4, [], "", "ring.1", "yellow", 1.8),
+  ],
+];
+
 function testDoc(variant: Variant, grain = 0.85): AnimationDocument {
-  const s = new Scene();
+  const s = new Scene(CHALK);
   s.stroke([[80, 120], [360, 90], [520, 200], [700, 110]], { at: 0, dur: 0.8, color: "ink", width: 6 });
   s.circle(260, 420, 120, { at: 0.5, color: "green", filled: false, width: 6 });
   s.box(520, 320, 300, 180, { at: 1, color: "blue", filled: false });
@@ -126,6 +164,9 @@ function Board({ doc, label, loop }: { doc: AnimationDocument | null; label: str
 }
 
 export default function ChalkPage() {
+  const [theme, setTheme] = useState<Theme>(envTheme);
+  useEffect(() => setTheme(currentTheme()), []);
+  const kinds = useMemo(() => compilePresetBoard(KINDS, 1, `kinds-${theme.id}`, theme), [theme]);
   const [refDoc, setRefDoc] = useState<AnimationDocument | null>(null);
   const [refName, setRefName] = useState("");
   const params = useMemo(() => (typeof location !== "undefined" ? new URLSearchParams(location.search) : new URLSearchParams()), []);
@@ -141,6 +182,16 @@ export default function ChalkPage() {
       <h1 style={{ fontSize: 20, margin: "0 0 12px" }}>Chalk shader in @clayzo/webgl-player (grain {grain})</h1>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         {docs.map(({ v, doc }) => <Board key={v} doc={doc} label={v} loop />)}
+      </div>
+      <h2 style={{ fontSize: 17, margin: "22px 0 10px" }}>
+        Every kind through the preset compiler, theme <b data-testid="theme">{theme.id}</b>{" "}
+        {THEMES.map((t) => (
+          <a key={t.id} href={`?theme=${t.id}`} style={{ marginLeft: 10, fontWeight: 400, fontSize: 14 }}>{t.id}</a>
+        ))}
+      </h2>
+      <div style={{ maxWidth: 1100 }}>
+        <Board doc={kinds.doc} label={`kinds-${theme.id}`} loop />
+        <p style={{ fontSize: 13 }}>{kinds.report.shapes.length} shapes, {kinds.report.texts.length} labels, dangling: {kinds.report.dangling.join("; ") || "none"}</p>
       </div>
       <h2 style={{ fontSize: 17, margin: "22px 0 10px" }}>Janani&apos;s {refName} (her board.ts, her shader, played here)</h2>
       <div style={{ maxWidth: 1100 }}>

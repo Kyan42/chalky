@@ -399,25 +399,30 @@ export class Scene {
     const w = box.x2 - box.x1, h = box.y2 - box.y1;
     const band = Math.max(22, Math.min(70, h / 2.6));
     const rows = Math.max(1, Math.ceil((h + band * 0.4) / (band * 0.8)));
-    const contours: PathContour[] = [];
+    // Each pass is one slightly bowed drag across the box; passes alternate direction and
+    // density, so some chalk shows through more than the rest.
+    const seed = this.count;
+    const ids: string[] = [];
     for (let r = 0; r < rows; r++) {
       const y = box.y1 + band * 0.35 + r * ((h - band * 0.7) / Math.max(1, rows - 1) || 0);
       const pts: Pt[] = [];
       const n = 8;
       for (let i = 0; i <= n; i++) {
-        const t = r % 2 ? 1 - i / n : i / n;
-        pts.push([box.x1 - band * 0.3 + t * (w + band * 0.6) + rand(r, i) * band * 0.3, y + rand(r + 7, i) * band * 0.35]);
+        const u = i / n, t = r % 2 ? 1 - u : u;
+        const bow = Math.sin(u * Math.PI) * band * 0.25 * (r % 2 ? -1 : 1);
+        pts.push([box.x1 - band * 0.35 + t * (w + band * 0.7) + rand(seed + r, i) * band * 0.3, y + bow + rand(seed + r + 7, i) * band * 0.3]);
       }
-      contours.push({ closed: false, vertices: vertices(pts, 16) });
+      const t = tick(Math.max(0, o.at));
+      const from = o.at + r * 0.12, to = from + 0.35;
+      ids.push(this.add("wipe", {
+        ...base("w", { outTick: END, inTick: o.at < 0 ? 0 : t }),
+        type: "path",
+        path: constant({ contours: [{ closed: false, vertices: vertices(pts, 16) }] }),
+        style: { stroke: stroke(hex(this.theme.colors.board), band * (1 + rand(seed, r) * 0.3), { opacity: (o.opacity ?? 0.62) + rand(seed + 3, r) * 0.3 }) },
+        ...(o.at < 0 ? {} : { operators: [trim("t", { end: this.drawOn(from, to) })] }),
+      }));
     }
-    const t = tick(Math.max(0, o.at));
-    return this.add("wipe", {
-      ...base("w", { outTick: END, inTick: o.at < 0 ? 0 : t }),
-      type: "path",
-      path: constant({ contours }),
-      style: { stroke: stroke(hex(this.theme.colors.board), band, { opacity: o.opacity ?? 0.62 }) },
-      ...(o.at < 0 ? {} : { operators: [trim("t", { end: this.drawOn(o.at, o.at + 0.45) })] }),
-    });
+    return ids[0];
   }
 
   /**
