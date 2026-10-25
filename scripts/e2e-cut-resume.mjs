@@ -92,9 +92,10 @@ const nextBeat = beats[beats.indexOf(cutBeat) + 1];
 console.log(`        cut at word ${cutBeat?.atWord}; reply "${reply?.text}" [${(reply?.actions ?? []).map((a) => (a.type === "resume" ? `resume:${a.how}${a.why ? ` (${a.why})` : ""}` : a.type)).join(", ")}]`);
 console.log(`        settled: ${JSON.stringify(settle)}; next beat played: ${nextBeat?.beatId}${nextBeat?.fromWord !== undefined ? ` from word ${nextBeat.fromWord} (${nextBeat.fromSec} s)` : " from its start"}; page then on ${after?.beat} word ${after?.firstWord}`);
 if (CUT <= 10) {
-  check("an early cut goes on from the word, not the start", settle?.how === "from the word" && nextBeat?.beatId === "b2" && Math.abs((nextBeat?.fromWord ?? -99) - (cutBeat?.atWord ?? 0) + 1) <= 1, `${settle?.how}`);
+  // (The beat's own line is written when it ends, after this script has left: the page and the settle event say it.)
+  check("an early cut goes on from the word, not the start", settle?.how === "from the word" && Math.abs(settle.wordIndex - ((cutBeat?.atWord ?? 0) - 1)) <= 1, `${settle?.how} at word ${settle?.wordIndex} (${settle?.sec} s)`);
   check("the page shows b2 from there (not word 0)", after?.beat === "b2" && (after?.firstWord ?? 0) >= CUT - 2, `${after?.beat} word ${after?.firstWord}`);
 } else {
-  check("a late cut goes on with the next beat", settle?.how === "next beat" && nextBeat?.beatId === "b3", `${settle?.how}, then ${nextBeat?.beatId}`);
+  check("a late cut goes on with the next beat", settle?.how === "next beat" && after?.beat === "b3" && (after?.firstWord ?? 99) <= 2, `${settle?.how}, then ${after?.beat} word ${after?.firstWord}`);
 }
 console.log(`${results.filter(Boolean).length}/${results.length} checks passed; transcript ${t?.id}`);
