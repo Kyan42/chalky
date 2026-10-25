@@ -775,7 +775,8 @@ export default function Lesson() {
     speaking: MUTED.has(status) || speakingAudio,
     // Chalky asked something (intake, check-in, a reply's check): a pause mid-answer must not end the turn.
     patient: status === "waiting",
-    paused: micMuted || halted,
+    paused: halted,
+    muted: micMuted,
     // Space down while Chalky talks: stop now, keep the resume point, then listen.
     onBargeIn: () => pauseRef.current(),
     onPartial: (text) => {

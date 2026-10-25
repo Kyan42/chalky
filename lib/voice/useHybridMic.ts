@@ -46,6 +46,11 @@ export interface HybridMicOptions {
   speaking: boolean;
   /** The learner stopped Chalky: hear nothing at all, and ignore the barge-in key, until this goes false. */
   paused?: boolean;
+  /**
+   * The learner muted the mic: hear nothing, like paused, but what was heard so far is handed in as an
+   * utterance at once instead of dropped (a mute mid-answer must not leave the answer unsaid).
+   */
+  muted?: boolean;
   /** KeyboardEvent.code of the barge-in key. */
   key?: string;
   /** Turns ending within this window merge into one utterance. */
@@ -112,7 +117,7 @@ export function useHybridMic(options: HybridMicOptions) {
   const speakingRef = useRef(options.speaking);
   speakingRef.current = options.speaking;
   const pausedRef = useRef(!!options.paused);
-  pausedRef.current = !!options.paused;
+  pausedRef.current = !!options.paused || !!options.muted;
   const held = useRef<{ since: number; words: boolean } | null>(null);
   const tail = useRef<{ timer: ReturnType<typeof setTimeout>; holdMs: number } | null>(null);
   const lastPartial = useRef("");
@@ -248,8 +253,10 @@ export function useHybridMic(options: HybridMicOptions) {
   }, [options.speaking, refreshMode]);
 
   // Paused: drop whatever was half heard, including a held key's turn, so nothing arrives later.
+  // Muted (and not paused): what was heard so far is the learner's whole turn.
   useEffect(() => {
-    if (!options.paused) return refreshMode();
+    if (!options.paused && !options.muted) return refreshMode();
+    const heard = options.paused ? "" : [merger.current?.buffered ?? "", lastPartial.current].join(" ").trim();
     endTail();
     held.current = null;
     merger.current?.discard();
@@ -257,7 +264,8 @@ export function useHybridMic(options: HybridMicOptions) {
     setPartial("");
     lastPartial.current = "";
     refreshMode();
-  }, [options.paused, endTail, refreshMode]);
+    if (heard) opts.current.onUtterance?.(heard, { via: "open", turns: 1 });
+  }, [options.paused, options.muted, endTail, refreshMode]);
 
   // The barge-in key: down opens the mic and interrupts Chalky; up ends the turn.
   useEffect(() => {
