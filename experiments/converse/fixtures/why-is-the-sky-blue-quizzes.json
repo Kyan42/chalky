@@ -1,0 +1,286 @@
+{
+  "title": "Why the Sky Is Blue (quizzes)",
+  "beats": [
+    {
+      "id": "b1",
+      "say": "Sunlight looks white, but it's really a mix of every color traveling together. Think of it as a bundle of waves, some long and red, some short and blue.",
+      "at": "sunlight",
+      "visual": "Draw the sun at left with a bundle of wavy lines leaving it to the right: a long stretched red wave on top, a tight short blue wave on the bottom, labeled 'white light'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 10,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "sun",
+          "what": "sun on the left"
+        },
+        {
+          "id": "waves",
+          "what": "bundle of colored waves, long red to short blue"
+        }
+      ],
+      "points": [],
+      "section": "Sunlight is a mix of colors with different wavelengths"
+    },
+    {
+      "id": "b2",
+      "say": "Look at these two waves. The red one has a long wavelength, the blue one a short wavelength. That difference in size is the one idea everything hangs on today.",
+      "at": "waves",
+      "visual": "Highlight the red and blue waves in the bundle, contrasting their spacing.",
+      "mode": "point",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 10,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "waves",
+          "word": "waves"
+        }
+      ]
+    },
+    {
+      "id": "b3",
+      "say": "Now picture that bundle hitting air. Air is mostly tiny nitrogen and oxygen molecules, far smaller than any of these light waves.",
+      "at": "air",
+      "visual": "Draw a scatter of small circles to the right of the waves labeled 'air molecules', with the wave bundle arrow pointing into them.",
+      "mode": "draw",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 68,
+        "y": 15,
+        "w": 27,
+        "h": 60
+      },
+      "adds": [
+        {
+          "id": "molecules",
+          "what": "cluster of tiny air molecule circles"
+        }
+      ],
+      "points": [],
+      "section": "Light meets the air"
+    },
+    {
+      "id": "b4",
+      "say": "So we have long red waves, short blue waves, and tiny molecules in the way. Does that picture of light and air make sense so far?",
+      "at": "have",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 90,
+        "h": 90
+      },
+      "adds": [],
+      "points": []
+    },
+    {
+      "id": "b5",
+      "say": "Quick quiz: can you name the parts I have numbered?",
+      "at": "Quick",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 1,
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 100,
+        "h": 100
+      },
+      "adds": [],
+      "points": [],
+      "quiz": "label"
+    },
+    {
+      "id": "b6",
+      "say": "Here's one molecule. When light passes, its electric field shakes the molecule's electrons, and those shaking electrons send light back out in new directions. That's called scattering.",
+      "at": "molecule",
+      "visual": "Draw one big circle in the center labeled 'molecule', an incoming wave from the left, and short arrows spraying outward in every direction labeled 'scattered'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 20,
+        "y": 15,
+        "w": 60,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "mol",
+          "what": "one large molecule circle"
+        },
+        {
+          "id": "rays",
+          "what": "arrows radiating out in all directions"
+        }
+      ],
+      "points": [],
+      "section": "Air molecules scatter short blue light much more than red"
+    },
+    {
+      "id": "b7",
+      "say": "The key is how strongly it scatters. It's called Rayleigh scattering, and it goes as one over wavelength to the fourth power. Shorter waves scatter enormously more.",
+      "at": "rayleigh",
+      "visual": "Above the molecule, write 'scattering ∝ 1 / λ⁴' labeled 'Rayleigh'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 45,
+        "h": 12
+      },
+      "adds": [
+        {
+          "id": "law",
+          "what": "equation: scattering proportional to one over wavelength to the fourth"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b8",
+      "say": "That fourth power is what makes this so lopsided. Halve the wavelength and the scattering jumps sixteen times. Is the idea of scattering clicking for you?",
+      "at": "power",
+      "visual": "Highlight the exponent four in the equation.",
+      "mode": "point",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 5,
+        "y": 5,
+        "w": 45,
+        "h": 12
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "law",
+          "word": "power"
+        }
+      ]
+    },
+    {
+      "id": "b9",
+      "say": "Before I show you the numbers: blue light is about four hundred fifty nanometers and red about seven hundred. Using that fourth power, roughly how many times more does blue scatter than red?",
+      "at": "Before",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 2,
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 100,
+        "h": 100
+      },
+      "adds": [],
+      "points": [],
+      "quiz": "predict"
+    },
+    {
+      "id": "b10",
+      "say": "Blue light is about four hundred fifty nanometers long. Red light is about seven hundred nanometers. Let's compare them as bars.",
+      "at": "blue",
+      "visual": "Draw two vertical bars, a shorter blue bar labeled '450 nm' and a taller red bar labeled '700 nm', titled 'wavelength'.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 8,
+        "y": 15,
+        "w": 58,
+        "h": 70
+      },
+      "adds": [
+        {
+          "id": "bars",
+          "what": "bar chart: blue 450 nanometers, red 700 nanometers"
+        }
+      ],
+      "points": [],
+      "section": "Real numbers show blue scatters about six times more"
+    },
+    {
+      "id": "b11",
+      "say": "Seven hundred divided by four hundred fifty is about one and a half. Raise that to the fourth power and you get roughly six.",
+      "at": "divided",
+      "visual": "Write '(700/450)⁴ ≈ 6' to the right of the bars, arrow from the bars to it.",
+      "mode": "draw",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 70,
+        "y": 15,
+        "w": 26,
+        "h": 30
+      },
+      "adds": [
+        {
+          "id": "calc",
+          "what": "calculation 700 over 450, to the fourth, about 6"
+        }
+      ],
+      "points": []
+    },
+    {
+      "id": "b12",
+      "say": "So blue light gets scattered about six times more than red. That scattered blue comes at your eyes from every direction of the sky. Does that number make sense?",
+      "at": "blue",
+      "visual": "Highlight the result 'about 6'.",
+      "mode": "point",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 70,
+        "y": 15,
+        "w": 26,
+        "h": 30
+      },
+      "adds": [],
+      "points": [
+        {
+          "id": "calc",
+          "word": "six"
+        }
+      ]
+    },
+    {
+      "id": "b13",
+      "say": "Your turn: draw sunlight hitting an air molecule and which colors scatter, then say done.",
+      "at": "Your",
+      "visual": "",
+      "mode": "talk",
+      "check": false,
+      "scene": 3,
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 100,
+        "h": 100
+      },
+      "adds": [],
+      "points": [],
+      "quiz": "sketch"
+    }
+  ]
+}

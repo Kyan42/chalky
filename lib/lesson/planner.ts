@@ -17,7 +17,7 @@ import { BLOCKS } from "@/lib/blocks";
 import { trackCall } from "./calllog";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
 import { withVoiceRules } from "./preference-prompt";
-import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
+import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type Region } from "./types";
 
 const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
 
@@ -56,7 +56,10 @@ Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
 - "point": draw nothing new; highlight parts already on the board while you talk about them. Use it when you're explaining something already drawn.
 - "talk": leave the board as it is. Use it for check-ins, analogies that need no picture, and the recap.
-A quiz: right after a section's recap or check-in you may add one quiz beat, at most two in the whole lesson: a "talk" beat with "quiz": "label" when that section's picture has several labelled parts (its "say" asks them to name the numbered parts, like "Quick quiz: can you name the parts I've numbered?"), or "quiz": "sketch" when the section explained a process (its "say" asks them to draw it, like "Your turn: draw how the water gets from the roots up to the leaf, then say done."). Not in the first section.
+Quizzes make the learner think, and they come regularly: every section after the first ends with one quiz beat, a "talk" beat whose "say" is the quiz question, put right after that section's check-in (in a lesson of more than four sections, every other section is enough). Never in the first section. Three kinds, rotating: never the same kind twice in a row, and a lesson with three or more quizzes uses all three.
+- "quiz": "label" when that section's picture has several labelled parts ("Quick quiz: can you name the parts I've numbered?").
+- "quiz": "predict" before a section whose content follows from what came before: "say" asks them to predict what the next section shows, without giving it away ("Before I show you: if blue scatters more, what color should a sunset be, and why?"). Their guess is checked against the next section's own sentences, so that section must answer it. Never on the lesson's last section.
+- "quiz": "sketch" when the section explained a process ("Your turn: draw how the water gets from the roots up to the leaf, then say done.").
 Most lessons have about half draw beats. The first beat is always "draw".
 
 The board shows one picture at a time, called a scene. Group beats into scenes: a scene is one picture built up over at most 4 draw beats and then wiped, like moving to a clean part of the whiteboard. Start a new scene when the lesson zooms in, moves to a new stage, or switches to the example. Number scenes 1, 2, 3 in order; a scene's first beat is a draw beat; talk beats keep the current scene number. A new scene starts empty, so a beat can only point at things drawn earlier in its own scene.
@@ -68,7 +71,7 @@ The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
-Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat, "bridge": "..." on a check-in beat, and "quiz": "label" | "sketch" on a quiz beat. Nothing else: no code fences, no commentary.`;
+Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat, "bridge": "..." on a check-in beat, and "quiz": "label" | "predict" | "sketch" on a quiz beat. Nothing else: no code fences, no commentary.`;
 
 const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
 const MODES = new Set<BeatMode>(["draw", "point", "talk"]);
@@ -95,8 +98,56 @@ interface PlanState {
   scene: number;
   /** Ids added so far, per scene. */
   known: Map<number, Set<string>>;
-  /** Quiz beats so far (at most two). */
-  quizzes?: number;
+  /** Sections begun so far (a beat with "section", or the lesson's first beat, starts one). */
+  sections?: number;
+  /** The current section has had its quiz. */
+  quizzed?: boolean;
+  /** Sections past the first that ended without a quiz, in a row. */
+  dry?: number;
+  /** The current section's title. */
+  title?: string;
+  /** Quiz kinds so far, in order. */
+  kinds?: QuizKind[];
+}
+
+const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
+
+/**
+ * The quiz kind to give: never the same kind twice in a row, and the third quiz uses whichever kind is
+ * still unused. `asked` is the planner's choice, kept when it fits; predict needs a section after it.
+ */
+function quizKind(st: PlanState, asked: QuizKind | undefined, hasNext = true): QuizKind {
+  const kinds = st.kinds ?? [];
+  const last = kinds[kinds.length - 1];
+  const ok = (k: QuizKind) => k !== last && (hasNext || k !== "predict");
+  const unused = QUIZ_KINDS.filter((k) => ok(k) && !kinds.includes(k));
+  if (asked && ok(asked) && (!kinds.includes(asked) || !unused.length)) return asked;
+  return unused[0] ?? QUIZ_KINDS.find(ok) ?? "sketch";
+}
+
+const QUIZ_SAY: Record<QuizKind, string> = {
+  label: "Quick quiz: can you name the parts I've numbered?",
+  predict: "Before I go on, a quick prediction: what do you think comes next, and why?",
+  sketch: "Your turn: draw what we just covered, as you'd explain it, then say done.",
+};
+
+/**
+ * Quizzes are regular: a section past the first ends with one. When it is about to end without one
+ * (the next section starts, or the lesson ends), a quiz beat in the planner's shape to put in first:
+ * every such section in lessons of up to four sections, every other one after that. Null when none is due.
+ */
+function dueQuiz(st: PlanState, hasNext: boolean): Record<string, unknown> | null {
+  if ((st.sections ?? 0) < 2 || st.quizzed) return null;
+  // Not after the closing recap: the lesson is over.
+  if (!hasNext && /\b(recap|summary|wrap|review)\b/i.test(st.title ?? "")) return null;
+  if ((st.sections ?? 0) > 4 && (st.dry ?? 0) < 1) return null;
+  const quiz = quizKind(st, undefined, hasNext);
+  return { say: QUIZ_SAY[quiz], mode: "talk", scene: st.scene, quiz, check: false };
+}
+
+/** A new section starts (or the lesson ends): count how many in a row went without a quiz. */
+function endSection(st: PlanState) {
+  if ((st.sections ?? 0) >= 2) st.dry = st.quizzed ? 0 : (st.dry ?? 0) + 1;
 }
 
 /** Checks one raw beat line and fixes what it can; keeps the scene bookkeeping in `st`. */
@@ -152,9 +203,19 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const line = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
   const section = line(b.section, 120);
   const bridge = check ? line(b.bridge, 120) : undefined;
-  // A quiz beat is a talk beat that asks; at most two in a lesson.
-  const quiz = (b.quiz === "label" || b.quiz === "sketch") && (st.quizzes ?? 0) < 2 ? (b.quiz as "label" | "sketch") : undefined;
-  if (quiz) st.quizzes = (st.quizzes ?? 0) + 1;
+  if (section || index === 0) {
+    st.sections = (st.sections ?? 0) + 1;
+    st.quizzed = false;
+    st.title = section ?? "";
+  }
+  // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
+  const asked = QUIZ_KINDS.includes(b.quiz as QuizKind) ? (b.quiz as QuizKind) : undefined;
+  const quiz = asked && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
+  if (quiz) {
+    if (quiz !== asked) console.info(`[plan] quiz ${asked} -> ${quiz} (kinds so far: ${(st.kinds ?? []).join(", ") || "none"})`);
+    st.quizzed = true;
+    st.kinds = [...(st.kinds ?? []), quiz];
+  }
   // The paper a beat teaches from (research material): its number, 1 to 9. An array or "[2]" is read as its first number.
   const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
   const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
@@ -214,8 +275,19 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
       console.warn(`[plan] skipped a line that isn't JSON: ${trimmed.slice(0, 120)}`);
       return;
     }
-    if (typeof obj.title === "string") yield { type: "title", title: obj.title, tMs: ms() };
-    else yield { type: "beat", beat: checkBeat(obj, beats++, st), tMs: ms() };
+    if (typeof obj.title === "string") {
+      yield { type: "title", title: obj.title, tMs: ms() };
+      return;
+    }
+    if (typeof obj.section === "string" && obj.section.trim() && beats > 0) {
+      const due = dueQuiz(st, true);
+      if (due) {
+        console.info(`[plan] section ${st.sections} ended without a quiz: added a ${due.quiz} quiz`);
+        yield { type: "beat", beat: checkBeat(due, beats++, st), tMs: ms() };
+      }
+      endSection(st);
+    }
+    yield { type: "beat", beat: checkBeat(obj, beats++, st), tMs: ms() };
   };
 
   // Drain whole lines as they arrive, then whatever is left once the stream ends.
@@ -233,6 +305,11 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   const message = await done;
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this question");
+  const last = beats ? dueQuiz(st, false) : null;
+  if (last) {
+    console.info(`[plan] the last section ended without a quiz: added a ${last.quiz} quiz`);
+    yield { type: "beat", beat: checkBeat(last, beats++, st), tMs: ms() };
+  }
   if (!beats) throw new Error("the planner returned no beats");
   yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
 }
@@ -372,6 +449,12 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
   const st: PlanState = { scene: maxScene, known: new Map() };
   if (r.op === "replace_from") st.known.set(newScene, new Set(kept.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
+  // Quiz cadence goes on from the kept beats: their sections and quiz kinds count.
+  const keptSections = kept.filter((b, k) => k === 0 || b.section);
+  st.sections = keptSections.length;
+  st.title = [...kept].reverse().find((b) => b.section)?.section ?? "";
+  st.kinds = kept.flatMap((b) => (b.quiz ? [b.quiz] : []));
+  st.quizzed = kept.slice(kept.map((b, k) => (k === 0 || b.section ? k : -1)).reduce((a, b) => Math.max(a, b), 0)).some((b) => b.quiz);
   const here = detourScene(r, maxScene);
   if (here.stay) st.known.set(here.scene, new Set(here.drawn.flatMap((b) => b.adds.map((a) => a.id))));
   /** The scene the detour's drawing beats use: decided by its first one (the same board, if allowed, or a clean one). */
@@ -413,6 +496,17 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       if (say !== obj.say) console.info(`[amend] trimmed the opener of ${r.prefix}-1: "${String(obj.say).slice(0, 80)}" -> "${say.slice(0, 80)}"`);
       obj.say = say.charAt(0).toUpperCase() + say.slice(1);
     }
+    // A new ending keeps quizzes regular: a section about to end without one gets one first.
+    if (r.op === "replace_from" && typeof obj.section === "string" && obj.section.trim()) {
+      const due = dueQuiz(st, true);
+      if (due) {
+        const qb = checkBeat(due, n + 1, st);
+        n++;
+        console.info(`[amend] ${r.prefix}: section ${st.sections} ended without a quiz: added a ${due.quiz} quiz`);
+        yield { type: "beat", beat: guard.guard({ ...qb, id: `${r.prefix}-${n}` }, st), tMs: ms() };
+      }
+      endSection(st);
+    }
     const checked = checkBeat(obj, n + 1, st);
     n++;
     const beat = guard.guard({ ...checked, id: `${r.prefix}-${n}` }, st);
@@ -433,6 +527,13 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
+  const lastQuiz = r.op === "replace_from" ? dueQuiz(st, false) : null;
+  if (lastQuiz) {
+    const qb = checkBeat(lastQuiz, n + 1, st);
+    n++;
+    console.info(`[amend] ${r.prefix}: the last section ended without a quiz: added a ${lastQuiz.quiz} quiz`);
+    yield { type: "beat", beat: guard.guard({ ...qb, id: `${r.prefix}-${n}` }, st), tMs: ms() };
+  }
   const layout = guard.summary();
   console.info(`[amend] ${r.prefix}: scenes ${layout.scenes.map((s) => `${s.scene}: ${s.kept}+${s.draws} drawings, ${s.points} points`).join("; ")}${layout.notes.length ? ` | ${layout.notes.join(" | ")}` : ""}`);
   // On the call log, so the page's amend-done event carries it into the transcript.

@@ -1,9 +1,10 @@
 /**
  * POST /api/quiz  { kind: "label", question, items: [{ n, id, answer }], answer, inkMarks? }
  *              |  { kind: "sketch", question, ask, rubric: string[], image?, inkMarks?, board?, answer? }
+ *              |  { kind: "predict", question, ask, answer, after: [{ say, section?, quiz? }] }  (rubric: the next section, cut here)
  *   →  QuizGrade (lib/lesson/quiz.ts)
  */
-import { gradeLabel, gradeSketch } from "@/lib/lesson/quiz";
+import { gradeLabel, gradePredict, gradeSketch, predictRubric } from "@/lib/lesson/quiz";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,17 @@ export async function POST(request: Request) {
       const image = typeof b.image === "string" && b.image.length < 1_400_000 && /^[A-Za-z0-9+/=]+$/.test(b.image) ? b.image : undefined;
       return Response.json(await gradeSketch({ question: str(b.question, 300), ask: str(b.ask, 300), rubric: strs(b.rubric, 8, 400), image, inkMarks: strs(b.inkMarks, 8, 120), board: strs(b.board, 40, 60), answer: str(b.answer, 400) }, request.signal));
     }
-    return Response.json({ error: "kind must be label or sketch" }, { status: 400 });
+    if (b.kind === "predict") {
+      const after = (Array.isArray(b.after) ? b.after : []).slice(0, 12).flatMap((x) => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        const say = str(o.say, 400);
+        return say ? [{ say, ...(typeof o.section === "string" ? { section: o.section } : {}), ...(typeof o.quiz === "string" ? { quiz: o.quiz } : {}) }] : [];
+      });
+      const rubric = predictRubric(after);
+      if (!rubric.length) return Response.json({ error: "no next section to grade against" }, { status: 400 });
+      return Response.json({ ...(await gradePredict({ question: str(b.question, 300), ask: str(b.ask, 300), answer: str(b.answer, 600), rubric }, request.signal)), rubric });
+    }
+    return Response.json({ error: "kind must be label, sketch or predict" }, { status: 400 });
   } catch (error) {
     return Response.json({ error: String((error as Error)?.message ?? error) }, { status: 500 });
   }

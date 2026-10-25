@@ -34,6 +34,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
 import { ResearchCards } from "@/components/ResearchCards";
+import { researchQuery } from "@/lib/research/query";
 import type { ResearchEvent, ResearchRecord } from "@/lib/research/types";
 import { END, finishDocument, H, PAPER, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
@@ -1454,8 +1455,6 @@ export default function Lesson() {
      * items), which the transcript and Convex keep and /log shows.
      */
     const runResearch = async (question: string, role: "start" | "question" | "late", untilMs = 0): Promise<Found> => {
-      // A cut-in starts with "wait," or "sorry,": the lookup is the question itself (and matches the cache).
-      question = question.replace(/^((wait|hold on|hang on|sorry|um+|uh+|oh|ok(ay)?|so|actually)[,.!]?\s+)+/i, "").trim() || question;
       const t0r = performance.now();
       if (role !== "late" && lastResearch && lastResearch.question !== question && performance.now() - lastResearch.at < RESEARCH_SPACING_MS) {
         logEv({ kind: "research-none", role, question, error: "another lookup started under 30 s ago" });
@@ -1487,10 +1486,11 @@ export default function Lesson() {
         return fail(String((e as Error).message ?? e));
       }
     };
-    const startResearch = (question: string) => {
+    /** `question` is what goes out (researchQuery: never the raw sentence); `heard` is what they said. */
+    const startResearch = (question: string, heard: string) => {
       if (researchJob) return;
       setResearching(true);
-      logEv({ kind: "research-started", role: "start", question });
+      logEv({ kind: "research-started", role: "start", question, heard });
       researchJob = runResearch(question, "start", RESEARCH_START_MS)
         .then((f) => {
           if (f.status === "ready" && f.record) setResearchRecord(f.record as unknown as ResearchRecord);
@@ -1684,7 +1684,8 @@ export default function Lesson() {
       return res.actions ?? [];
     };
     // ---------- Quizzes ----------
-    const SKIP_QUIZ = /^\W*(skip( it| this)?|next|pass|no thanks|not now|later)\W*$/i;
+    // "skip", or not knowing ("I don't know", "no idea"): the quiz moves on, telling the answer in one line.
+    const SKIP_QUIZ = /^\W*(?:(?:ok(?:ay)?|um+|uh+|hmm+|honestly|sorry|so)[,.\s]+)*(?:skip( it| this)?|next|pass|no thanks|not now|later|i (?:really |honestly )?(?:don'?t|do not) know|no idea|i have no idea|not sure|i'?m not sure|dunno|no clue|i give up)(?:[,.\s]+(?:sorry|skip|pass))*\W*$/i;
     const DONE = /\b(done|finished|that'?s it|there you go|ok(ay)? done)\b/i;
     const sayLine = (text: string) => playBeat(line(text), abort.signal, null).catch(() => {});
     /** The cursor on the wall clock (after a line has started speaking, which resets it). */
@@ -1708,20 +1709,34 @@ export default function Lesson() {
       while (from > 0 && !list[from].beat.section) from--;
       return list.slice(from, Math.max(from + 1, i + (list[i]?.beat.quiz ? 0 : 1))).filter((b) => !b.beat.quiz).map((b) => b.beat.say).slice(-6);
     };
+    /** The beats after `i`, for a predict quiz (the server cuts the next section out of them as its rubric). */
+    const beatsAfter = (i: number) => list.slice(i + 1, i + 13).map((b) => ({ say: b.beat.say, ...(b.beat.section ? { section: b.beat.section } : {}), ...(b.beat.quiz ? { quiz: b.beat.quiz } : {}) }));
+    const firstSentence = (t: string) => t.split(/(?<=[.!?])\s+/)[0]?.trim() ?? t;
     const record = (r: QuizResult, grade: { ms?: number; model?: string; call?: unknown; feedback?: string }) => {
       learner.quizzes = [...(learner.quizzes ?? []), r];
       // The summary rides in `confusions` (what Convex keeps and the next lesson's memory reads).
       const pct = Math.round(r.score * 100);
-      learner.confusions = [...learner.confusions, `quiz (${r.kind}) "${r.asked.slice(0, 70)}": ${pct}%${r.right.length ? `, got ${r.right.join(", ")}` : ""}${r.missing.length ? `, missed ${r.missing.join(", ")}` : ""}`].slice(-5);
+      const how = r.skipped ? "skipped" : r.verdict ? `${r.verdict} (${pct}%)` : `${pct}%`;
+      learner.confusions = [...learner.confusions, `quiz (${r.kind}) "${r.asked.slice(0, 70)}": ${how}${r.right.length ? `, got ${r.right.join(", ")}` : ""}${r.missing.length ? `, missed ${r.missing.join(", ")}` : ""}`].slice(-5);
       noteLearner();
       const { kind: quiz, ...rest } = r;
       logEv({ kind: "quiz-result", quiz, ...rest, feedback: grade.feedback ?? "", ms: grade.ms ?? null, model: grade.model ?? null, call: grade.call ?? null });
+    };
+    /** Skipped ("skip", "I don't know"): the answer in one line, and the record says so. */
+    const skipQuiz = async (kind: QuizKind, ask: string, answer: string | null, beatId: string | null, line: string) => {
+      logEv({ kind: "quiz-skipped", quiz: kind, beatId, said: answer ?? "" });
+      setStatus("speaking");
+      await sayLine(line);
+      record({ kind, asked: ask, answered: answer ?? "", score: 0, right: [], missing: [], beatId, at: new Date().toISOString(), skipped: true }, { feedback: line });
     };
     /**
      * A quiz on the scene in view. label: numbered markers over its labelled parts (labels covered), the
      * learner names them (by voice or typing), the fast model grades; feedback with the cursor on each
      * number, then the labels come back. sketch: the learner draws (Done, or "done"), the slow model grades
-     * the board picture against the section's own sentences. Either can be skipped ("skip", "next").
+     * the board picture against the section's own sentences. predict: before the next section, the learner
+     * guesses what it shows; the fast model grades the guess against that section's sentences (right, partly,
+     * wrong) in one line, and the section that follows shows the answer. Each waits for the learner as long
+     * as it takes, and can be skipped ("skip", "I don't know"): the answer in one line, then on.
      */
     const runQuiz = async (kind: QuizKind, ask: string, i: number): Promise<void> => {
       const beatId = list[i]?.beat.id ?? null;
@@ -1731,11 +1746,20 @@ export default function Lesson() {
         .slice(0, 4)
         // The answer is the label as a word or two, not an id ("sine-wave" -> "sine wave").
         .map((e, k) => ({ n: k + 1, id: e.id, answer: e.label.replace(/[-_]+/g, " ").trim(), box: v.boxes[e.id], cover: v.labels![e.id] }));
-      if (kind === "label" && items.length < 2) {
-        // Nothing labelled to number here: draw it instead.
-        logEv({ kind: "quiz-fallback", from: "label", to: "sketch", why: `${items.length} labelled part(s) in view` });
+      const lastKind = learner.quizzes?.[learner.quizzes.length - 1]?.kind;
+      const hasNext = beatsAfter(i).some((b) => !b.quiz);
+      if (kind === "predict" && !hasNext) {
+        // Nothing after it to predict: draw it instead.
+        logEv({ kind: "quiz-fallback", from: "predict", to: "sketch", why: "no section after it" });
         kind = "sketch";
         ask = "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
+      }
+      if (kind === "label" && items.length < 2) {
+        // Nothing labelled to number here: a prediction (if a section follows and the last quiz wasn't one), or a drawing.
+        const to: QuizKind = hasNext && lastKind !== "predict" ? "predict" : "sketch";
+        logEv({ kind: "quiz-fallback", from: "label", to, why: `${items.length} labelled part(s) in view` });
+        kind = to;
+        ask = to === "predict" ? "Before I go on, a quick prediction: what do you think comes next, and why?" : "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
       }
       // A label quiz's question is always ours: a question written elsewhere may name the hidden answers.
       if (kind === "label") ask = `Quick quiz: name the parts I've numbered, one to ${["", "one", "two", "three", "four"][items.length] ?? items.length}.`;
@@ -1748,8 +1772,12 @@ export default function Lesson() {
         const answer = await awaitTurn(abort.signal);
         if (abort.signal.aborted) return;
         if (answer === null || SKIP_QUIZ.test(answer)) {
+          const line = `No problem: ${items.map((it) => `${["", "one", "two", "three", "four"][it.n] ?? it.n} is ${it.answer}`).join(", ")}.`;
+          const spoken = skipQuiz(kind, ask, answer, beatId, line);
+          await sleep(150);
+          cursorNow(items.map((it, k) => ({ t: 0.6 + k * 1.1, target: it.id, gesture: "circle" as const })));
+          await spoken;
           setQuizMarks(null);
-          logEv({ kind: "quiz-skipped", quiz: kind, beatId });
           return;
         }
         logEv({ kind: "learner", via: inputViaRef.current, role: "quiz answer", beatId, text: answer });
@@ -1770,6 +1798,31 @@ export default function Lesson() {
         await spoken;
         setQuizMarks(null);
         record({ kind, asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString() }, g);
+        return;
+      }
+      if (kind === "predict") {
+        setStatus("speaking");
+        await sayLine(ask);
+        setStatus("waiting");
+        const answer = await awaitTurn(abort.signal);
+        if (abort.signal.aborted) return;
+        const after = beatsAfter(i);
+        if (answer === null || SKIP_QUIZ.test(answer)) {
+          await skipQuiz(kind, ask, answer, beatId, `That's fine, here's the answer: ${firstSentence(after.find((b) => !b.quiz)?.say ?? "")}`);
+          return;
+        }
+        logEv({ kind: "learner", via: inputViaRef.current, role: "quiz answer", beatId, text: answer });
+        setStatus("replying");
+        const g = await post("/api/quiz", { kind: "predict", question: q, ask, answer, after })
+          .then((r) => r.json())
+          .catch((e) => ({ error: String(e) }));
+        if (g.error || typeof g.feedback !== "string") {
+          logEv({ kind: "quiz-error", quiz: kind, error: g.error ?? "no feedback" });
+          return;
+        }
+        setStatus("speaking");
+        await sayLine(g.feedback);
+        record({ kind, asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString(), verdict: g.verdict }, g);
         return;
       }
       // sketch
@@ -1803,7 +1856,10 @@ export default function Lesson() {
       });
       if (abort.signal.aborted) return;
       if (handedIn === "skip") {
-        logEv({ kind: "quiz-skipped", quiz: kind, beatId });
+        // The section's point in one line: its last sentence that isn't a question.
+        const point = sectionRubric(i).flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((t) => !t.trim().endsWith("?")).pop() ?? "";
+        showInk([]);
+        await skipQuiz(kind, ask, said || null, beatId, `No problem. In short: ${point}`);
         return;
       }
       const strokes = inkRef.current;
@@ -2355,8 +2411,8 @@ export default function Lesson() {
           },
           (t) => {
             // Recent papers first (the planner waits for their material), then the lesson.
-            // The learner's question as asked (the route adds any recency hint).
-            if (t.research && !lessonStarted) startResearch(heardText);
+            // Their question, made search-shaped (researchQuery: never the raw sentence with its greeting).
+            if (t.research && !lessonStarted) startResearch(researchQuery(heardText, t.research.topic, t.lesson?.question), heardText);
             if (t.lesson && !lessonStarted) startLesson(t.lesson);
           },
         );
@@ -2439,7 +2495,9 @@ export default function Lesson() {
         if (trailer.research && lessonStarted && i >= 0) {
           setResearching(true);
           setStatus("replying");
-          const f = await runResearch(heardText, "question");
+          const query = researchQuery(heardText, trailer.research.topic);
+          logEv({ kind: "research-started", role: "question", question: query, heard: heardText });
+          const f = await runResearch(query, "question");
           setResearching(false);
           if (abort.signal.aborted) return -1;
           if (f.status !== "ready") {
@@ -3262,7 +3320,7 @@ export default function Lesson() {
           )}
           {learnerView && (learnerView.level !== "unknown" || learnerView.prior || learnerView.focus || learnerView.confusions.length > 0) && (
             <p className="beat-meta" data-testid="learner">
-              Learner: {[learnerView.level !== "unknown" && `level ${learnerView.level}`, learnerView.prior && `prior: ${learnerView.prior}`, learnerView.focus && `focus: ${learnerView.focus}`, learnerView.confusions.length > 0 && `${learnerView.confusions.length} confusion(s)`].filter(Boolean).join(" · ")}
+              Learner: {[learnerView.level !== "unknown" && `level ${learnerView.level}`, learnerView.prior && `prior: ${learnerView.prior}`, learnerView.focus && `focus: ${learnerView.focus}`, learnerView.confusions.length > 0 && `${learnerView.confusions.length} confusion(s)`, learnerView.quizzes?.length && `quizzes: ${learnerView.quizzes.map((z) => `${z.kind} ${z.skipped ? "skipped" : z.verdict ?? `${Math.round(z.score * 100)}%`}`).join(", ")}`].filter(Boolean).join(" · ")}
             </p>
           )}
           {pausedAt && <p className="beat-meta" data-testid="paused-at">Paused at {pausedAt.beatId}, word {pausedAt.wordIndex + 1}.</p>}

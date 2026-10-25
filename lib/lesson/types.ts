@@ -38,7 +38,7 @@ export interface PlannedBeat {
   points: { id: string; word: string }[];
   /** On a section's first beat: the section's one-line goal. */
   section?: string;
-  /** A quiz beat (a talk beat whose "say" is the quiz question): label the numbered parts, or draw something. */
+  /** A quiz beat (a talk beat whose "say" is the quiz question): label the numbered parts, guess what comes next, or draw something. */
   quiz?: QuizKind;
   /** Taught from research material: the number of the paper this beat teaches from (its [n] in the material). */
   cite?: number;
@@ -51,7 +51,7 @@ export interface PlannedBeat {
  * (no persistence yet) and passed to the planner and the reply route: the
  * intake answer, their check-in replies and what they got stuck on.
  */
-export type QuizKind = "label" | "sketch";
+export type QuizKind = "label" | "predict" | "sketch";
 
 /** One quiz, graded: kept on the learner record (the page's), and summed up in `confusions` for Convex. */
 export interface QuizResult {
@@ -64,6 +64,10 @@ export interface QuizResult {
   missing: string[];
   beatId: string | null;
   at: string;
+  /** Predict: how the guess compared with what the next section says. */
+  verdict?: "right" | "partly" | "wrong";
+  /** They skipped it ("skip", "I don't know"): told the answer in one line, scored 0. */
+  skipped?: boolean;
 }
 
 export interface LearnerRecord {

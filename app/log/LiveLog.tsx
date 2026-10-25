@@ -32,6 +32,7 @@ interface LearnerView {
   confusions: string[];
   replies?: string[];
   lessonIds?: string[];
+  quizzes?: { kind: string; asked: string; answered: string; score: number; verdict?: string; skipped?: boolean }[];
 }
 
 interface LessonDetail {
@@ -297,6 +298,20 @@ function Learner({ l }: { l: LearnerView }) {
       <dd>{l.focus || "–"}</dd>
       <dt>stuck on</dt>
       <dd>{l.confusions.length ? <ol>{l.confusions.map((c, i) => <li key={i}>{c}</li>)}</ol> : "–"}</dd>
+      {!!l.quizzes?.length && (
+        <>
+          <dt>quizzes</dt>
+          <dd>
+            <ol>
+              {l.quizzes.map((z, i) => (
+                <li key={i}>
+                  {z.kind}: {z.skipped ? "skipped" : z.verdict ?? `${Math.round(z.score * 100)}%`} · “{z.asked}”{z.answered ? ` → “${z.answered}”` : ""}
+                </li>
+              ))}
+            </ol>
+          </dd>
+        </>
+      )}
       {l.replies && (
         <>
           <dt>replies</dt>
@@ -385,6 +400,14 @@ function describe(e: Row): string {
       return `at beat ${e.at}: ${Array.isArray(e.beats) ? e.beats.map((b: Row) => b.beatId).join(", ") : ""}`;
     case "plan-title":
       return q(e.title);
+    case "quiz-start":
+      return `${e.quiz} on ${e.beatId ?? "–"}: ${q(e.ask)}`;
+    case "quiz-result":
+      return `${e.quiz}: ${e.verdict ?? `${Math.round(Number(e.score) * 100)}%`}${e.skipped ? " (skipped)" : ""} · ${q(e.answered)} → ${q(e.feedback)}${e.model ? ` · ${String(e.model).replace(/^claude-/, "")}` : ""}${typeof e.ms === "number" ? ` ${e.ms} ms` : ""}`;
+    case "quiz-skipped":
+      return `${e.quiz} on ${e.beatId ?? "–"}${e.said ? `: ${q(e.said)}` : ""}`;
+    case "quiz-fallback":
+      return `${e.from} → ${e.to}: ${e.why ?? ""}`;
     case "end":
       return String(e.end ?? "");
     default: {

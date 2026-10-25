@@ -10,6 +10,7 @@
  * the first sentence. "ok / got it / keep going" never reaches a model.
  */
 import "server-only";
+import { researchQuery } from "@/lib/research/query";
 import Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
 import { cleanId } from "./planner";
@@ -217,7 +218,7 @@ The actions (several per turn, applied in order):
 - "research" {"query", "days"}: look up something recent on the web. Use it only for recency and specifics past what you know, never for things you already know.
   Before a lesson: when the question is time-sensitive (it says new, latest, recent, this week, month or year, gives a version number or a year from 2025 on, or names something newer than what you know), use it together with "start_lesson" and the intake "ask"; the lookup runs while they answer.
   During a lesson: when they ask something you cannot answer from what you know (a recent event, a specific result or number after your knowledge), say ONE covering line ("Let me check the latest on that."); the answer comes from what is found.
-  "query": the question to look up, short and specific ("what's new in CRISPR this month", "what changed in Python 3.14"); "days": how far back (7 this week, 30 this month, default 14, 90 at most).
+  "query": a short web search for it: the topic and what is wanted, in a few words, never the learner's sentence as said (no greeting, no "I'm learning", no "could you check": "Hey Chalky, I'm doing research on VLAs, could you check what's new" -> "what's new in vision language action models"; "what's new in CRISPR this month", "what changed in Python 3.14"); "days": how far back (7 this week, 30 this month, default 14, 90 at most).
 - "resume" {"how"}: how the lesson goes on after your reply: "continue" (go on from where it was), "replay_beat" (say the beat you were cut off in again), or "wait" (wait for them). If you leave it out: "wait" after an "ask", else "continue".
 
 Choosing:
@@ -521,12 +522,12 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   // A time-sensitive first question always looks things up, even when the model forgot to; anything else never does.
   if (!input.beats.length && lesson && !research && TIME_SENSITIVE.test(input.utterance)) {
     const days = /\bthis week\b/i.test(input.utterance) ? 7 : /\bthis month\b/i.test(input.utterance) ? 30 : /\bthis year\b/i.test(input.utterance) ? 90 : 14;
-    research = { topic: input.utterance.trim().slice(0, 200), days };
+    research = { topic: researchQuery(input.utterance, null, lesson.question), days };
   }
   // Mid-lesson, a question about something recent that the model handed to the board helper (which knows only
   // the lesson) is a lookup: "who won the 2026 Nobel?" is research, not delegate. Questions about the board stay delegated.
   if (input.beats.length && !research && delegate && RECENT.test(input.utterance) && !BOARD_WORDS.test(input.utterance)) {
-    research = { topic: input.utterance.trim().slice(0, 200), days: /\bthis week\b/i.test(input.utterance) ? 7 : 30 };
+    research = { topic: researchQuery(input.utterance), days: /\bthis week\b/i.test(input.utterance) ? 7 : 30 };
     delegate = null;
   }
   // A lookup takes a while: a lesson started on one always asks the intake question meanwhile.
