@@ -61,6 +61,8 @@ const FRAME_TICKS = 4;
 const DOC_END = 20 * TPS;
 /** A breath between beats: the judges asked for a slower lesson. */
 const GAP_SECONDS = 0.65;
+/** A section's opening question with nothing heard this long: "no worries, let me just show you", and on. */
+const QUESTION_WAIT_MS = 40_000;
 /** Speakers ring on for a moment after the audio ends; keep the mic closed a little longer. */
 const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
@@ -1729,7 +1731,7 @@ export default function Lesson() {
     const DONE = /\b(done|finished|that'?s it|there you go|ok(ay)? done)\b/i;
     const sayLine = (text: string) => playBeat(line(text), abort.signal, null).catch(() => {});
     /** A request to hear the question again, not an answer: "repeat that", "what was the question", "what do you mean". */
-    const REPEAT_ASK = /\b(repeat (that|it|the question)|say (that|it) again|what was the question|(missed|didn'?t (hear|catch)) (the|that|your) question|come again|pardon|sorry,? what|what do you mean)\b|^\W*repeat\W*$/i;
+    const REPEAT_ASK = /\b(repeat (that|it|the question)|say (that|it) again|what was the question|(missed|didn'?t (hear|catch)) (the|that|your) question|come again|pardon|sorry,? what|what do you mean|(can|could) you (clarify|rephrase|explain the question)|clarify (that|the question)|what are you asking)\b|^\W*(repeat|clarify)\W*$/i;
     /**
      * The learner's answer to a quiz. Asking for the question again (or "what do you mean") is not an answer:
      * Chalky asks it again and keeps waiting, with no grade and nothing on the record.
@@ -1838,12 +1840,28 @@ export default function Lesson() {
       const done = (how: "right" | "partly" | "wrong" | "skipped", g: { score?: number; right?: string[]; missing?: string[]; ms?: number; model?: string; call?: unknown; feedback?: string } = {}) =>
         record({ kind: "predict", asked: ask, answered: tries.map((t) => t.answer).join(" / "), score: g.score ?? 0, right: g.right ?? [], missing: g.missing ?? [], beatId, at: new Date().toISOString(), ...(how === "skipped" ? { skipped: true } : { verdict: how }), socratic: true, tries }, g);
       let asking = ask;
-      for (let k = 0; k < 3; k++) {
+      // Two tries at most: the question, and one reframe after a wrong answer.
+      for (let k = 0; k < 2; k++) {
         setStatus("speaking");
         await sayLine(asking);
         setStatus("waiting");
-        const answer = await awaitAnswer("predict", asking, beatId);
+        // Nothing heard for 40 s (a bad connection, a mic that dropped): don't keep them waiting, show it.
+        let quiet = false;
+        const askedAt = performance.now();
+        const clock = setInterval(() => {
+          if (performance.now() - askedAt < QUESTION_WAIT_MS || partialRef.current.trim()) return;
+          quiet = true;
+          turnRef.current?.(null);
+        }, 1000);
+        const answer = await awaitAnswer("predict", asking, beatId).finally(() => clearInterval(clock));
         if (abort.signal.aborted) return;
+        if (quiet) {
+          logEv({ kind: "socratic-quiet", beatId, try: k + 1, waitedMs: QUESTION_WAIT_MS });
+          setStatus("speaking");
+          await sayLine("No worries, let me just show you.");
+          if (tries.length) done("skipped");
+          return;
+        }
         if (answer !== null && STOP_ASKING.test(answer)) {
           socraticOff = true;
           logEv({ kind: "socratic-off", beatId, said: answer });
@@ -1868,22 +1886,23 @@ export default function Lesson() {
           return;
         }
         tries.push({ ask: asking, answer, verdict: g.verdict });
-        if (g.verdict === "right") {
-          // They have it: one sentence back, and the section's beats that would repeat what they said go.
+        if (g.verdict === "right" || g.verdict === "partly") {
+          // Right or partly right: one sentence back and the section plays; if they have it, the section's
+          // beats that would repeat what they said go.
           setStatus("speaking");
           const spoken = sayFeedback("predict", beatId, g.feedback);
           const section = sectionBeats(i);
-          const drop = ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw");
+          const drop = g.verdict !== "right" ? [] : ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw");
           for (const b of drop) list.splice(list.indexOf(b), 1);
           if (drop.length) setBeats([...list]);
           await spoken;
           logEv({ kind: "socratic-adjust", beatId, verdict: g.verdict, try: k + 1, covered: g.covered ?? [], cut: drop.map((b) => b.beat.id), how: drop.length ? "cut what they already said" : "as planned" });
-          done("right", g);
+          done(g.verdict, g);
           return;
         }
-        // Missed (wrong or partly): no explaining yet. A reaction, then the question again from another side
-        // (twice); after the third miss, one line naming the gap, and the section teaches it.
-        const mode = k < 2 ? "reframe" : "gap";
+        // Wrong: no explaining yet. The question again from another side, once; after the second miss, one
+        // line naming the gap, and the section teaches it.
+        const mode = k < 1 ? "reframe" : "gap";
         // The reframe opens with the one reaction to their idea, so the grader's line isn't said on a miss.
         const f = await post("/api/quiz", { kind: mode, question: q, ask, asked: tries.map((t) => t.ask), after, answers: tries.map((t) => t.answer), missing: g.missing ?? [] })
           .then((r) => r.json())

@@ -115,6 +115,10 @@ interface PlanState {
   socratic?: boolean;
   /** The current section has had its opening question. */
   opened?: boolean;
+  /** The section before this one had an opener (past four sections, openers come every other section). */
+  openedPrev?: boolean;
+  /** The last beat checked is to be left out (a quiz Socratic mode doesn't allow, with nothing else to say). */
+  drop?: boolean;
   /** The beat's place in its section (0: the section's first beat). */
   inSection?: number;
 }
@@ -123,7 +127,7 @@ interface PlanState {
  * Ask me first (Socratic, the learner's preference): appended to the planner's rules. The opener is a predict
  * quiz the page already knows how to ask and grade (the rubric: the rest of its section).
  */
-const SOCRATIC_RULES = `Ask me first (the learner's preference): each section lets them think before you explain it. The section's first beat (in the first section, its second beat, right after the first drawing) is a "talk" beat with "quiz": "predict", carrying the section's "section" title as usual: its "say" is one short setup line, then one question of the form "what do you think happens here, and why?", without giving the answer away. The rest of the section then teaches the answer, as its own beats. One such question per section, never two in a row; no other "predict" quiz (the label and sketch quizzes still end sections).`;
+const SOCRATIC_RULES = `Ask me first (the learner's preference; this replaces the quiz cadence above): the first section just teaches, with drawings. From the second section on, a section may open by letting them think: its first beat is a "talk" beat with "quiz": "predict", carrying the section's "section" title as usual: its "say" is one short setup line, then one question of the form "what do you think happens here, and why?", without giving the answer away. The rest of the section then teaches the answer, as its own beats. In a lesson of more than four sections, open every other section this way. A section with an opening question has no other quiz. Besides those questions, at most two quizzes in the whole lesson ("label" or "sketch", never "predict"), each in a section without an opening question. Most beats teach and draw; the lesson keeps moving.`;
 
 const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 
@@ -153,6 +157,8 @@ const QUIZ_SAY: Record<QuizKind, string> = {
  */
 function dueQuiz(st: PlanState, hasNext: boolean): Record<string, unknown> | null {
   if ((st.sections ?? 0) < 2 || st.quizzed) return null;
+  // Socratic: a section that opened with a question has no quiz, and two quizzes is the lesson's most.
+  if (st.socratic && (st.opened || (st.kinds?.length ?? 0) >= 2)) return null;
   // Not after the closing recap: the lesson is over.
   if (!hasNext && /\b(recap|summary|wrap|review)\b/i.test(st.title ?? "")) return null;
   if ((st.sections ?? 0) > 4 && (st.dry ?? 0) < 1) return null;
@@ -222,16 +228,29 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   if (section || index === 0) {
     st.sections = (st.sections ?? 0) + 1;
     st.quizzed = false;
+    st.openedPrev = !!st.opened;
     st.opened = false;
     st.title = section ?? "";
     st.inSection = 0;
   } else st.inSection = (st.inSection ?? 0) + 1;
   const asked = QUIZ_KINDS.includes(b.quiz as QuizKind) ? (b.quiz as QuizKind) : undefined;
-  // Socratic: a predict question in a section's first two beats opens it (never the lesson's very first beat).
-  const opener = !!st.socratic && asked === "predict" && !st.opened && index > 0 && (st.inSection ?? 0) <= 1;
+  // Socratic: a predict question in a section's first two beats opens it, from the second section on (the
+  // first teaches), and past four sections every other section.
+  const opener = !!st.socratic && asked === "predict" && !st.opened && (st.sections ?? 0) >= 2 && (st.inSection ?? 0) <= 1 && !((st.sections ?? 0) > 4 && st.openedPrev);
   if (opener) st.opened = true;
   // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
-  const quiz = opener ? asked : asked && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
+  // Socratic: none in a section that opened with a question, none of kind predict, two in the lesson at most.
+  const allowed = !st.socratic || (asked !== "predict" && !st.opened && (st.kinds?.length ?? 0) < 2);
+  const quiz = opener ? asked : asked && allowed && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
+  // A quiz Socratic mode doesn't allow keeps its teaching words, not its question; with nothing left it goes.
+  let sayOut = say;
+  let checkOut = check;
+  if (asked && !quiz && st.socratic) {
+    sayOut = say.split(/(?<=[.!?])\s+/).filter((t) => !t.trim().endsWith("?")).join(" ").replace(/^(quick quiz|your turn|before i go on)[:,]?\s*/i, "").trim();
+    checkOut = b.check === true && !!sayOut;
+    st.drop = !sayOut;
+    console.info(`[plan] socratic: ${asked} quiz at beat ${index + 1} not allowed here: ${sayOut ? "kept as a talk beat" : "left out"}`);
+  }
   if (quiz && !opener) {
     if (quiz !== asked) console.info(`[plan] quiz ${asked} -> ${quiz} (kinds so far: ${(st.kinds ?? []).join(", ") || "none"})`);
     st.quizzed = true;
@@ -241,7 +260,7 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
   const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
   const cite = citeN >= 1 && citeN <= 9 ? Math.round(citeN) : undefined;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(opener ? { opener } : {}), ...(cite ? { cite } : {}) };
+  return { id: `b${index + 1}`, say: sayOut, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : checkOut, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(opener ? { opener } : {}), ...(cite ? { cite } : {}) };
 }
 
 /**
@@ -309,7 +328,13 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
       }
       endSection(st);
     }
-    yield { type: "beat", beat: checkBeat(obj, beats++, st), tMs: ms() };
+    const beat = checkBeat(obj, beats, st);
+    if (st.drop) {
+      st.drop = false;
+      return;
+    }
+    beats++;
+    yield { type: "beat", beat, tMs: ms() };
   };
 
   // Drain whole lines as they arrive, then whatever is left once the stream ends.
@@ -535,6 +560,10 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       endSection(st);
     }
     const checked = checkBeat(obj, n + 1, st);
+    if (st.drop) {
+      st.drop = false;
+      return;
+    }
     n++;
     const beat = guard.guard({ ...checked, id: `${r.prefix}-${n}` }, st);
     yield { type: "beat", beat, tMs: ms() };
