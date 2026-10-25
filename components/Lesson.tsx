@@ -223,6 +223,16 @@ function freeRegion(boxes: Record<string, GridBox>, view: Region = FULL_VIEW): R
 
 /** The whole board, on the 100x100 grid: a scene's view before any zooming out. */
 const FULL_VIEW: Region = { x: 0, y: 0, w: 100, h: 100 };
+/**
+ * One board for the whole lesson: scenes are places on it, not wipes. Scene k's 100x100 grid starts
+ * SCENE_SPAN grid units right of scene k-1's, in one row read left to right; the span is wider than the
+ * furthest zoom-out (MAX_VIEW, 240) so a zoomed-out scene never shows its neighbour. A new scene moves
+ * the camera to fresh space. Each scene is laid out and compiled in its own coordinates (the planner's
+ * regions, the layout pass and fitToRegion never see the offset); only the camera group places it.
+ */
+const SCENE_SPAN = 260;
+const sceneX = (scene: number) => (Math.max(1, scene) - 1) * SCENE_SPAN;
+const sceneView = (scene: number): Region => ({ x: sceneX(scene), y: 0, w: 100, h: 100 });
 /** How far one zoom-out grows the view, and the most it ever shows (2.4x the board). */
 const ZOOM_STEP = 1.4;
 const MAX_VIEW = 240;
@@ -239,26 +249,68 @@ function cameraBetween(a: Region, b: Region, u: number): InkCamera {
   return { cx: p.cx + (q.cx - p.cx) * e, cy: p.cy + (q.cy - p.cy) * e, s: p.s + (q.s - p.s) * e };
 }
 
-/**
- * Compiles a scene. Its drawing lives in world space (the 100x100 grid, and
- * beyond it once the lesson has zoomed out); `camera.view` is the part of the
- * world the board shows. Zooming out from `camera.from` animates over the
- * document's first second, like an infinite canvas making room.
- */
-function compileScene(groups: PresetElement[][], camera: { view: Region; from?: Region } = { view: FULL_VIEW }): { doc: AnimationDocument; report: LayoutReport } | null {
-  if (!groups.some((g) => g.length)) return null;
-  const { view, from } = camera;
-  const stage = { x1: (view.x / 100) * W + 14, y1: (view.y / 100) * H + 14, x2: ((view.x + view.w) / 100) * W - 14, y2: ((view.y + view.h) / 100) * H - 14 };
-  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`, undefined, stage);
-  if (report.dangling.length) console.info(`[board] dangling refs: ${report.dangling.join("; ")}`);
-  const zoomed = view.w !== 100 || view.x !== 0 || view.y !== 0 || (from && (from.w !== view.w || from.x !== view.x || from.y !== view.y));
-  return { doc: zoomed ? withCamera(doc, view, from) : doc, report };
+/** The stage (board pixels, scene-local) labels must stay inside for a world view of `scene`. */
+function localStage(view: Region, scene: number) {
+  const x = view.x - sceneX(scene);
+  return { x1: (x / 100) * W + 14, y1: (view.y / 100) * H + 14, x2: ((x + view.w) / 100) * W - 14, y2: ((view.y + view.h) / 100) * H - 14 };
 }
 
-/** Wraps a board's drawing (not its paper) in a camera group that shows `view`, gliding there from `from`. */
-function withCamera(doc: AnimationDocument, view: Region, from?: Region): AnimationDocument {
-  const comp = doc.compositions[doc.rootCompositionId];
-  const content = comp.rootNodeIds.filter((id) => id !== "paper");
+/**
+ * Compiles a scene into the lesson's one board. The scene is laid out in its own coordinates (the
+ * 100x100 grid, and beyond it once it has zoomed out); `others` are the other scenes already drawn,
+ * finished and still, placed at their own spots. `camera.view` is the part of the world the board
+ * shows; moving from `camera.from` (a zoom-out, or the last scene's place) animates over the
+ * document's first second, like an infinite canvas making room. On a scene change that glide
+ * overlaps the first second of the new scene's drawing, which reads as the hand arriving.
+ */
+function compileScene(
+  groups: PresetElement[][],
+  camera: { view: Region; from?: Region } = { view: FULL_VIEW },
+  scene = 1,
+  others: { scene: number; doc: AnimationDocument }[] = [],
+): { doc: AnimationDocument; report: LayoutReport } | null {
+  if (!groups.some((g) => g.length)) return null;
+  const { view, from } = camera;
+  const { doc, report } = compilePresetBoard(groups, groups.length - 1, `board-${Date.now()}`, undefined, localStage(view, scene));
+  if (report.dangling.length) console.info(`[board] dangling refs: ${report.dangling.join("; ")}`);
+  return { doc: composeWorld([...others, { scene, doc }], view, from), report };
+}
+
+/** A scene drawn and done: every beat finished, nothing animating (another scene's place on the board). */
+function compileStill(groups: PresetElement[][], scene: number): AnimationDocument {
+  return compilePresetBoard(groups, -1, `still-${scene}`, undefined, localStage(sceneView(scene), scene)).doc;
+}
+
+/** Every string under an "id", "inputId" or "children" key, prefixed: one scene's nodes, renamed so scenes never collide. */
+function prefixIds<T>(v: T, p: string): T {
+  if (Array.isArray(v)) return v.map((x) => prefixIds(x, p)) as T;
+  if (!v || typeof v !== "object") return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    if ((k === "id" || k === "inputId") && typeof x === "string") out[k] = p + x;
+    else if (k === "children" && Array.isArray(x)) out[k] = x.map((c) => (typeof c === "string" ? p + c : prefixIds(c, p)));
+    else out[k] = prefixIds(x, p);
+  }
+  return out as T;
+}
+
+/**
+ * The lesson's one board: each scene's drawing (not its paper) in a group at its place, all of them in a
+ * camera group that shows `view`, gliding there from `from`. The paper is the newest scene's.
+ */
+function composeWorld(scenes: { scene: number; doc: AnimationDocument }[], view: Region, from?: Region): AnimationDocument {
+  const nodes: Record<string, SceneNode> = {};
+  const places: string[] = [];
+  const latest = scenes[scenes.length - 1].doc;
+  for (const { scene, doc } of scenes) {
+    const comp = doc.compositions[doc.rootCompositionId];
+    const pre = `s${scene}-`;
+    for (const [id, node] of Object.entries(comp.nodes)) if (id !== "paper") nodes[pre + id] = prefixIds(node, pre);
+    const place = `scene-${scene}`;
+    nodes[place] = { ...base(place, { outTick: END, x: (sceneX(scene) / 100) * W, y: 0 }), type: "group", children: comp.rootNodeIds.filter((id) => id !== "paper").map((id) => pre + id) } as SceneNode;
+    places.push(place);
+  }
+  const paper = latest.compositions[latest.rootCompositionId].nodes.paper;
   // The view's centre goes to the board's centre, scaled so the view fills the board.
   const pose = (v: Region) => ({ anchor: { x: ((v.x + v.w / 2) / 100) * W, y: ((v.y + v.h / 2) / 100) * H, z: 0 }, scale: { x: 100 / v.w, y: 100 / v.h, z: 1 } });
   const to = pose(view);
@@ -274,9 +326,9 @@ function withCamera(doc: AnimationDocument, view: Region, from?: Region): Animat
       scale: from ? keyed("camera.scale", [[0, start.scale, glide], [t1, to.scale]]) : constant(to.scale),
     }),
     type: "group",
-    children: content,
+    children: places,
   };
-  return finishDocument(`${doc.id}-cam`, doc.name, { ...comp.nodes, camera }, ["paper", "camera"]);
+  return finishDocument(`${latest.id}-world`, latest.name, { ...(paper ? { paper } : {}), ...nodes, camera }, paper ? ["paper", "camera"] : ["camera"]);
 }
 
 /** A board box (world grid) as it appears on screen through `view`. */
@@ -285,6 +337,8 @@ function onScreen(b: GridBox, view: Region): GridBox {
 }
 const screenBoxes = (boxes: Record<string, GridBox>, view: Region) =>
   view === FULL_VIEW ? boxes : Object.fromEntries(Object.entries(boxes).map(([id, b]) => [id, onScreen(b, view)]));
+/** A scene-local box as it sits on the one board. */
+const worldBox = (b: GridBox, scene: number): GridBox => (scene > 1 ? { ...b, x: b.x + sceneX(scene) } : b);
 
 /**
  * The view zoomed out one step, growing to the right and down from where the
@@ -354,16 +408,19 @@ interface BoardView {
   /** Element boxes in world space (the grid the drawing is laid out on). */
   boxes: Record<string, GridBox>;
   list: { id: string; kind: string; label: string }[];
-  /** The part of the world the board shows; FULL_VIEW until the scene zooms out. */
+  /** The part of the world the board shows: the scene's place, until it zooms out. */
   view: Region;
+  /** The scene these elements belong to. */
+  scene: number;
 }
-const EMPTY_BOARD: BoardView = { boxes: {}, list: [], view: FULL_VIEW };
+const EMPTY_BOARD: BoardView = { boxes: {}, list: [], view: FULL_VIEW, scene: 1 };
 
 /** Turns the compiler's report (stage pixels) into grid boxes, and names every element once for /api/converse. */
-function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[], view: Region = FULL_VIEW): BoardView {
+function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: string; what: string }[], view: Region = FULL_VIEW, scene = 1): BoardView {
   const boxes: Record<string, GridBox> = {};
   const list: BoardView["list"] = [];
-  const grid = (b: { x1: number; y1: number; x2: number; y2: number }): GridBox => ({ x: (b.x1 / W) * 100, y: (b.y1 / H) * 100, w: ((b.x2 - b.x1) / W) * 100, h: ((b.y2 - b.y1) / H) * 100 });
+  // Boxes on the one board: the report is in the scene's own pixels.
+  const grid = (b: { x1: number; y1: number; x2: number; y2: number }): GridBox => worldBox({ x: (b.x1 / W) * 100, y: (b.y1 / H) * 100, w: ((b.x2 - b.x1) / W) * 100, h: ((b.y2 - b.y1) / H) * 100 }, scene);
   const byId = new Map(elements.map((e) => [e.id, e]));
   const what = new Map(adds.map((a) => [a.id, a.what]));
   // Block parts are registered twice ("cell.nucleus" and "cell-nucleus"); list the dotted one.
@@ -385,7 +442,7 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
     boxes[t.id] = grid(t.box);
     list.push({ id: t.id, kind: "text", label: byId.get(t.id)?.text || t.id });
   }
-  return { boxes, list, view };
+  return { boxes, list, view, scene };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -1188,7 +1245,33 @@ export default function Lesson() {
     let sketchCount = 0;
     /** Each scene's view of the board: the whole board, until answers needed room and it zoomed out. */
     const views = new Map<number, Region>();
-    const viewOf = (scene: number) => views.get(scene) ?? FULL_VIEW;
+    const viewOf = (scene: number) => views.get(scene) ?? sceneView(scene);
+    /** The scene the board last showed: a beat in another scene glides the camera over from there. */
+    let shownScene = 0;
+    /** Other scenes, finished and still, cached until one gains a drawing (a sketch). */
+    const stills = new Map<number, { key: string; doc: AnimationDocument }>();
+    /** Every scene drawn so far before list position `upto`, except `scene`, as still documents for the board. */
+    const otherScenes = (scene: number, upto: number) => {
+      const out: { scene: number; doc: AnimationDocument }[] = [];
+      const done = list.slice(0, upto);
+      for (const sc of [...new Set(done.map((b) => b.beat.scene))].sort((a, b) => a - b)) {
+        if (sc === scene) continue;
+        const groups = done.filter((b) => b.beat.scene === sc).flatMap((b) => [...(b.beat.mode !== "talk" ? [b.elements ?? []] : []), ...(b.sketches?.length ? [b.sketches] : [])]).filter((g) => g.length);
+        if (!groups.length) continue;
+        const key = `${groups.length}:${groups.reduce((n, g) => n + g.length, 0)}`;
+        let c = stills.get(sc);
+        if (!c || c.key !== key) {
+          try {
+            c = { key, doc: compileStill(groups, sc) };
+          } catch {
+            continue;
+          }
+          stills.set(sc, c);
+        }
+        out.push({ scene: sc, doc: c.doc });
+      }
+      return out;
+    };
     const history: Exchange[] = [];
     let amendCount = 0;
     /** A detour planned (and drawn) in the background after a brief answer, in case the learner is still lost. */
@@ -1329,7 +1412,7 @@ export default function Lesson() {
        */
       let sketchStart = -1;
       let sketchSeeking = false;
-      let zoomFrom: Region = FULL_VIEW, zoomTo: Region = FULL_VIEW;
+      let zoomFrom: Region = viewOf(list[i]?.beat.scene ?? 1), zoomTo: Region = zoomFrom;
       let sketchShown: Promise<void> = Promise.resolve();
       let replyLive = true;
       const startSketch = (t: ConverseTrailer) => {
@@ -1358,7 +1441,7 @@ export default function Lesson() {
         const say = sentences.map((x) => x.text).join(" ");
         // Everything stays inside the region: a line out to the rest of the board would cut across what is drawn there.
         const visual = `${ask.visual} Keep every shape, label and arrow inside your region; no arrows or connectors out to the rest of the board.`;
-        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual, mode: "draw", check: false, scene, region, adds: ask.adds, points: [] };
+        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual, mode: "draw", check: false, scene, region: { ...region, x: region.x - sceneX(scene) }, adds: ask.adds, points: [] };
         const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
         const t0 = performance.now();
         sketchShown = post("/api/draw", { question: q, beat, earlier }, abort.signal)
@@ -1374,14 +1457,14 @@ export default function Lesson() {
             owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
             views.set(scene, view);
             if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
-            const compiled = compileScene([...base, els], { view, from: before });
+            const compiled = compileScene([...base, els], { view, from: before }, scene, otherScenes(scene, i + 1));
             if (!compiled) return;
             // The ink stays where it was until the zoom starts, then moves with the board.
             zoomFrom = before;
             zoomTo = view;
             zoomingRef.current = view !== before;
             cameraRef.current = cameraFor(before);
-            showBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene), view));
+            showBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene), view, scene));
             await showDocument(compiled.doc);
             const a = audio as StreamPlayer | null;
             if (a && !a.drained) sketchStart = a.position();
@@ -1889,9 +1972,13 @@ export default function Lesson() {
                 let groups = sceneGroups(list, bi, currentElements);
                 const scene = list[bi].beat.scene;
                 const view = viewOf(scene);
+                // A new scene: the camera glides from where the board was to this scene's place.
+                const from = shownScene && shownScene !== scene ? viewOf(shownScene) : undefined;
+                const tc = performance.now();
+                const others = otherScenes(scene, bi);
                 let compiled: ReturnType<typeof compileScene> = null;
                 try {
-                  compiled = compileScene(groups, { view });
+                  compiled = compileScene(groups, { view, from }, scene, others);
                 } catch (e) {
                   // One bad drawing (a NaN size, say) must not end the lesson: keep the board without it.
                   logEv({ kind: "board-error", beatId: list[bi].beat.id, error: String((e as Error).message ?? e).slice(0, 200) });
@@ -1906,13 +1993,17 @@ export default function Lesson() {
                     }
                   });
                   try {
-                    compiled = compileScene(groups, { view });
+                    compiled = compileScene(groups, { view, from }, scene, others);
                   } catch {
                     compiled = null;
                   }
                 }
                 if (!compiled) return null;
-                showBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene), view));
+                const compileMs = Math.round(performance.now() - tc);
+                console.info(`[board] ${list[bi].beat.id}: scene ${scene}${from ? ` (camera from scene ${shownScene})` : ""} ${groups.flat().length} elements, ${others.length} other scene(s) on the board, compiled in ${compileMs} ms`);
+                logEv({ kind: "board-compiled", beatId: list[bi].beat.id, scene, otherScenes: others.map((o) => o.scene), ms: compileMs, ...(from ? { cameraFrom: shownScene } : {}) });
+                shownScene = scene;
+                showBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene), view, scene));
                 return compiled.doc;
               };
         const beatAbort = new AbortController();
@@ -2226,7 +2317,7 @@ export default function Lesson() {
 
   return (
     <div className="board-wrap">
-      <div className="board" data-status={status} data-mic={voice.mode}>
+      <div className="board" data-status={status} data-mic={voice.mode} data-scene={board.scene} data-view={`${Math.round(board.view.x)},${Math.round(board.view.y)},${Math.round(board.view.w)}`}>
         <header className="topic">
           <h1 data-testid="title">{title}</h1>
           <form
