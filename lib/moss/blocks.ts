@@ -146,32 +146,27 @@ export function namedBlocks(beat: Pick<PlannedBeat, "adds">): Block[] {
 
 type BeatBlocks = { blocks: Block[]; retrieval: Retrieval; prefetched?: boolean };
 
-/** Picks started when a beat was planned, by mode and query (the same beat comes back to /api/draw). */
-const gp = globalThis as typeof globalThis & { __chalkyBlockPicks?: Map<string, Promise<BeatBlocks>>; __chalkyBlockStats?: Record<string, number> };
+/**
+ * Moss rankings started when a beat was planned. Keyed by the beat's id and spoken line: the layout
+ * pass (/api/layout) rewrites a later beat's adds before it is drawn, but not those, so the drawn
+ * beat still finds its ranking; its block list is then built from the beat as drawn.
+ */
+const gp = globalThis as typeof globalThis & { __chalkyBlockPicks?: Map<string, Promise<Retrieval>>; __chalkyBlockStats?: Record<string, number> };
 const picks = (gp.__chalkyBlockPicks ??= new Map());
 const stats = (gp.__chalkyBlockStats ??= { beats: 0, moss: 0, prefetched: 0, keyword: 0 });
-const pickKey = (beat: PlannedBeat) => `${beat.mode}|${beatQuery(beat)}`;
+const pickKey = (beat: PlannedBeat) => `${beat.id}|${beat.say}`;
 
-async function pick(beat: PlannedBeat, budgetMs: number, waitForLoad: boolean): Promise<BeatBlocks> {
-  if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
-  const query = beatQuery(beat);
-  const state = waitForLoad && retrievalMode() === "moss" ? mossState() : null;
-  // Off the critical path, a beat planned while the index loads can wait for it (within the budget).
-  if (state && !state.loaded) await Promise.race([state.ready, new Promise((r) => setTimeout(r, budgetMs))]);
-  const retrieval = await relevantBlocks(query, BEAT_K, { budgetMs });
-  if (!retrieval.hits) return { blocks: [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])], retrieval };
-  // Plus the keyword match's top few: an embedding can rank a literal "water molecules" below the
-  // plant it is in (scripts/test-moss-blocks.ts), and a keyword match never does.
-  return { blocks: [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])], retrieval };
-}
-
-/** Starts a beat's block pick as soon as it is planned (/api/plan, /api/amend), so its draw finds it done. */
+/** Starts a beat's Moss ranking as soon as it is planned (/api/plan, /api/amend), so its draw finds it done. */
 export function prefetchBlocks(beat: PlannedBeat): void {
   if (beat.mode === "point" || retrievalMode() !== "moss") return;
   const key = pickKey(beat);
   if (picks.has(key)) return;
   if (picks.size >= 400) picks.delete(picks.keys().next().value!);
-  picks.set(key, pick(beat, PREFETCH_BUDGET_MS, true).then((r) => ({ ...r, prefetched: true })));
+  const query = beatQuery(beat);
+  const state = mossState();
+  // Off the critical path, a beat planned while the index loads can wait for it (within the budget).
+  const loaded = state && !state.loaded ? Promise.race([state.ready, new Promise((r) => setTimeout(r, PREFETCH_BUDGET_MS))]) : Promise.resolve();
+  picks.set(key, loaded.then(() => relevantBlocks(query, BEAT_K, { budgetMs: PREFETCH_BUDGET_MS })));
 }
 
 /**
@@ -183,21 +178,28 @@ export function prefetchBlocks(beat: PlannedBeat): void {
 export async function blocksForBeat(beat: PlannedBeat): Promise<BeatBlocks> {
   if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
   const t0 = performance.now();
+  const query = beatQuery(beat);
   const early = picks.get(pickKey(beat));
   const late = new Promise<null>((r) => setTimeout(() => r(null), QUERY_BUDGET_MS));
-  const got = (early && (await Promise.race([early, late]))) || (early ? null : await pick(beat, QUERY_BUDGET_MS, false));
-  const result: BeatBlocks = got ?? { blocks: [...new Set([...namedBlocks(beat), ...keywordBlocks(beatQuery(beat), BEAT_K)])], retrieval: { status: "error", hits: null, ms: QUERY_BUDGET_MS, error: "prefetch still running" } };
+  let retrieval: Retrieval = early ? ((await Promise.race([early, late])) ?? { status: "error", hits: null, ms: QUERY_BUDGET_MS, error: "prefetch still running" }) : await relevantBlocks(query, BEAT_K);
+  const prefetched = Boolean(early && retrieval.hits);
+  // A prefetch that ran while the index was still loading: the index may be ready now.
+  if (early && retrieval.status === "loading") retrieval = await relevantBlocks(query, BEAT_K);
+  const blocks = retrieval.hits
+    ? // Plus the keyword match's top few: an embedding can rank a literal "water molecules" below the
+      // plant it is in (scripts/test-moss-blocks.ts), and a keyword match never does.
+      [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])]
+    : [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])];
   const waited = Math.round(performance.now() - t0);
-  const r = result.retrieval;
   stats.beats++;
-  if (r.hits) stats.moss++;
+  if (retrieval.hits) stats.moss++;
   else stats.keyword++;
-  if (result.prefetched) stats.prefetched++;
+  if (prefetched) stats.prefetched++;
   const rate = `moss ${stats.moss}/${stats.beats} beats, ${stats.prefetched} prefetched, budget ${QUERY_BUDGET_MS} ms`;
-  if (r.hits) console.log(`[moss] ${beat.id}: ${result.prefetched ? `prefetched (query ${r.ms} ms), waited ${waited} ms` : `${r.ms} ms`} -> ${result.blocks.map((b) => b.id).join(", ")} (${r.hits.map((h) => `${h.id} ${h.score}`).join(", ")}) [${rate}]`);
+  if (retrieval.hits) console.log(`[moss] ${beat.id}: ${prefetched ? `prefetched (query ${retrieval.ms} ms), waited ${waited} ms` : `${retrieval.ms} ms`} -> ${blocks.map((b) => b.id).join(", ")} (${retrieval.hits.map((h) => `${h.id} ${h.score}`).join(", ")}) [${rate}]`);
   else {
-    if (r.status !== "off" && r.status !== "no-key") console.warn(`[moss] ${beat.id}: ${r.status}${r.error ? ` (${r.error})` : ""}; keyword match [${rate}]`);
-    console.log(`[blocks] ${beat.id}: keywords -> ${result.blocks.map((b) => b.id).join(", ") || "none"}`);
+    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; keyword match [${rate}]`);
+    console.log(`[blocks] ${beat.id}: keywords -> ${blocks.map((b) => b.id).join(", ") || "none"}`);
   }
-  return result;
+  return { blocks, retrieval, prefetched };
 }
