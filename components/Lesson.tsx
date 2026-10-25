@@ -60,6 +60,19 @@ const INTAKE_SILENCE_MS = 4000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
+/**
+ * Voice barge-in (experimental): talk over Chalky to interrupt. Off unless
+ * NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN=1; in development, ?voice=1 or ?voice=0 overrides.
+ * Without headphones the speakers can leak into the mic; Space always works.
+ */
+function voiceBargeInEnabled(): boolean {
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    const v = new URLSearchParams(window.location.search).get("voice");
+    if (v === "1") return true;
+    if (v === "0") return false;
+  }
+  return process.env.NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN === "1";
+}
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
 const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
@@ -383,7 +396,13 @@ export default function Lesson() {
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
+  // Read after mount so the server render and the first client render agree.
+  const [voiceBargeIn, setVoiceBargeIn] = useState(false);
+  useEffect(() => setVoiceBargeIn(voiceBargeInEnabled()), []);
   const voice = useHybridMic({
+    voiceBargeIn,
+    onVoiceBargeIn: (partial) => logRef.current({ kind: "voice-barge", partial, status: statusRef.current }),
+    onVoiceIgnored: (text) => logRef.current({ kind: "voice-ignored", text }),
     // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
     keyterms: SEED_TERMS,
     speaking: MUTED.has(status) || speakingAudio,
@@ -1720,6 +1739,11 @@ export default function Lesson() {
             )}
             {busy && <button type="button" onClick={stop} data-testid="stop">Stop</button>}
           </form>
+          {voiceBargeIn && (
+            <span className="voice-badge" data-testid="voice-barge-badge" title="Talk over Chalky to interrupt. Use headphones: speakers can leak into the mic. Space still pauses.">
+              Voice interrupt on · headphones
+            </span>
+          )}
           <div className="mic" data-testid="status">
             {statusLabel[status]}
             <Orb state={orbState} level={orbLevel} size={34} />

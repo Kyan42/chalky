@@ -126,6 +126,9 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   background: var(--ink); color: var(--on-ink); cursor: pointer; }
 .caption .heard { color: var(--blue); font-style: italic; }
 .topic .orb { margin-left: 0.6em; }
+/* Voice barge-in is on: say so, so the learner knows talking over Chalky interrupts it. */
+.voice-badge { font-size: clamp(9px, 0.85vw, 13px); color: #1f6f5c; background: #e3f4ee; border: 1px solid #b9e2d4;
+  border-radius: 999px; padding: 0.2em 0.7em; margin-right: 0.6em; white-space: nowrap; }
 /* The topic written on the board while the first beat is planned. */
 .chalk-title { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 12%; text-align: center; pointer-events: none;
   font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; font-size: clamp(18px, 3vw, 46px); color: var(--ink);

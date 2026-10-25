@@ -24,7 +24,19 @@ import { InkSession } from "./stt";
 import { cartesiaToken } from "./token";
 import { TurnMerger } from "./turn-merger";
 
-export type MicMode = "off" | "open" | "muted" | "held" | "tail";
+export type MicMode = "off" | "open" | "muted" | "held" | "tail" | "voice";
+
+/** Sounds that aren't words: they never count toward a voice barge-in. */
+const FILLERS = new Set(["um", "umm", "uh", "uhh", "uhm", "er", "erm", "ah", "oh", "mm", "mhm", "hmm", "huh", "uh-huh"]);
+
+/** Real words in a transcript: at least two letters, not a filler. */
+export function realWords(text: string): number {
+  return text
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z'-]/g, ""))
+    .filter((w) => w.length >= 2 && !FILLERS.has(w)).length;
+}
 
 export interface HybridMicOptions {
   /** True while Chalky's voice is playing (plus a short echo tail). */
@@ -54,6 +66,20 @@ export interface HybridMicOptions {
   onError?: (message: string) => void;
   /** Ink-2 key terms for the first connection (at most 100; see lib/voice/keyterms.ts). */
   keyterms?: string[];
+  /**
+   * Voice barge-in (experimental, off by default): the mic keeps streaming
+   * while Chalky speaks, and a turn that starts then counts as a barge-in once
+   * Ink hears two real words in it (fillers don't count). The first such
+   * partial fires onBargeIn (pause now); the turn then ends as usual and comes
+   * back as an utterance via "barge". A turn that starts while Chalky speaks
+   * and never reaches two real words is dropped (onVoiceIgnored): echo, a
+   * cough, an "mm". Space keeps working either way.
+   */
+  voiceBargeIn?: boolean;
+  /** A voice barge-in fired, on this partial transcript. */
+  onVoiceBargeIn?: (partial: string) => void;
+  /** A turn heard while Chalky spoke was dropped: it never reached two real words. */
+  onVoiceIgnored?: (text: string) => void;
 }
 
 export function useHybridMic(options: HybridMicOptions) {
@@ -83,18 +109,25 @@ export function useHybridMic(options: HybridMicOptions) {
   const held = useRef<{ since: number; words: boolean } | null>(null);
   const tail = useRef<{ timer: ReturnType<typeof setTimeout>; holdMs: number } | null>(null);
   const lastPartial = useRef("");
+  const voiceRef = useRef(!!options.voiceBargeIn);
+  voiceRef.current = !!options.voiceBargeIn;
+  /** The current Ink turn began while Chalky was speaking (voice mode). */
+  const turnWhileSpeaking = useRef(false);
+  /** That turn has become a barge-in (two real words heard). */
+  const voiceBarged = useRef(false);
 
   const modeNow = useCallback((): MicMode => {
     if (!ink.current) return "off";
     if (held.current) return "held";
     if (tail.current) return "tail";
-    return speakingRef.current ? "muted" : "open";
+    if (speakingRef.current) return voiceRef.current ? "voice" : "muted";
+    return "open";
   }, []);
   const refreshMode = useCallback(() => setMode(modeNow()), [modeNow]);
 
   /** Whether mic audio goes to Ink right now. */
   const gateOpen = useCallback(() => {
-    if (held.current || tail.current) return true;
+    if (held.current || tail.current || voiceRef.current) return true;
     return !speakingRef.current;
   }, []);
 
@@ -110,7 +143,8 @@ export function useHybridMic(options: HybridMicOptions) {
     try {
       await unlockAudio();
       merger.current = new TurnMerger({ mergeMs: windowRef.current }, (text, turns) => {
-        const via = tail.current || held.current ? "barge" : "open";
+        const via = tail.current || held.current || voiceBarged.current ? "barge" : "open";
+        voiceBarged.current = false;
         const holdMs = tail.current?.holdMs;
         endTail();
         setPartial("");
@@ -120,16 +154,34 @@ export function useHybridMic(options: HybridMicOptions) {
         applyKeyterms();
       });
       const session = new InkSession(cartesiaToken, {
-        onStart: () => merger.current?.turnStart(),
+        onStart: () => {
+          merger.current?.turnStart();
+          turnWhileSpeaking.current = voiceRef.current && speakingRef.current && !held.current;
+        },
         onUpdate: (t) => {
           lastPartial.current = t;
           if (held.current && t.trim()) held.current.words = true;
+          // Voice barge-in: the first partial with two real words while Chalky talks pauses it at once.
+          if (turnWhileSpeaking.current && !voiceBarged.current && realWords(t) >= 2) {
+            voiceBarged.current = true;
+            opts.current.onVoiceBargeIn?.(t);
+            opts.current.onBargeIn?.();
+          }
           setPartial(t);
           opts.current.onPartial?.(t);
         },
         onEnd: (t) => {
           lastPartial.current = "";
           setPartial("");
+          if (turnWhileSpeaking.current && !voiceBarged.current) {
+            // Heard while Chalky spoke, never two real words: not the learner talking to Chalky.
+            turnWhileSpeaking.current = false;
+            merger.current?.turnEnd("");
+            opts.current.onVoiceIgnored?.(t);
+            applyKeyterms();
+            return;
+          }
+          turnWhileSpeaking.current = false;
           merger.current?.turnEnd(t);
           applyKeyterms();
           // The key is up and Ink has ended the turn: no need to wait any longer.
@@ -157,8 +209,9 @@ export function useHybridMic(options: HybridMicOptions) {
   }, [mergeMs, endTail, refreshMode, gateOpen]);
 
   // Chalky starting to speak closes the open mic; a turn caught half-way is dropped (it was never going to end).
+  // With voice barge-in the mic stays open, and a turn in progress is left to finish.
   useEffect(() => {
-    if (options.speaking && !held.current && !tail.current) {
+    if (options.speaking && !held.current && !tail.current && !voiceRef.current) {
       merger.current?.discard();
       setPartial("");
       lastPartial.current = "";

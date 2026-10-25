@@ -49,6 +49,7 @@ export default function MicPage() {
     muted: `muted while Chalky speaks: hold ${key} to barge in`,
     held: "listening (key held)",
     tail: "key released: waiting for the end of the turn",
+    voice: "Chalky speaking: talk to interrupt (voice barge-in)",
   };
 
   return (
