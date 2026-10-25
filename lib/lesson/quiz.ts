@@ -176,7 +176,7 @@ const PREDICT_SCHEMA = {
 export async function gradePredict(o: { question: string; ask: string; answer: string; rubric: string[]; socratic?: boolean }, signal?: AbortSignal): Promise<QuizGrade & { verdict: "right" | "partly" | "wrong"; covered: number[] }> {
   const t0 = performance.now();
   const speak = o.socratic
-    ? `Then ONE short sentence Chalky, the teacher, says aloud before teaching this part: first person, warm, reacting to their idea itself (take it seriously, name what is interesting in it), leading into the explanation. Never say or imply right, wrong, correct, incorrect, close or exactly, and never give the answer away.`
+    ? `Then ONE short sentence Chalky, the teacher, says aloud to them ("you", never "their answer" or "the learner") before teaching this part: first person, warm, reacting to their idea itself (take it seriously, name what is interesting in it), leading into the explanation. Never say or imply right, wrong, correct, incorrect, close or exactly, and never give the answer away.`
     : `Then ONE short sentence Chalky, the teacher, says aloud: first person, warm, specific about their guess, and it must not give away the rest of the answer (the lesson is about to show it).`;
   const system = await withVoiceRules(
     `You grade a prediction in a lesson. Before the next part of the lesson, the learner was asked to predict what comes next. The answer key is what the next part actually says, sentence by sentence. Verdict: "right" when their prediction has the key idea (their own words, rough is fine), "partly" when it has part of it or the right direction without the reason, "wrong" when it misses it or says the opposite. "right" and "missing": the key ideas they got and missed, each in a few words. "covered": the numbers of the answer key's sentences whose point their answer already makes, so hearing them would only repeat it ([] if none). ${speak} Return JSON only.`,
@@ -212,11 +212,11 @@ const LINE_SCHEMA = { type: "object", properties: { line: { type: "string" } }, 
  * never stating or half-stating the answer (a different door, not a hint). gap: the third miss; one line that
  * names what their answers are missing, without explaining it (the section, played next, does that).
  */
-export async function socraticLine(o: { mode: "reframe" | "gap"; question: string; ask: string; rubric: string[]; answers: string[]; missing: string[] }, signal?: AbortSignal): Promise<{ line: string; ms: number; model: string; call?: CallLog }> {
+export async function socraticLine(o: { mode: "reframe" | "gap"; question: string; ask: string; asked?: string[]; rubric: string[]; answers: string[]; missing: string[] }, signal?: AbortSignal): Promise<{ line: string; ms: number; model: string; call?: CallLog }> {
   const t0 = performance.now();
   const task =
     o.mode === "reframe"
-      ? `The learner's answer to a question in a lesson missed the idea. Ask them again, reframed: use their own words and framing, and pick a concrete case or a smaller first step toward the same idea. Never state or half-state the answer, and never hint at it by naming it: a different door into the question, not a clue. ONE sentence, ending with a question mark.`
+      ? `The learner's answer to a question in a lesson missed the idea. Ask them again, reframed: open with a few words that take their idea seriously, in their own words (no verdict: never right, wrong, close or not quite), then ask from another side: a concrete case or a smaller first step toward the same idea, and not one already asked. Never state or half-state the answer, and never hint at it by naming it: a different door into the question, not a clue. ONE sentence, spoken to them ("you"), ending with a question mark.`
       : `The learner has tried three times to answer a question in a lesson and still missed the idea. Say ONE sentence that names, kindly and specifically, the piece their answers have been missing (what to look at), without explaining it: the next part of the lesson explains it. No score, no "wrong".`;
   const system = await withVoiceRules(`${task} Chalky, the teacher, says it aloud: first person, warm, plain words, under 30 words. Return JSON only: {"line": "..."}.`);
   const user = [
@@ -224,6 +224,7 @@ export async function socraticLine(o: { mode: "reframe" | "gap"; question: strin
     `The question asked: ${o.ask}`,
     `What the lesson is about to explain (the answer, never to be given away):\n${o.rubric.map((r) => `- ${r}`).join("\n")}`,
     `Their answers so far: ${o.answers.map((a) => `"${a}"`).join("; ")}`,
+    o.asked && o.asked.length > 1 ? `Already asked (don't repeat these or their examples): ${o.asked.slice(1).map((a) => `"${a}"`).join("; ")}` : "",
     o.missing.length ? `What their answers are missing: ${o.missing.join("; ")}` : "",
   ]
     .filter(Boolean)

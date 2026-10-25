@@ -1844,12 +1844,11 @@ export default function Lesson() {
         // Missed (wrong or partly): no explaining yet. A reaction, then the question again from another side
         // (twice); after the third miss, one line naming the gap, and the section teaches it.
         const mode = k < 2 ? "reframe" : "gap";
-        const follow = post("/api/quiz", { kind: mode, question: q, ask, after, answers: tries.map((t) => t.answer), missing: g.missing ?? [] })
+        // The reframe opens with the one reaction to their idea, so the grader's line isn't said on a miss.
+        const f = await post("/api/quiz", { kind: mode, question: q, ask, asked: tries.map((t) => t.ask), after, answers: tries.map((t) => t.answer), missing: g.missing ?? [] })
           .then((r) => r.json())
           .catch((e) => ({ error: String(e) }));
         setStatus("speaking");
-        if (mode === "reframe") await sayFeedback("predict", beatId, g.feedback);
-        const f = await follow;
         const next = typeof f.line === "string" && f.line ? f.line : null;
         logEv({ kind: mode === "reframe" ? "socratic-reframe" : "socratic-gap", beatId, try: k + 1, verdict: g.verdict, line: next, ms: f.ms ?? null, error: f.error ?? null });
         if (mode === "gap" || !next) {

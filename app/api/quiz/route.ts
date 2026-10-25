@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         const say = str(o.say, 400);
         return say ? [{ say, ...(typeof o.section === "string" ? { section: o.section } : {}), ...(typeof o.quiz === "string" ? { quiz: o.quiz } : {}) }] : [];
       });
-      return Response.json(await socraticLine({ mode: b.kind, question: str(b.question, 300), ask: str(b.ask, 300), rubric: predictRubric(after), answers: strs(b.answers, 3, 600), missing: strs(b.missing, 4, 200) }, request.signal));
+      return Response.json(await socraticLine({ mode: b.kind, question: str(b.question, 300), ask: str(b.ask, 300), asked: strs(b.asked, 3, 300), rubric: predictRubric(after), answers: strs(b.answers, 3, 600), missing: strs(b.missing, 4, 200) }, request.signal));
     }
     return Response.json({ error: "kind must be label, sketch, predict, reframe or gap" }, { status: 400 });
   } catch (error) {
