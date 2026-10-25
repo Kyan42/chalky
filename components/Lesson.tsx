@@ -1415,6 +1415,8 @@ export default function Lesson() {
      * items), which the transcript and Convex keep and /log shows.
      */
     const runResearch = async (question: string, role: "start" | "question" | "late", untilMs = 0): Promise<Found> => {
+      // A cut-in starts with "wait," or "sorry,": the lookup is the question itself (and matches the cache).
+      question = question.replace(/^((wait|hold on|hang on|sorry|um+|uh+|oh|ok(ay)?|so|actually)[,.!]?\s+)+/i, "").trim() || question;
       const t0r = performance.now();
       if (role !== "late" && lastResearch && lastResearch.question !== question && performance.now() - lastResearch.at < RESEARCH_SPACING_MS) {
         logEv({ kind: "research-none", role, question, error: "another lookup started under 30 s ago" });

@@ -331,6 +331,8 @@ ${r.material}
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,
     `Same beat format and rules as a full lesson, except: ignore the beat count and do not write a title line. Output only the beat lines.`,
+    // Without this the rewrite teaches from the sources but drops "cite", so the source cards never open.
+    r.material ? `Each beat line that teaches from a source adds "cite": n, that source's number (for example {"say": "...", "mode": "talk", "cite": 2}).` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
