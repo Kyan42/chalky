@@ -33,6 +33,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
 import { ResearchCards } from "@/components/ResearchCards";
+import { researchQuery } from "@/lib/research/query";
 import type { ResearchEvent, ResearchRecord } from "@/lib/research/types";
 import { END, finishDocument, H, PAPER, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
@@ -1453,8 +1454,6 @@ export default function Lesson() {
      * items), which the transcript and Convex keep and /log shows.
      */
     const runResearch = async (question: string, role: "start" | "question" | "late", untilMs = 0): Promise<Found> => {
-      // A cut-in starts with "wait," or "sorry,": the lookup is the question itself (and matches the cache).
-      question = question.replace(/^((wait|hold on|hang on|sorry|um+|uh+|oh|ok(ay)?|so|actually)[,.!]?\s+)+/i, "").trim() || question;
       const t0r = performance.now();
       if (role !== "late" && lastResearch && lastResearch.question !== question && performance.now() - lastResearch.at < RESEARCH_SPACING_MS) {
         logEv({ kind: "research-none", role, question, error: "another lookup started under 30 s ago" });
@@ -1486,10 +1485,11 @@ export default function Lesson() {
         return fail(String((e as Error).message ?? e));
       }
     };
-    const startResearch = (question: string) => {
+    /** `question` is what goes out (researchQuery: never the raw sentence); `heard` is what they said. */
+    const startResearch = (question: string, heard: string) => {
       if (researchJob) return;
       setResearching(true);
-      logEv({ kind: "research-started", role: "start", question });
+      logEv({ kind: "research-started", role: "start", question, heard });
       researchJob = runResearch(question, "start", RESEARCH_START_MS)
         .then((f) => {
           if (f.status === "ready" && f.record) setResearchRecord(f.record as unknown as ResearchRecord);
@@ -2410,8 +2410,8 @@ export default function Lesson() {
           },
           (t) => {
             // Recent papers first (the planner waits for their material), then the lesson.
-            // The learner's question as asked (the route adds any recency hint).
-            if (t.research && !lessonStarted) startResearch(heardText);
+            // Their question, made search-shaped (researchQuery: never the raw sentence with its greeting).
+            if (t.research && !lessonStarted) startResearch(researchQuery(heardText, t.research.topic, t.lesson?.question), heardText);
             if (t.lesson && !lessonStarted) startLesson(t.lesson);
           },
         );
@@ -2494,7 +2494,9 @@ export default function Lesson() {
         if (trailer.research && lessonStarted && i >= 0) {
           setResearching(true);
           setStatus("replying");
-          const f = await runResearch(heardText, "question");
+          const query = researchQuery(heardText, trailer.research.topic);
+          logEv({ kind: "research-started", role: "question", question: query, heard: heardText });
+          const f = await runResearch(query, "question");
           setResearching(false);
           if (abort.signal.aborted) return -1;
           if (f.status !== "ready") {
