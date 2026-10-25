@@ -217,7 +217,7 @@ export async function socraticLine(o: { mode: "reframe" | "gap"; question: strin
   const task =
     o.mode === "reframe"
       ? `The learner's answer to a question in a lesson missed the idea. Ask them again, reframed: open with a few words that take their idea seriously, in their own words (no verdict: never right, wrong, close or not quite), then ask from another side: a concrete case or a smaller first step toward the same idea, and not one already asked. Never state or half-state the answer, and never hint at it by naming it: a different door into the question, not a clue. ONE sentence, spoken to them ("you"), ending with a question mark.`
-      : `The learner has tried three times to answer a question in a lesson and still missed the idea. Say ONE sentence that names, kindly and specifically, the piece their answers have been missing (what to look at), without explaining it: the next part of the lesson explains it. No score, no "wrong".`;
+      : `The learner has tried three times to answer a question in a lesson and still missed the idea. Say ONE sentence, spoken to them, that names specifically the piece their answers have been missing (what to look at, e.g. "the part we haven't looked at is what happens when white light gets split apart"), without explaining it: the next part of the lesson explains it. No acknowledgement filler ("I hear you"), no score, no "wrong".`;
   const system = await withVoiceRules(`${task} Chalky, the teacher, says it aloud: first person, warm, plain words, under 30 words. Return JSON only: {"line": "..."}.`);
   const user = [
     `The lesson: ${o.question}`,
@@ -231,7 +231,7 @@ export async function socraticLine(o: { mode: "reframe" | "gap"; question: strin
     .join("\n");
   const { out, call } = await json<{ line: string }>(CONVERSE_MODEL, `socratic-${o.mode}`, system, user, LINE_SCHEMA, 120, signal);
   // One sentence; a reframe ends with its question.
-  let line = out.line.trim().split(/(?<=[.!?])\s+/).slice(0, o.mode === "reframe" ? 2 : 1).join(" ");
+  let line = out.line.trim().split(/(?<=[.!?])\s+/).slice(0, 2).join(" ");
   if (o.mode === "reframe" && !line.endsWith("?")) line = `${line.replace(/[.!]$/, "")}?`;
   return { line, ms: Math.round(performance.now() - t0), model: CONVERSE_MODEL, call };
 }
