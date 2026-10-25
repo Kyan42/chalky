@@ -18,16 +18,25 @@ path: the fetch starts after the plan's title arrives, the route returns at once
 
 ## Status (2026-10-24)
 
-**No `APIFY_TOKEN` yet**, so nothing has been fetched from Apify: the actor latency below is the
-actor's own published benchmark, not measured here, and the five demo questions are not cached yet.
-Everything else is built and was checked in the browser with the fixture set (cards, beat
-switching, highlight, overlay layout, no-token state, events).
+Live since 2026-10-24: the five demo questions are fetched and cached (3 real pages each), and
+the dev page shows real cards with passages following the beat. Re-fetch with
+`node scripts/prewarm-sources.mjs 3011 --fresh`.
 
-When the token lands:
+| question | fetch | via | sites |
+|---|---|---|---|
+| what is photosynthesis | 8.6 s | Standby | bbc.co.uk, en.wikipedia.org, life.illinois.edu |
+| why is the sky blue | 6.4 s | Standby | spaceplace.nasa.gov, math.ucr.edu, nesdis.noaa.gov |
+| how do plants breathe | 4.3 s | Standby | rhs.org.uk, jic.ac.uk, bbcearth.com |
+| what is an oxygen molecule | 8.8 s | Standby | en.wikipedia.org, sciencedirect.com, bbc.co.uk |
+| how do vaccines work | 3.4 s | Standby | who.int, cdc.gov, mayoclinic.org |
 
-1. Add `APIFY_TOKEN=<token>` to `.env.local` (main checkout), restart the dev server.
-2. `node scripts/prewarm-sources.mjs 3011` (one question at a time; prints latency, mode and sites).
-3. Commit `experiments/sources-cache/*.json`; replace "unmeasured" below with the printed numbers.
+Not every first try worked. With `-site:youtube.com -site:tiktok.com` in the query, Standby timed
+out (40 s) on 2 of 5 and the fallback run took 54 to 62 s. Without those operators it answers in
+3 to 9 s, so they are gone (video sites are dropped from the results instead). Standby still
+timed out once on "what is photosynthesis" without them, and a run can come back with pages that
+have no usable text (error pages, cookie walls), so the actor now fetches 5 pages and keeps the
+best 3. Reliability is fine for background work and the cache covers the demo, but expect a
+timeout now and then on a fresh question.
 
 ## The actor: `apify/rag-web-browser`
 
@@ -40,22 +49,19 @@ measuring is small.
   Bearer` header so it never lands in a log): a warm web server, no actor start, the actor's
   README's recommended low-latency path. If it fails (non-200, timeout), the same input goes to a
   normal run via `apify-client` `.call()` at 4 GB with a 120 s run timeout.
-- Input: `maxResults: 3`, `scrapingTool: "raw-http"` (up to 2x faster than the browser per the
+- Input: `maxResults: 5` (3 kept), `scrapingTool: "raw-http"` (up to 2x faster than the browser per the
   README; the pages we want are static), `outputFormats: ["markdown"]`, `requestTimeoutSecs: 45`,
-  `removeCookieWarnings: false` (slightly faster). Query: the learner's question minus video sites
-  (`-site:youtube.com -site:tiktok.com`).
-- **Latency: unmeasured (no token).** The actor's README benchmark for a normal run: 3 results at
-  8 GB ≈ 17 s, at 4 GB ≈ 31 s; 1 result ≈ 16 to 22 s. Standby should be faster (no start). Earlier
-  team research found Apify's web search at 16 to 31 s, which matches. Either way it is background
-  work: the cards appear some seconds into the lesson, or instantly from the cache.
+  `removeCookieWarnings: false` (slightly faster). Query: the learner's question as asked.
+- **Latency, measured:** 3.4 to 8.8 s through Standby (table above); the normal-run fallback took
+  54 to 62 s. The actor's README benchmarks a normal run at 17 to 31 s.
 - **Cost per lesson** (store page, pay per event, FREE tier prices; cheaper on paid tiers): one
-  search $0.00348 + three page fetches 3 × $0.00228 = **about $0.010 per question** through Standby.
+  search $0.00348 + five page fetches 5 × $0.00228 = **about $0.015 per question** through Standby.
   A normal run also pays the platform's actor-start charge per GB of memory. A cached question
   costs nothing.
 
-Alternatives not measured (no token): a Wikipedia scraper actor (cleaner text, one site only),
-Google Search Results Scraper plus a page-content actor (two runs chained, slower), a scholarly
-search actor (abstracts only, often paywalled).
+Alternatives not measured: a Wikipedia scraper actor (cleaner text, one site only), Google
+Search Results Scraper plus a page-content actor (two runs chained, slower), a scholarly search
+actor (abstracts only, often paywalled). For papers see `lib/research/README.md`.
 
 ## Passage matching: word overlap, no model call
 
