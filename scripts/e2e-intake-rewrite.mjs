@@ -61,7 +61,8 @@ const waitFor = async (pred, ms) => {
   return null;
 };
 try {
-  await page.goto(`${BASE}/lesson`);
+  // FIXTURE=<slug>: a saved plan instead of the planner (the first turn and the intake still go to the models).
+  await page.goto(`${BASE}/lesson${process.env.FIXTURE ? `?fixture=${process.env.FIXTURE}&beats=${process.env.BEATS ?? 15}&firstturn=1` : ""}`);
   await page.click('[data-testid="start-talking"]');
   await waitFor((s) => s.status === "Listening", 20000);
   await page.click("body", { position: { x: 5, y: 400 } });

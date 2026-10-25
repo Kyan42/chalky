@@ -479,6 +479,12 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (level === "detour" || level === "replan") sketch = null;
   const cues = groundCues(cursor, spoken, input.board);
   // Shown something elsewhere on the board: they get to look before the lesson moves the camera back.
+  // The check is the question the learner actually heard: the reply's own question when it asked one
+  // (the page looks for the check in what was said, and says it again only when it is missing).
+  if (check) {
+    const asked = spoken.split(/(?<=[.!?])\s+/).filter((x) => x.trim().endsWith("?")).pop();
+    if (asked) check = asked.trim();
+  }
   let resume: ConverseResume = how ?? (check || goTo ? "wait" : "continue");
   // Going on at once would glide the camera straight back: after a go_to, always wait.
   if (goTo) resume = "wait";
@@ -712,6 +718,11 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         else if (!asked) console.info(`[converse] no cursor cues (board: ${input.board.map((e) => e.id).join(", ") || "empty"})`);
       } catch {
         trailer = fallbackTrailer(input, spoken);
+      }
+      // An ask the reply never got to say aloud (it spoke no question): say it now, before the trailer.
+      if (trailer.check && !spoken.includes("?")) {
+        spoken += (spoken ? " " : "") + trailer.check;
+        yield { type: "sentence", text: trailer.check, tMs: ms() };
       }
       yield { type: "trailer", trailer, tMs: ms(), modelCues };
       calls.push(tracked.finish());
