@@ -38,7 +38,7 @@ import type { ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
-import { isGreetingOnly, isResume, isStillLost } from "@/lib/lesson/resume";
+import { isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
 import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
@@ -625,11 +625,6 @@ export default function Lesson() {
         queueRef.current.push(said);
         pauseRef.current();
       } else if (["idle", "done", "stopped", "error"].includes(statusRef.current)) {
-        // "Hey Chalky." on its own is not a question; wait for the rest.
-        if (isGreetingOnly(said)) {
-          setHeardNote(`Heard “${said}”. Go ahead, what do you want to learn?`);
-          return;
-        }
         setHeardNote(null);
         askRef.current(said);
       }
@@ -907,20 +902,28 @@ export default function Lesson() {
     showBoard(EMPTY_BOARD);
     setCursorScript([]);
     queueRef.current = [];
-    setTitle("Planning…");
-    setStatus("planning");
-    await showDocument(undefined);
-
     const post = (path: string, body: unknown, signal: AbortSignal = abort.signal) =>
       fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     // Development: /lesson?fixture=<slug>&beats=<n> plays a saved plan instead of calling the planner.
     const params = new URLSearchParams(window.location.search);
     const fixture = process.env.NODE_ENV !== "production" ? params.get("fixture") : null;
+    /**
+     * The learner's first words go to the conversation model like everything else they say, and its
+     * actions decide: a short answer, a greeting back, or start_lesson (with an ask: the intake).
+     * A fixture starts its saved lesson at once, unless ?firstturn=1 (development).
+     */
+    const direct = !!fixture && params.get("firstturn") !== "1";
+    /** A lesson is running: the planner (or the fixture) has been started. */
+    let lessonStarted = false;
+    setTitle(direct ? "Planning…" : "");
+    setStatus(direct ? "planning" : "replying");
+    await showDocument(undefined);
 
-    // The intake: one short question to the learner, asked while the planner writes the speculative plan.
-    // ?intake=0 turns it off (development).
+    // The intake (only when the lesson starts directly): one short question to the learner, asked while
+    // the planner writes the speculative plan. ?intake=0 turns it off (development). Otherwise the
+    // conversation model's "ask" next to its start_lesson is the intake.
     const intakeAsk =
-      params.get("intake") === "0"
+      !direct || params.get("intake") === "0"
         ? Promise.resolve(null)
         : post("/api/converse", { intent: "intake_ask", question: q })
             .then((r) => r.json())
@@ -1100,7 +1103,12 @@ export default function Lesson() {
       setBeats([...list]);
     };
 
-    const planning = (async () => {
+    let planning: Promise<void> = Promise.resolve();
+    /** Starts the lesson: the planner (or the fixture) streams beats in from here on. */
+    const startPlanning = () => {
+    lessonStarted = true;
+    setTitle("Planning…");
+    planning = (async () => {
       const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
       for await (const event of ndjson<PlanEvent>(res)) {
@@ -1155,6 +1163,23 @@ export default function Lesson() {
         setStatus("error");
       }
     });
+    };
+    if (direct) startPlanning();
+    /** The intake question the conversation model asked next to its start_lesson, already spoken. */
+    let pendingIntake: string | null = null;
+    /** start_lesson: the planner starts from the model's question; what it learned goes on the learner record. */
+    const startLesson = (lesson: NonNullable<ConverseTrailer["lesson"]>) => {
+      if (lessonStarted) return;
+      q = lesson.question.trim() || q;
+      setQuestion(q);
+      transcript.question = q;
+      if (lesson.focus) learner.focus = lesson.focus;
+      if (lesson.level && lesson.level !== "unknown") learner.level = lesson.level as LearnerRecord["level"];
+      noteLearner();
+      voice.setKeyterms(buildKeyterms(topicWords(q)));
+      logEv({ kind: "start-lesson", question: q, focus: lesson.focus, level: lesson.level });
+      startPlanning();
+    };
 
     // ---------- The conversation layer ----------
     /** Escalation reached for the current confusion: 0 none, 1 a brief answer, 2 a detour. Kept across the detour's beats. */
@@ -1260,7 +1285,13 @@ export default function Lesson() {
      * so word timestamps (and the cursor's cues) share one clock. Returns the
      * trailer and what was said, or null if the learner cut in or it failed.
      */
-    const speakReply = async (utterance: string, i: number, wordIndex: number, onLevel?: (level: ConverseTrailer["level"]) => void): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
+    const speakReply = async (
+      utterance: string,
+      i: number,
+      wordIndex: number,
+      onLevel?: (level: ConverseTrailer["level"]) => void,
+      onTrailer?: (trailer: ConverseTrailer) => void,
+    ): Promise<{ trailer: ConverseTrailer; said: string } | null> => {
       const replyAbort = new AbortController();
       replyAbortRef.current = replyAbort;
       const onStop = () => replyAbort.abort();
@@ -1389,7 +1420,7 @@ export default function Lesson() {
           "/api/converse",
           {
             utterance,
-            question: q,
+            question: lessonStarted ? q : "",
             beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, section: s.beat.section, check: s.beat.check })),
             beatIndex: i,
             wordIndex,
@@ -1417,6 +1448,7 @@ export default function Lesson() {
             } else if (ev.type === "trailer") {
               modelCues = ev.modelCues ?? [];
               trailer = ev.trailer;
+              onTrailer?.(ev.trailer);
               startSketch(ev.trailer);
               cue();
             } else if (ev.type === "error") throw new Error(ev.message);
@@ -1503,6 +1535,7 @@ export default function Lesson() {
           kind: "reply",
           who: "chalky",
           text: saidText,
+          actions: t.actions,
           level: t.level,
           resume: t.resume,
           check: t.check,
@@ -1567,7 +1600,7 @@ export default function Lesson() {
         logEv({
           kind: "learner",
           via: heardText === null ? "button" : inputViaRef.current,
-          role: wordIndex >= 0 ? "cut-in" : bridge ? "check-in" : "between beats",
+          role: !lessonStarted ? "before a lesson" : wordIndex >= 0 ? "cut-in" : bridge ? "check-in" : "between beats",
           beatId: list[i]?.beat.id ?? null,
           wordIndex,
           text: heardText ?? "(Continue)",
@@ -1600,12 +1633,21 @@ export default function Lesson() {
           dropDraft();
         }
         // A detour is decided before the lead-in is spoken: start planning (and drawing) it right away.
-        const reply = await speakReply(heardText, i, wordIndex, (level) => {
-          if (level === "detour" && !(draft && draft.at === resumeAt)) {
-            dropDraft();
-            draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText, "a one-sentence hand-off, like \"Let me draw that for you.\"");
-          }
-        });
+        // A lesson the reply starts begins planning as soon as its actions arrive, while the reply is spoken.
+        const reply = await speakReply(
+          heardText,
+          i,
+          wordIndex,
+          (level) => {
+            if (level === "detour" && lessonStarted && !(draft && draft.at === resumeAt)) {
+              dropDraft();
+              draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText, "a one-sentence hand-off, like \"Let me draw that for you.\"");
+            }
+          },
+          (t) => {
+            if (t.lesson && !lessonStarted) startLesson(t.lesson);
+          },
+        );
         if (abort.signal.aborted) return -1;
         if (!reply) {
           setStatus("waiting");
@@ -1632,6 +1674,31 @@ export default function Lesson() {
           }
           return resumeAt;
         };
+        // Before a lesson: a short answer or a greeting back waits for more; a started lesson goes on to
+        // its beats, with the reply's question (if any) as the intake.
+        if (i < 0) {
+          if (lessonStarted) {
+            pendingIntake = trailer.check;
+            return 0;
+          }
+          setStatus("waiting");
+          continue;
+        }
+        // Asked to teach it properly mid-lesson: the rest of the lesson is rewritten for that.
+        if (trailer.lesson) {
+          replan(resumeAt, `The learner asked for a full lesson: ${trailer.lesson.question}${trailer.lesson.focus ? ` (${trailer.lesson.focus})` : ""}.`, heardText, false, reply.said);
+          return resumeAt;
+        }
+        // Beats that no longer apply (a sketch covered them): dropped from the plan, never from what was said.
+        if (trailer.amend?.op === "delete") {
+          const from = Math.max(resumeAt, trailer.amend.index - 1);
+          const gone = list.splice(from, Math.min(trailer.amend.count ?? 1, Math.max(0, list.length - from)));
+          if (gone.length) {
+            dropPrefetches("beats deleted");
+            logEv({ kind: "beats-deleted", beatIds: gone.map((b) => b.beat.id), note: trailer.amend.note });
+            setBeats([...list]);
+          }
+        }
         if (trailer.level === "confirm") return await goOn(reply.said);
         if (trailer.level === "replan") {
           escalation = 0;
@@ -1695,12 +1762,25 @@ export default function Lesson() {
     try {
       // The intake: ask one question, wait for an answer (or ~4 s of silence), and let the fast model
       // decide whether the plan should change after beat 1. The plan has been streaming meanwhile.
-      const iq = await intakeAsk;
+      // Before a lesson: the first words, and whatever follows, go to the conversation model until one of
+      // its replies starts a lesson.
+      if (!direct) {
+        queueRef.current.unshift(q);
+        while (!lessonStarted && !abort.signal.aborted) {
+          const next = await converseAt(-1, -1, 0);
+          if (next < 0) break;
+        }
+        if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
+      }
+      const iq = direct ? await intakeAsk : pendingIntake ? { say: pendingIntake, kind: "action", model: "converse", ms: undefined, call: undefined, spoken: true } : null;
       if (iq?.say && !abort.signal.aborted) {
         const tAsk = performance.now();
-        logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms, call: iq.call ?? null });
-        setStatus("speaking");
-        await playBeat(line(iq.say), abort.signal, null, onFirstSound);
+        if ("spoken" in iq) logEv({ kind: "intake-asked", text: iq.say, by: "ask action" });
+        else {
+          logEv({ kind: "say", who: "chalky", role: "intake", text: iq.say, intakeKind: iq.kind, model: iq.model, ms: iq.ms, call: iq.call ?? null });
+          setStatus("speaking");
+          await playBeat(line(iq.say), abort.signal, null, onFirstSound);
+        }
         setStatus("waiting");
         const answer = await (async () => {
           const waiting = awaitTurn(abort.signal);
