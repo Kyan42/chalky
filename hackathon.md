@@ -3,7 +3,7 @@
 - **Project:** Chalky
 - **Event:** Cal Hacks 13.0
 - **What it does:** Chalky replaces the chat box for understanding things: ask out loud, and it explains on a whiteboard in a voice you can interrupt mid-word, and remembers what you got stuck on.
-- **Live app:** not deployed (runs locally, see README)
+- **Live app:** not deployed (runs locally)
 - **Repo:** https://github.com/Kyan42/chalky
 - **Frontend:** not deployed (run locally)
 - **Convex deployment:** https://wooden-clam-492.convex.cloud
