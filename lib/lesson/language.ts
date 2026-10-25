@@ -8,8 +8,8 @@
  * Shared by the live /api/draw route and the board-layout experiment.
  */
 import { PALETTE } from "@/experiments/visual-flex/doc";
-import { BLOCKS } from "@/lib/blocks";
-import { BLOCK_LANGUAGE } from "@/lib/blocks/catalog";
+import { BLOCKS, type Block } from "@/lib/blocks";
+import { BLOCK_LANGUAGE, blockLanguageFor } from "@/lib/blocks/catalog";
 import { PRESET_KINDS } from "@/lib/lesson/presets";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
@@ -82,8 +82,9 @@ const span = (r: PlannedBeat["region"]) => `x ${r.x}..${r.x + r.w}, y ${r.y}..${
 /**
  * The prompt for one beat. `earlier` are the draw beats before it in the same
  * scene: the model sees what they declared (ids, what, region), not what they drew.
+ * `blocks` (picked per beat by lib/moss/blocks.ts) narrows the block catalog; null lists them all.
  */
-export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[]): string {
+export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], blocks?: Block[] | null): string {
   const pointOnly = beat.mode === "point";
   const before = earlier.flatMap((b) => b.adds.map((e) => `- ${e.id}: ${e.what} (somewhere in ${span(b.region)})`));
   const must = beat.adds.length
@@ -103,7 +104,7 @@ export function drawPrompt(question: string, beat: PlannedBeat, earlier: Planned
       : "The board is empty before this beat.",
     "refs may only name ids from the lists above or ids of elements earlier in your own answer; any other ref is dropped.",
     "",
-    PRESET_LANGUAGE,
+    blocks ? PRESET_LANGUAGE.replace(BLOCK_LANGUAGE, blockLanguageFor(blocks)) : PRESET_LANGUAGE,
     "",
     "Return JSON matching the schema.",
   ]
