@@ -10,7 +10,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { question?: unknown; effort?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { question?: unknown; effort?: unknown; material?: unknown };
+  // Research material to teach from (recent papers with citation tags), from /api/research.
+  const material = typeof body.material === "string" && body.material.trim() ? body.material.slice(0, 40_000) : undefined;
   // Development only: compare planner effort levels without restarting the server.
   const effort = process.env.NODE_ENV !== "production" && (body.effort === "low" || body.effort === "medium" || body.effort === "high") ? body.effort : undefined;
   const question = typeof body.question === "string" ? body.question.trim() : "";
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
 
   const upstream = new AbortController();
   request.signal.addEventListener("abort", () => upstream.abort(), { once: true });
-  const events = planLesson(question, upstream.signal, effort);
+  const events = planLesson(question, upstream.signal, effort, material);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {

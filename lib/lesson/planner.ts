@@ -103,7 +103,8 @@ interface PlanState {
 function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const b = raw as Record<string, unknown>;
   if (typeof b.say !== "string") throw new Error(`beat ${index + 1} is missing say`);
-  const say = b.say.trim();
+  // A citation tag ("[2]") is never spoken: Sonic would read it aloud.
+  const say = b.say.replace(/\s*\[\d{1,2}(?:\s*[,-]\s*\d{1,2})*\]/g, "").replace(/\s{2,}/g, " ").trim();
   const tokens = say.split(/\s+/);
   const words = tokens.map(norm);
   // Fall back to the first content word if the anchor isn't in the sentence.
@@ -154,10 +155,26 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   // A quiz beat is a talk beat that asks; at most two in a lesson.
   const quiz = (b.quiz === "label" || b.quiz === "sketch") && (st.quizzes ?? 0) < 2 ? (b.quiz as "label" | "sketch") : undefined;
   if (quiz) st.quizzes = (st.quizzes ?? 0) + 1;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}) };
+  // The paper a beat teaches from (research material): its number, 1 to 9. An array or "[2]" is read as its first number.
+  const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
+  const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
+  const cite = citeN >= 1 && citeN <= 9 ? Math.round(citeN) : undefined;
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(cite ? { cite } : {}) };
 }
 
-export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {
+/**
+ * Teaching from research material (recent papers, each with a citation tag like [1]): the lesson is built from
+ * the material, not from memory, and every beat that uses a paper says which.
+ */
+const MATERIAL_RULES = `Teach this from the material below (recent sources found just now: web pages, each numbered [1], [2]...), not from memory, wherever it covers the question:
+- Each section draws on one or two of the sources: what is new, what changed, what it means, with the dates and numbers the sources give.
+- Every beat that teaches from a source carries "cite": n, that source's number (one number: the source the beat is mostly about). A beat that uses no source has no "cite". Never write the tags ([1]) in "say": it is spoken aloud. Name a source naturally instead ("the release notes", "a report from this week").
+- You may give background from general knowledge, but say so out loud ("as background, ..."), and never present it as something a source said.
+- Drawings are diagrams of what the sources describe: a timeline, boxes and arrows for how something works, a simple chart of a number. Nothing decorative.
+- The recap names what is new and where it came from.
+- Never invent a source, a date, a version, a number or a claim that is not in the material.`;
+
+export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT, material?: string): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const tracked = trackCall("plan", MODEL);
@@ -168,7 +185,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
       system: plannerSystem(),
       thinking: plannerThinking(MODEL),
       output_config: { effort },
-      messages: [{ role: "user", content: question }],
+      messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
     },
     { signal },
   );
@@ -255,6 +272,8 @@ export interface AmendRequest {
   /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
   intake?: boolean;
   learner?: LearnerRecord;
+  /** The research material the lesson is taught from, if any: a change keeps teaching from it and citing it. */
+  material?: string;
   /** Sketches answers drew on the board so far (scene, scene-local region, adds): drawings like any other. */
   sketches?: PlannedBeat[];
 }
@@ -303,10 +322,17 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     r.op === "replace_from" ? scenesRule : "",
     r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
     `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
+    r.material ? `${MATERIAL_RULES}
+
+<material>
+${r.material}
+</material>` : "",
     describeLearner(r.learner),
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,
     `Same beat format and rules as a full lesson, except: ignore the beat count and do not write a title line. Output only the beat lines.`,
+    // Without this the rewrite teaches from the sources but drops "cite", so the source cards never open.
+    r.material ? `Each beat line that teaches from a source adds "cite": n, that source's number (for example {"say": "...", "mode": "talk", "cite": 2}).` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
