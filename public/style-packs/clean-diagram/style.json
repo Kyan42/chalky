@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "id": "clean-diagram",
+  "name": "Clean diagram",
+  "description": "Precise paths and soft semantic colors with no texture.",
+  "ink": "#302b24",
+  "paper": "#f7f5ef",
+  "accent": "#c69a34",
+  "width": 1.2,
+  "wobble": 0,
+  "texture": 0,
+  "mode": "clean",
+  "palette": "../palette.json",
+  "rendering": {
+    "engine": "svg",
+    "seed": 17,
+    "notes": "Texture and wobble are SVG filters. Clayzo needs a renderer adapter for these effects; geometry, parts and anchors remain compatible."
+  }
+}

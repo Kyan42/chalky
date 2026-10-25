@@ -1,22 +1,25 @@
-// Janani's whiteboard blocks (presets/ on her `presets` branch, merged in): hand-authored line art
-// the lesson places by id instead of drawing from primitives. Rendered through our stage by
-// ./render.ts. presets/ is the one source; each topic exports factories (makeAtom, makeBeaker…)
-// and a default instance of each, and these lists hold the defaults.
+// Whiteboard blocks: Janani's (presets/ on her `presets` branch, merged in: biology, computing,
+// chemistry) and Leo's scenery (forest and podium illustrations, ./scenery.ts), hand-authored line
+// art the lesson places by id instead of drawing from primitives. Rendered through our stage by
+// ./render.ts. Each presets topic exports factories (makeAtom, makeBeaker…) and a default instance
+// of each, and these lists hold the defaults.
 import { BIOLOGY, BY_TOPIC as BIOLOGY_TOPICS } from "@/presets/biology";
 import { CHEMISTRY, BY_TOPIC as CHEMISTRY_TOPICS } from "@/presets/chemistry";
 import { COMPUTING, BY_TOPIC as COMPUTING_TOPICS } from "@/presets/computing";
 import type { Block } from "@/presets/types";
+import { SCENERY } from "./scenery";
 
 export type { Block, Paint, Part, Shape } from "@/presets/types";
-export { BIOLOGY, CHEMISTRY, COMPUTING };
+export { BIOLOGY, CHEMISTRY, COMPUTING, SCENERY };
 
-export const BLOCKS: Block[] = [...BIOLOGY, ...COMPUTING, ...CHEMISTRY];
+export const BLOCKS: Block[] = [...BIOLOGY, ...COMPUTING, ...CHEMISTRY, ...SCENERY];
 
 /** The catalog by subject and topic ("biology: plants"), 4 to 20 blocks each, for galleries. */
 export const TOPICS: { name: string; blocks: Block[] }[] = [
   ...Object.entries(BIOLOGY_TOPICS).map(([t, blocks]) => ({ name: `biology: ${t}`, blocks })),
   ...Object.entries(COMPUTING_TOPICS).map(([t, blocks]) => ({ name: `computing: ${t}`, blocks })),
   ...Object.entries(CHEMISTRY_TOPICS).map(([t, blocks]) => ({ name: `chemistry: ${t}`, blocks })),
+  { name: "scenery", blocks: SCENERY },
 ];
 
 /** Ids compare without case or punctuation, so "neural-net", "neural net" and "neuralnet" all match. */

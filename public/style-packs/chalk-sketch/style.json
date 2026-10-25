@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "id": "chalk-sketch",
+  "name": "Chalk sketch",
+  "description": "Dry grainy marks and broken contours on warm paper.",
+  "ink": "#302b24",
+  "paper": "#f7f5ef",
+  "accent": "#c69a34",
+  "width": 1.9,
+  "wobble": 0.9,
+  "texture": 0.175,
+  "mode": "chalk",
+  "palette": "../palette.json",
+  "rendering": {
+    "engine": "svg",
+    "seed": 17,
+    "notes": "Texture and wobble are SVG filters. Clayzo needs a renderer adapter for these effects; geometry, parts and anchors remain compatible."
+  }
+}

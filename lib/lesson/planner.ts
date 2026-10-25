@@ -15,6 +15,7 @@
 import "server-only";
 import { BLOCKS } from "@/lib/blocks";
 import { trackCall } from "./calllog";
+import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
 import { withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "./types";
 
@@ -273,6 +274,13 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
   const where = here.stay
     ? `If there is free space on that board for the one or two new things you need (the 100x100 board, outside the regions above), stay in scene ${here.scene}: draw only in free space and point at what is there. Otherwise start a clean board: scene ${newScene}. Either way all of the detour's beats stay in the scene you pick, and its first beat draws something.`
     : `It goes on a clean part of the board: its first beat is a draw beat in scene ${newScene}, and all of its beats stay in scene ${newScene}.`;
+  // A new ending continues on the kept beat's board: say what is on it, so nothing is drawn twice.
+  const keptBeats = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : [];
+  const onBoard = keptBeats.filter((b) => b.scene === newScene && b.mode === "draw");
+  const holds = onBoard.length
+    ? `Already drawn on the board the learner is looking at (scene ${newScene}): ${onBoard.map((b) => `${b.adds.map((a) => `${a.id} (${a.what})`).join(", ") || "-"} in region [${[b.region.x, b.region.y, b.region.w, b.region.h].map(Math.round).join(", ")}]`).join("; ")}. Never add any of these again, under any id or name: refer to them by id (a point beat) instead. Scene ${newScene} has room for ${Math.max(0, MAX_DRAWS_PER_SCENE - onBoard.length)} more drawing(s).`
+    : "";
+  const scenesRule = `A scene holds at most ${MAX_DRAWS_PER_SCENE} draw beats in all (point beats don't count), and the drawings in a scene must not overlap: when a scene is full, start the next scene (fresh space on the board).`;
   const task = r.intake
     ? `REWRITE THE LESSON from beat ${r.index + 1} on, tailored to what the learner just told you (above): beats ${r.index + 1} onward are dropped, and the beats before stay as they are (beat 1 is already being spoken). Write the rest of a whole lesson, 10 to 16 beats, by the same rules as a full lesson (sections with goals, check-ins with bridges, a recap at the end). It continues on the same board: stay in scene ${newScene} for a while, drawing in free space beside what is already there (you may point at those ids), and start new scenes after it as the lesson moves on.`
     : r.op === "insert_after"
@@ -283,6 +291,8 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     `The lesson planned so far:\n${lines.join("\n")}`,
     r.heard ? `The learner just said: "${r.heard}"` : "",
     board,
+    holds,
+    r.op === "replace_from" ? scenesRule : "",
     r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
     `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
     describeLearner(r.learner),
@@ -333,6 +343,8 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   /** The scene the detour's drawing beats use: decided by its first one (the same board, if allowed, or a clean one). */
   let detourAt: number | null = null;
   const notes: string[] = [];
+  // The scene rules the first plan's layout pass keeps, applied to each changed beat as it arrives.
+  const guard = new SceneGuard(kept);
   let n = 0;
   const parse = function* (line: string): Generator<PlanEvent> {
     const trimmed = line.trim();
@@ -367,9 +379,10 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       if (say !== obj.say) console.info(`[amend] trimmed the opener of ${r.prefix}-1: "${String(obj.say).slice(0, 80)}" -> "${say.slice(0, 80)}"`);
       obj.say = say.charAt(0).toUpperCase() + say.slice(1);
     }
-    const beat = checkBeat(obj, n + 1, st);
+    const checked = checkBeat(obj, n + 1, st);
     n++;
-    yield { type: "beat", beat: { ...beat, id: `${r.prefix}-${n}` }, tMs: ms() };
+    const beat = guard.guard({ ...checked, id: `${r.prefix}-${n}` }, st);
+    yield { type: "beat", beat, tMs: ms() };
   };
   const done = stream.finalMessage();
   let finished = false;
@@ -386,5 +399,9 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   if (pending.trim()) yield* parse(pending);
   if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish(), ...(notes.length ? { notes } : {}) };
+  const layout = guard.summary();
+  console.info(`[amend] ${r.prefix}: scenes ${layout.scenes.map((s) => `${s.scene}: ${s.kept}+${s.draws} drawings, ${s.points} points`).join("; ")}${layout.notes.length ? ` | ${layout.notes.join(" | ")}` : ""}`);
+  // On the call log, so the page's amend-done event carries it into the transcript.
+  const call = { ...tracked.finish(), layout };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call, ...(notes.length || layout.notes.length ? { notes: [...notes, ...layout.notes] } : {}) };
 }
