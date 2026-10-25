@@ -14,7 +14,7 @@ const cache = new Map<string, ArrayBuffer>();
 export async function POST(request: Request) {
   const b = (await request.json().catch(() => ({}))) as { voice?: unknown; speed?: unknown };
   const voice = VOICES.find((v) => v.id === b.voice)?.id ?? DEFAULT_VOICE_ID;
-  const speed = SPEEDS.find((s) => s.value === String(b.speed ?? "default"))?.speed ?? 0.92;
+  const speed: number = SPEEDS.find((s) => s.value === String(b.speed ?? "default"))?.speed ?? 0.92;
   const key = `${voice}@${speed}`;
   let audio = cache.get(key);
   if (!audio) {

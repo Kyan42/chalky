@@ -17,12 +17,12 @@ export const VOICES: ChalkyVoice[] = [
 ];
 export const DEFAULT_VOICE_ID = VOICES[0].id;
 
-/** Speaking speeds: Chalky's usual (no cookie: Sonic's default, 0.92) and three presets. */
+/** Speaking speeds, slowest first: Chalky's usual (no cookie: Sonic's default, 0.92) and three presets. */
 export const SPEEDS = [
+  { value: "0.65", speed: 0.65, label: "Slowest · 0.65×" },
+  { value: "0.75", speed: 0.75, label: "Relaxed · 0.75×" },
   { value: "default", speed: 0.92, label: "Chalky's usual · 0.92×" },
-  { value: "0.8", speed: 0.8, label: "Relaxed · 0.8×" },
-  { value: "1", speed: 1, label: "Normal · 1×" },
-  { value: "1.2", speed: 1.2, label: "Brisk · 1.2×" },
+  { value: "1.1", speed: 1.1, label: "Quick · 1.1×" },
 ] as const;
 
 /** The line a voice sample says: Chalky's greeting. */

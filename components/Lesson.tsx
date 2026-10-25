@@ -1049,7 +1049,8 @@ export default function Lesson() {
         // The audio clock stops writing first, so the last word stays highlighted through the gap.
         cancelAnimationFrame(raf);
         setWordIndexNow(timestamps.words.length - 1);
-        await new Promise((r) => setTimeout(r, GAP_SECONDS * 1000));
+        // "Step by step" (Teaching pace in Preferences): half as long again between beats.
+        await new Promise((r) => setTimeout(r, GAP_SECONDS * (readPreferences(document.cookie).pace === "stepwise" ? 1.5 : 1) * 1000));
         await waitWhilePaused(signal);
       }
     } finally {

@@ -73,7 +73,7 @@ export default function Preferences() {
         </div>
         <div className="preference-field">
           <label htmlFor="lesson-approach">Learning approach</label><p>What helps things click?</p>
-          <select id="lesson-approach" value={settings.approach} onChange={e => update("approach", e.target.value as Settings["approach"])}><option value="balanced">A little of everything</option><option value="analogies">Everyday analogies</option><option value="practice">Practice problems and questions</option></select>
+          <select id="lesson-approach" value={settings.approach} onChange={e => update("approach", e.target.value as Settings["approach"])}><option value="socratic">Ask me first (Socratic)</option><option value="analogies">Everyday analogies</option><option value="explain">Just explain</option></select>
         </div>
         <div className="preference-field">
           <label htmlFor="lesson-pace">Teaching pace</label><p>Separate from how fast the voice speaks.</p>
