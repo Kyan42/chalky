@@ -302,7 +302,8 @@ function parseAt(at: unknown): { word: string; occurrence: number } | null {
 }
 
 /** The learner asked for a picture: that needs a detour, whatever the model said. */
-const WANTS_DRAWING = /\b(draw|drawing|sketch|diagram|picture)\b/i;
+// "draw it", "sketch that", "show me a diagram"; not "show me where the diagram was" (that is go_to).
+const WANTS_DRAWING = /\b(draw|sketch)\b|\b(make|give|show) (me )?(a|an) (picture|diagram|drawing)\b/i;
 
 const RANK: Record<ConverseLevel, number> = { confirm: 0, answer: 1, detour: 2, replan: 3 };
 /** Hand-off lines for a reply the server escalated: the drawing that follows does the explaining. */
