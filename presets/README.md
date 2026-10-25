@@ -29,6 +29,13 @@ explain a concept, so the model names `leaf` instead of drawing one stroke by st
   point at or circle it. `computing/CONVENTIONS.md` has the rules for adding more.
   `computing/variants.ts` shows factories at other settings. Big counts (a 6-node layer, a 10-cell
   array) need the block placed at 250px or more to read in thick chalk.
+- `chemistry/` — 100 blocks in five topics of 20 (`BY_TOPIC` in `chemistry/index.ts`): atoms and
+  elements, molecules and bonds, matter and reactions, solutions, acids and gases, and lab equipment.
+  Factories as in computing: `makeAtom({ protons: 11 })`, `makeBeaker({ fill: 0.8, liquid: "green" })`,
+  `makeEnergyProfile({ catalyst: true })`, `makePhScale({ value: 2 })`. `makeMolecule({ atoms, bonds })`
+  draws any ball-and-stick molecule; atoms keep one colour per element everywhere (O red, N blue, C ink).
+  Glassware is drawn to one scale, so a test tube placed beside a beaker matches it.
+  `chemistry/CONVENTIONS.md` has the rules and `chemistry/variants.ts` shows options.
 - `sheet.ts` — renders any module's blocks as a labelled sheet in any theme.
 
 Sheets and previews (labels need `presets/out/fonts/Manrope.ttf`, the app's font from `public/fonts`):
@@ -38,5 +45,6 @@ npx tsx presets/sheet.ts presets/biology/index.ts chalk          # all 100 block
 npx tsx presets/sheet.ts presets/biology/organs.ts whiteboard    # one topic, another theme
 npx tsx presets/sheet.ts presets/computing/ai.ts chalk           # 20 AI blocks
 npx tsx presets/sheet.ts presets/computing/variants.ts chalk     # factories at other settings
+npx tsx presets/sheet.ts presets/chemistry/index.ts chalk        # all 100 chemistry blocks
 npx tsx presets/preview.ts chalk                                 # the photosynthesis and respiration lessons
 ```
