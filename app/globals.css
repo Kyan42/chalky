@@ -55,7 +55,7 @@
 :root[data-theme="chalkboard"] {
   --paper: #25332D;
   --ink: #F1EEE4;
-  --charcoal: #1B2622;
+  --charcoal: #F1EEE4;
   --muted: #AEB5AE;
   --rule: #3C4C44;
   --accent: #F28C82;
@@ -201,7 +201,7 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 
 /* The mascot: seated on the welcome screen, with a speech bubble; small at bottom left while teaching. */
 .tutor-character, .stage .welcome.tutor-character { position: absolute; left: 50%; top: 50%; inset: auto; transform: translate(-50%, -50%); width: min(336px, 60cqh); height: min(336px, 60cqh);
-  display: block; padding: 0; gap: 0; pointer-events: none; background: var(--paper); }
+  display: block; padding: 0; gap: 0; pointer-events: none; }
 .tutor-character .tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; }
 /* The welcome PNG is a cutout (public/mascot/seated-cutout.png, keyed from his seated.png); the videos keep a white backdrop, so they multiply onto the paper. */
 .tutor-character video.tutor-mascot { mix-blend-mode: multiply; }
@@ -213,7 +213,7 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   background: var(--bubble); border-right: 1px solid var(--bubble-rule); border-bottom: 1px solid var(--bubble-rule); }
 .tutor-bubble h2, .stage .welcome .tutor-bubble h2 { margin: 0; font-weight: 400; font-size: clamp(24px, 2.4vw, 34px); line-height: 1.2; color: var(--ink); }
 .tutor-bubble p, .stage .welcome .tutor-bubble p { margin: 8px 0 0; font-family: "Instrument Sans", sans-serif; font-size: clamp(13px, 1.1vw, 16px); color: var(--muted); }
-.tutor-character.teaching { width: 200px; height: 200px; top: auto; bottom: 24px; left: 20px; right: auto; transform: none; z-index: 2; }
+.tutor-character.teaching { background: var(--paper); width: 200px; height: 200px; top: auto; bottom: 24px; left: 20px; right: auto; transform: none; z-index: 2; }
 .tutor-character.teaching .tutor-mascot { background: transparent; }
 
 /* The conversation dock: one shared transcript line, the voice actions, the hint, and the typing box. */
