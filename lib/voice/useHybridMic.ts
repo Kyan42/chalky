@@ -29,6 +29,10 @@ export type MicMode = "off" | "open" | "muted" | "held" | "tail";
 export interface HybridMicOptions {
   /** True while Chalky's voice is playing (plus a short echo tail). */
   speaking: boolean;
+  /** Keep the echo-cancelled microphone open and interrupt on recognized speech. */
+  autoInterrupt?: boolean;
+  /** Explicit user pause: suspend microphone input. */
+  paused?: boolean;
   /** KeyboardEvent.code of the barge-in key. */
   key?: string;
   /** Turns ending within this window merge into one utterance. */
@@ -83,19 +87,60 @@ export function useHybridMic(options: HybridMicOptions) {
   const held = useRef<{ since: number; words: boolean } | null>(null);
   const tail = useRef<{ timer: ReturnType<typeof setTimeout>; holdMs: number } | null>(null);
   const lastPartial = useRef("");
+  const voiceInterrupted = useRef(false);
+  const candidate = useRef<{ since: number; text: string; timer?: ReturnType<typeof setTimeout> } | null>(null);
+  const clearCandidate = useCallback(() => {
+    if (candidate.current?.timer) clearTimeout(candidate.current.timer);
+    candidate.current = null;
+  }, []);
+  const publishPartial = useCallback((text: string) => {
+    lastPartial.current = text;
+    if (held.current && text.trim()) held.current.words = true;
+    const combined = [merger.current?.buffered, text.trim()].filter(Boolean).join(" ");
+    setPartial(combined);
+    if (combined) opts.current.onPartial?.(combined);
+  }, []);
+  // Speech detection alone can be a cough or a chair scrape. Require words,
+  // then a short confirmation window before taking the floor from Chalky.
+  const confirmCandidate = useCallback((ended = false) => {
+    const c = candidate.current;
+    if (!c || opts.current.paused) return false;
+    const words = c.text.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
+    const meaningful = words.filter(w => !["um", "uh", "hmm", "hm", "ah", "oh"].includes(w));
+    if (!meaningful.length) return false;
+    const command = /^(stop|wait|pause|hold on)\b/i.test(c.text.trim());
+    const delay = command ? 120 : meaningful.length >= 2 ? 350 : 550;
+    const remaining = delay - (performance.now() - c.since);
+    if (remaining > 0) {
+      if (!ended) {
+        if (c.timer) clearTimeout(c.timer);
+        c.timer = setTimeout(() => confirmCandidate(), remaining);
+      }
+      return false;
+    }
+    const text = c.text;
+    clearCandidate();
+    voiceInterrupted.current = true;
+    merger.current?.turnStart();
+    opts.current.onBargeIn?.();
+    publishPartial(text);
+    return true;
+  }, [clearCandidate, publishPartial]);
 
   const modeNow = useCallback((): MicMode => {
     if (!ink.current) return "off";
+    if (opts.current.paused) return "muted";
     if (held.current) return "held";
     if (tail.current) return "tail";
-    return speakingRef.current ? "muted" : "open";
+    return speakingRef.current && !opts.current.autoInterrupt ? "muted" : "open";
   }, []);
   const refreshMode = useCallback(() => setMode(modeNow()), [modeNow]);
 
   /** Whether mic audio goes to Ink right now. */
   const gateOpen = useCallback(() => {
+    if (opts.current.paused) return false;
     if (held.current || tail.current) return true;
-    return !speakingRef.current;
+    return !!opts.current.autoInterrupt || !speakingRef.current;
   }, []);
 
   const endTail = useCallback(() => {
@@ -110,6 +155,7 @@ export function useHybridMic(options: HybridMicOptions) {
     try {
       await unlockAudio();
       merger.current = new TurnMerger({ mergeMs: windowRef.current }, (text, turns) => {
+        if (opts.current.paused) return;
         const via = tail.current || held.current ? "barge" : "open";
         const holdMs = tail.current?.holdMs;
         endTail();
@@ -120,19 +166,42 @@ export function useHybridMic(options: HybridMicOptions) {
         applyKeyterms();
       });
       const session = new InkSession(cartesiaToken, {
-        onStart: () => merger.current?.turnStart(),
+        onStart: () => {
+          if (opts.current.paused) return;
+          clearCandidate();
+          if (opts.current.autoInterrupt && speakingRef.current && !held.current && !voiceInterrupted.current) {
+            candidate.current = { since: performance.now(), text: "" };
+          }
+          // Start the merger only when words arrive: noise must not extend
+          // an existing learner turn indefinitely.
+        },
         onUpdate: (t) => {
-          lastPartial.current = t;
-          if (held.current && t.trim()) held.current.words = true;
-          setPartial(t);
-          opts.current.onPartial?.(t);
+          if (opts.current.paused) return;
+          if (!candidate.current && opts.current.autoInterrupt && speakingRef.current && !held.current && !voiceInterrupted.current) {
+            candidate.current = { since: performance.now(), text: "" };
+          }
+          if (candidate.current) {
+            candidate.current.text = t;
+            confirmCandidate();
+            return;
+          }
+          if (t.trim()) merger.current?.turnStart();
+          publishPartial(t);
         },
         onEnd: (t) => {
+          if (opts.current.paused) return;
+          if (candidate.current) {
+            candidate.current.text = t;
+            const accepted = confirmCandidate(true);
+            clearCandidate();
+            if (!accepted) return;
+          }
           lastPartial.current = "";
-          setPartial("");
           merger.current?.turnEnd(t);
+          const combined = merger.current?.buffered ?? t;
+          setPartial(combined);
+          if (combined.trim()) opts.current.onPartial?.(combined);
           applyKeyterms();
-          // The key is up and Ink has ended the turn: no need to wait any longer.
           if (tail.current) merger.current?.flush();
         },
         onError: (message) => {
@@ -154,17 +223,19 @@ export function useHybridMic(options: HybridMicOptions) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
     }
-  }, [mergeMs, endTail, refreshMode, gateOpen]);
+  }, [mergeMs, endTail, refreshMode, gateOpen, clearCandidate, confirmCandidate, publishPartial]);
 
   // Chalky starting to speak closes the open mic; a turn caught half-way is dropped (it was never going to end).
   useEffect(() => {
-    if (options.speaking && !held.current && !tail.current) {
+    if (options.speaking && !options.autoInterrupt && !held.current && !tail.current) {
       merger.current?.discard();
       setPartial("");
       lastPartial.current = "";
     }
+    if (options.paused) { clearCandidate(); merger.current?.discard(); setPartial(""); lastPartial.current = ""; }
+    if (!options.speaking) voiceInterrupted.current = false;
     refreshMode();
-  }, [options.speaking, refreshMode]);
+  }, [options.speaking, options.autoInterrupt, options.paused, refreshMode, clearCandidate]);
 
   // The barge-in key: down opens the mic and interrupts Chalky; up ends the turn.
   useEffect(() => {
@@ -244,10 +315,11 @@ export function useHybridMic(options: HybridMicOptions) {
   useEffect(
     () => () => {
       endTail();
+      clearCandidate();
       mic.current?.stop();
       ink.current?.close();
     },
-    [endTail],
+    [endTail, clearCandidate],
   );
 
   /**

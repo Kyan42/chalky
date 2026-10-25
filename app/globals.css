@@ -182,7 +182,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .tutor-board { position: relative; width: 100%; height: 100dvh; aspect-ratio: auto; display: block; font-family: "Instrument Sans", sans-serif; }
 .tutor-board .stage { position: absolute; inset: 0; padding: 5% 12% 160px; }
 .tutor-character { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 336px; height: 336px; }
-.tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.tutor-mascot { display: block; width: 100%; height: 100%; object-fit: contain; }
 .tutor-bubble { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(460px, 86vw); padding: 18px 26px; border: 1px solid #e4dfd3; border-radius: 18px; background: #fffdf8; box-shadow: 0 4px 12px #46351a09; font-family: "Instrument Serif", Georgia, serif; font-size: 30px; line-height: 1.25; text-align: center; }
 .tutor-bubble::after { content: ""; position: absolute; bottom: -7px; left: calc(50% - 7px); width: 12px; height: 12px; transform: rotate(45deg); background: #fffdf8; border-right: 1px solid #e4dfd3; border-bottom: 1px solid #e4dfd3; }
 .conversation-dock { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); width: min(640px, 90%); text-align: center; }
@@ -203,7 +203,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
   .tutor-board .stage { padding: 6% 4% 150px; }
   .tutor-character.teaching { width: 154px; height: 154px; left: 10px; right: auto; bottom: 150px; }
 }
-.tutor-character { background: var(--paper); }
+.tutor-character { background: transparent; }
 /* Warm ochre and charcoal controls, matched to Chalky's paper palette. */
 .tutor-board { --ink: #302b24; --accent: #bc870b; --muted: #81796b; --rule: #ded7c8; }
 .start-voice { background: #302b24; color: #fffaf0; border: 1px solid #302b24; box-shadow: none; transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease; }
@@ -234,3 +234,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outli
 .type-alternative summary { cursor: pointer; }
 .type-alternative .ask { margin-top: 10px; }
 .tutor-board { --paper: #f7f5ef; }
+
+/* Selected terracotta start button. */
+.start-voice[data-testid="start-talking"] { background: #ad6448; border-color: #ad6448; color: #fffaf0; border-radius: 8px; box-shadow: none; }
+.start-voice[data-testid="start-talking"] svg { color: #fffaf0; }
+.start-voice[data-testid="start-talking"]:hover:not(:disabled) { background: #99573e; border-color: #99573e; box-shadow: none; }
+
+/* Reserve caption space so line wrapping does not shift the controls. */
+.shared-transcript { height: 90px; min-height: 90px; display: flex; align-items: center; justify-content: center; }
+.shared-transcript p { margin: 0; width: 100%; text-wrap: pretty; }
+
+.planning-tinker { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: 112px; height: 112px; pointer-events: none; }
+.planning-tinker video { display: block; width: 100%; height: 100%; object-fit: contain; }
+@media (prefers-reduced-motion: reduce) { .planning-tinker { display: none; } }
+
+/* Small paper-cut shapes gather beneath the topic while its first visual loads. */
+.thinking-shapes { position: absolute; top: calc(50% + 58px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 22px; width: 260px; height: 74px; }
+.thinking-shape { display: block; flex: none; width: 28px; height: 30px; background: #bc870b; animation: thinking-drift 3.4s ease-in-out infinite; }
+.shape-diamond { clip-path: polygon(45% 0,100% 46%,56% 100%,0 57%); animation-delay: -.8s; }
+.shape-triangle { width: 32px; background: #d3a332; clip-path: polygon(42% 0,100% 93%,0 100%); animation-delay: -2.1s; }
+.shape-block { width: 25px; height: 25px; background: #ad6448; clip-path: polygon(4% 0,100% 7%,91% 100%,0 92%); animation-delay: -1.3s; }
+.shape-pentagon { width: 35px; height: 35px; clip-path: polygon(43% 0,100% 37%,79% 94%,23% 100%,0 38%); animation-delay: -2.8s; }
+.shape-sliver { width: 16px; height: 33px; background: #d3a332; clip-path: polygon(30% 0,100% 9%,66% 100%,0 84%); animation-delay: -.2s; }
+@keyframes thinking-drift { 0%,100% { transform: translate(-3px,5px) rotate(-14deg); } 50% { transform: translate(4px,-10px) rotate(18deg); } }
+.thinking-shapes[data-paused="true"] .thinking-shape { animation-play-state: paused; }
+@media (max-width: 600px) { .thinking-shapes { top: calc(50% + 52px); gap: 15px; transform: translateX(-50%) scale(.85); } }
+@media (prefers-reduced-motion: reduce) { .thinking-shape { animation: none; } }

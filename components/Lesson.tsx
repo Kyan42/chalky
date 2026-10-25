@@ -384,18 +384,31 @@ export default function Lesson() {
   }, []);
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
+  const [micMuted, setMicMuted] = useState(false);
+  const [learnerCaption, setLearnerCaption] = useState("");
+  const captionAwaitingSpeech = useRef(false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
   const voice = useHybridMic({
     // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
     keyterms: SEED_TERMS,
+    autoInterrupt: true,
+    mergeMs: 850,
+    patientMs: 1200,
+    paused: micMuted,
     speaking: MUTED.has(status) || speakingAudio,
     // Chalky asked something (intake, check-in, a reply's check): a pause mid-answer must not end the turn.
     patient: status === "waiting",
     // Space down while Chalky talks: stop now, keep the resume point, then listen.
     onBargeIn: () => pauseRef.current(),
+    onPartial: (text) => {
+      if (!text.trim()) return;
+      captionAwaitingSpeech.current = false;
+      setLearnerCaption(text);
+    },
     onUtterance: (text) => {
       const said = text.trim();
       if (!said) return;
+      setLearnerCaption(said);
       inputViaRef.current = "voice";
       if (mergeRef.current(said)) return;
       if (turnRef.current) turnRef.current(said);
@@ -482,6 +495,7 @@ export default function Lesson() {
     const voiced = firstPerson(state.beat.say);
     if (voiced.rewrites.length) logRef.current({ kind: "self-name-rewrite", role: state.beat.id === "line" ? "line" : "beat", beatId: state.beat.id, from: state.beat.say, to: voiced.text, rewrites: voiced.rewrites });
     const spokenText = voiced.text;
+    captionAwaitingSpeech.current = true;
     setWords(spokenText.split(/\s+/));
     setWordIndexNow(-1);
     wordIndexRef.current = -1;
@@ -497,10 +511,15 @@ export default function Lesson() {
     let raf = 0;
 
     const show = async (currentElements: PresetElement[]) => {
-      if (!compile) return;
+      if (!compile || signal.aborted || !playing) return;
+      await waitWhilePaused(signal);
+      if (signal.aborted || !playing) return;
+      // A pending drawing must not blank the board before usable visuals exist.
+      const doc = compile(currentElements);
+      if (!doc) return;
       lastTick = -1;
       try {
-        await showDocument(compile(currentElements));
+        await showDocument(doc);
       } catch (e) {
         // The player refused the document: keep speaking with the board as it was.
         console.warn("[board] player", e);
@@ -510,12 +529,16 @@ export default function Lesson() {
 
     const frame = () => {
       raf = requestAnimationFrame(frame);
-      if (!audio) return;
+      if (!audio || pausedRef.current || signal.aborted) return;
       const t = audio.position();
       if (t < 0) return;
       const w = wordAt(t, timestamps);
       wordIndexRef.current = w;
       setWordIndexNow(w);
+      if (w >= 0 && !pausedRef.current && captionAwaitingSpeech.current) {
+        captionAwaitingSpeech.current = false;
+        setLearnerCaption("");
+      }
       const player = playerRef.current;
       if (compile && player && anchorStart !== null && !seeking) {
         const tick = Math.max(0, Math.min(DOC_END - FRAME_TICKS, Math.round(((t - anchorStart) * TPS) / FRAME_TICKS) * FRAME_TICKS));
@@ -684,12 +707,12 @@ export default function Lesson() {
     setLastReplyMs(null);
     setLastLevel(null);
     setPausedAt(null);
-    showBoard(EMPTY_BOARD);
+    // Retain the previous board while the next topic is being prepared.
     setCursorScript([]);
     queueRef.current = [];
     setTitle("Planning…");
     setStatus("planning");
-    await showDocument(undefined);
+    // The first usable drawing replaces the old board, never the planning step.
 
     const post = (path: string, body: unknown, signal: AbortSignal = abort.signal) =>
       fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
@@ -1003,8 +1026,8 @@ export default function Lesson() {
       abort.signal.addEventListener("abort", onStop, { once: true });
       const signal = replyAbort.signal;
       setStatus("replying");
-      // A beat cut off mid-drawing froze half drawn; show its drawing finished so the reply can point at it.
-      void playerRef.current?.seek(DOC_END - FRAME_TICKS);
+      // Keep the interrupted drawing exactly as the learner saw it. A spoken
+      // follow-up can refer to this board without completing or replacing it.
       const t1 = performance.now();
       const ctx = await unlockAudio();
       let audio: StreamPlayer | null = null;
@@ -1076,6 +1099,7 @@ export default function Lesson() {
           wake();
         });
         reading.catch(() => {});
+        captionAwaitingSpeech.current = true;
         setWords([]);
         setWordIndexNow(-1);
         setCursorScript([]);
@@ -1083,7 +1107,14 @@ export default function Lesson() {
         const frame = () => {
           raf = requestAnimationFrame(frame);
           const t = audio?.position() ?? -1;
-          if (t >= 0) setWordIndexNow(wordAt(t, all));
+          if (t >= 0) {
+            const w = wordAt(t, all);
+            setWordIndexNow(w);
+            if (w >= 0 && !pausedRef.current && captionAwaitingSpeech.current) {
+              captionAwaitingSpeech.current = false;
+              setLearnerCaption("");
+            }
+          }
         };
         raf = requestAnimationFrame(frame);
         let heard = false;
@@ -1535,6 +1566,7 @@ export default function Lesson() {
     if (pausedRef.current || (st !== "speaking" && st !== "replying")) return;
     pausedRef.current = { prev: st, at: performance.now(), beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current };
     audioRef.current?.pause();
+    playerRef.current?.pause();
     speakingRef.current = false;
     setSpeakingAudio(false);
     setPausedAt({ beatId: currentBeatIdRef.current, wordIndex: wordIndexRef.current });
@@ -1547,6 +1579,7 @@ export default function Lesson() {
     const p = pausedRef.current;
     if (!p) return;
     pausedRef.current = null;
+    captionAwaitingSpeech.current = true;
     audioRef.current?.resume();
     if (audioRef.current && !audioRef.current.drained) {
       speakingRef.current = true;
@@ -1684,7 +1717,9 @@ export default function Lesson() {
   };
   const [lecturePreview, setLecturePreview] = useState(false);
   const showWelcome = !lecturePreview && !question;
-  const mascotSource = speakingAudio ? "/mascot/talking.mp4" : "/mascot/thinking.mp4";
+  const mascotSource = showWelcome
+    ? "/mascot/chalk-in-hand.webm"
+    : lecturePreview || speakingAudio ? "/mascot/talking.webm" : "/mascot/thinking.webm";
 
   const drawLabel = (b: BeatState) => {
     switch (b.draw) {
@@ -1707,7 +1742,14 @@ export default function Lesson() {
             {question && current < 0 && (
               // Before the first beat draws: the topic in chalk, so the board is never blank while Chalky plans.
               <div className="chalk-title" data-testid="chalk-title">
-                {title && title !== "Planning…" ? title : question}
+                <span>{title && title !== "Planning…" ? title : question}</span>
+                <div className="thinking-shapes" aria-hidden="true" data-paused={status === "paused" || status === "listening"}>
+                  <span className="thinking-shape shape-diamond" />
+                  <span className="thinking-shape shape-triangle" />
+                  <span className="thinking-shape shape-block" />
+                  <span className="thinking-shape shape-pentagon" />
+                  <span className="thinking-shape shape-sliver" />
+                </div>
               </div>
             )}
             <ChalkyCursor boxes={board.boxes} script={cursorScript} clock={cursorClock} />
@@ -1724,7 +1766,7 @@ export default function Lesson() {
             <text x="450" y="380" textAnchor="middle" fontSize="21" fill="#81796b">Water + carbon dioxide → sugar + oxygen</text>
           </svg>}
           <div className={showWelcome ? "tutor-character" : "tutor-character teaching"} data-testid="welcome">
-            {!lecturePreview && !voice.started ? <img className="tutor-mascot" src="/mascot/seated.png" alt="Chalky sitting cross-legged" /> : <video key={mascotSource} className="tutor-mascot" src={lecturePreview ? "/mascot/talking.mp4" : mascotSource} autoPlay muted loop playsInline aria-label={speakingAudio ? "Chalky talking" : "Chalky thinking"} />}
+            <video key={mascotSource} className="tutor-mascot" src={mascotSource} autoPlay muted loop playsInline aria-label={showWelcome ? "Chalky holding chalk" : lecturePreview || speakingAudio ? "Chalky talking" : "Chalky thinking"} />
           </div>
         </section>
         <aside className="evidence lesson-beats" hidden>
@@ -1763,11 +1805,11 @@ export default function Lesson() {
         </aside>
         <div className="conversation-dock">
           <div className="shared-transcript" data-testid="caption" aria-live="polite">
-            {lecturePreview ? <p>Think of the leaf as a tiny kitchen.</p> : voice.partial ? <p data-testid="heard">{captionWindow(voice.partial.split(/\s+/), voice.partial.split(/\s+/).length - 1).map(({word,index},i,list) => <span key={index} className={i === list.length-1 ? "transcript-word current learner-word" : "transcript-word"}>{word} </span>)}</p> : heardNote && !question ? <p data-testid="heard-note">{heardNote}</p> : <p>{captionWindow(words, wordIndexNow).map(({word,index}) => <span key={index} className={index === wordIndexNow ? "transcript-word current chalky-word" : "transcript-word"} data-state={index === wordIndexNow ? "now" : "spoken"}>{word} </span>)}</p>}
+            {lecturePreview ? <p>Think of the leaf as a tiny kitchen.</p> : learnerCaption ? <p data-testid="heard">{learnerCaption.trim().split(/\s+/).slice(-24).map((word,i,list) => <span key={i} className={i === list.length-1 ? "transcript-word current learner-word" : "transcript-word"}>{word} </span>)}</p> : heardNote && !question ? <p data-testid="heard-note">{heardNote}</p> : <p>{captionWindow(words, wordIndexNow).map(({word,index}) => <span key={index} className={index === wordIndexNow ? "transcript-word current chalky-word" : "transcript-word"} data-state={index === wordIndexNow ? "now" : "spoken"}>{word} </span>)}</p>}
           </div>
           <div className="voice-actions">
             {lecturePreview ? <button className="start-voice" onClick={() => setLecturePreview(false)}>Back to start</button> : <>
-              {!voice.started && <button className="start-voice" type="button" onClick={startTalking} data-testid="start-talking"><svg width="18" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>Start talking</button>}
+              {<button className="start-voice" type="button" onClick={() => { if (!voice.started) { void startTalking(); return; } setMicMuted(value => !value); }} aria-pressed={voice.started ? micMuted : undefined} data-testid="start-talking"><svg width="18" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/>{micMuted && <path d="M3 3l18 18"/>}<path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>{!voice.started ? "Start talking" : micMuted ? "Unmute" : "Mute"}</button>}
             {status === "speaking" && busy && (
               <button className="quiet-action" type="button" onClick={pausePlayback} data-testid="interrupt" title="Space">Pause</button>
             )}
@@ -1779,8 +1821,8 @@ export default function Lesson() {
             </>}
           </div>
           {!lecturePreview && <>
-            <p className="voice-hint" data-testid="status">{voice.started || question ? statusLabel[status] : "Turn on your microphone to begin"}</p>
-            <details className="type-alternative"><summary>Type instead</summary>
+            <p hidden className="voice-hint" data-testid="status">{voice.started || question ? statusLabel[status] : "Turn on your microphone to begin"}</p>
+            <details hidden className="type-alternative"><summary>Type instead</summary>
           <form
             className="ask"
             onSubmit={(e) => {
