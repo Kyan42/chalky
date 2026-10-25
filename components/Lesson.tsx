@@ -1332,7 +1332,8 @@ export default function Lesson() {
             if (!els.length) return;
             // What the board shows now (the scene so far, this beat finished), with the sketch drawing on top.
             const base = sceneGroups(list, i, owner.beat.mode === "draw" ? (owner.elements ?? []) : []);
-            owner.sketches = [...(owner.sketches ?? []), ...els];
+            // Marked solid: a later beat planned onto this spot is moved off the sketch, not drawn over it.
+            owner.sketches = [...(owner.sketches ?? []), ...els.map((e) => ({ ...e, solid: true }))];
             owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
             views.set(scene, view);
             if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
