@@ -1,34 +1,32 @@
 "use client";
 
 /**
- * Recent papers: /experiments/research
+ * Time-sensitive questions from the web: /experiments/research
  *
- * A topic and a window in; the papers (components/PaperCards.tsx), the planner's material text,
- * the path that fetched them, latency and a cached badge out (POST /api/research,
- * lib/research/papers.ts). "Path" forces one fetch path for measuring; pick a citation and type a
- * line to see the card open and the matching key sentence light up, as a beat with `cite` would.
- * No model calls.
+ * A question in; the pages (components/ResearchCards.tsx), the planner's material text, the
+ * search sent, latency and a cached badge out (POST /api/research, lib/research/web.ts). Pick a
+ * citation and type a line to see the card open and the matching key sentence light up, as a beat
+ * with `cite` would. No model calls.
  */
 import { useState } from "react";
-import { PaperCards } from "@/components/PaperCards";
+import { ResearchCards } from "@/components/ResearchCards";
 import type { ResearchEvent, ResearchRecord } from "@/lib/research/types";
 
-const TOPICS = ["vision-language-action models", "LLM agents", "voice AI", "retrieval-augmented generation", "photosynthesis"];
-const PATHS = [
-  { value: "", label: "auto (Apify, then arXiv API)" },
-  { value: "apify-arxiv", label: "Apify arXiv actor" },
-  { value: "apify-rag", label: "Apify rag-web-browser" },
-  { value: "arxiv-api", label: "arXiv API (free fallback)" },
+const QUESTIONS = [
+  "what's new in CRISPR this month",
+  "what changed in Python 3.14",
+  "who won the 2026 Nobel in physics and for what",
+  "what's the latest on the James Webb telescope",
+  "what's new in battery technology",
+  "what's the latest with quantum computers",
 ];
 
 const box: React.CSSProperties = { border: "1px solid #ccc", borderRadius: 8, padding: 12, background: "#fff" };
 const badge = (bg: string): React.CSSProperties => ({ display: "inline-block", padding: "2px 8px", borderRadius: 99, fontSize: 12, background: bg, marginRight: 6 });
 
 export default function ResearchPage() {
-  const [draft, setDraft] = useState(TOPICS[0]);
-  const [days, setDays] = useState(14);
-  const [path, setPath] = useState("");
-  const [run, setRun] = useState<{ topic: string; days: number; n: number; fresh: boolean; only: string } | null>(null);
+  const [draft, setDraft] = useState(QUESTIONS[0]);
+  const [run, setRun] = useState<{ question: string; n: number; fresh: boolean } | null>(null);
   const [rec, setRec] = useState<ResearchRecord | null>(null);
   const [events, setEvents] = useState<(ResearchEvent & { t: number })[]>([]);
   const [t0, setT0] = useState(0);
@@ -40,14 +38,14 @@ export default function ResearchPage() {
     setEvents([]);
     setT0(performance.now());
     setCite(1);
-    setRun({ topic: draft.trim(), days, n: (run?.n ?? 0) + 1, fresh: fresh || !!path, only: path });
+    setRun({ question: draft.trim(), n: (run?.n ?? 0) + 1, fresh });
   };
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui, sans-serif", background: "#f6f5f1", minHeight: "100vh", color: "#222" }}>
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Recent papers</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>What&apos;s new, from the web</h1>
       <p style={{ margin: "0 0 16px", color: "#666", fontSize: 13 }}>
-        /api/research (lib/research/CONTRACT.md); cached per topic and window in experiments/research-cache. Forcing a path skips the cache and does not write it.
+        /api/research (lib/research/CONTRACT.md): one Apify rag-web-browser call, 8 s budget, cached per question in experiments/research-cache.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "minmax(360px, 1fr) 380px", gap: 16, alignItems: "start" }}>
         <section style={{ display: "grid", gap: 12 }}>
@@ -59,23 +57,13 @@ export default function ResearchPage() {
               }}
               style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
             >
-              <input value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: 1, minWidth: 200, padding: 8, fontSize: 15 }} data-testid="research-topic" />
-              <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
-                last
-                <input type="number" min={1} max={90} value={days} onChange={(e) => setDays(Math.max(1, Math.min(90, Number(e.target.value) || 14)))} style={{ width: 56, padding: 6 }} data-testid="research-days" />
-                days
-              </label>
-              <select value={path} onChange={(e) => setPath(e.target.value)} style={{ fontSize: 13 }} data-testid="research-path">
-                {PATHS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-              <button type="submit" disabled={!draft.trim()} data-testid="research-start">Find papers</button>
-              <button type="button" disabled={!draft.trim()} onClick={() => start(true)} title="Skip the cache and fetch again (overwrites the cache file)">Fetch fresh</button>
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: 1, minWidth: 240, padding: 8, fontSize: 15 }} data-testid="research-question" />
+              <button type="submit" disabled={!draft.trim()} data-testid="research-start">Look it up</button>
+              <button type="button" disabled={!draft.trim()} onClick={() => start(true)} title="Skip the cache (a good answer still overwrites the cache file)">Fetch fresh</button>
             </form>
             <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {TOPICS.map((t) => (
-                <button key={t} type="button" onClick={() => setDraft(t)} style={{ fontSize: 12 }}>{t}</button>
+              {QUESTIONS.map((q) => (
+                <button key={q} type="button" onClick={() => setDraft(q)} style={{ fontSize: 12 }}>{q}</button>
               ))}
             </div>
           </div>
@@ -87,29 +75,28 @@ export default function ResearchPage() {
             ) : (
               <>
                 {rec.status === "running" && <span style={badge("#fff3cd")}>running</span>}
-                {rec.status === "failed" && <span style={badge("#f8d7da")}>failed</span>}
+                {rec.status === "none" && <span style={badge("#f8d7da")} data-testid="badge-none">none</span>}
                 {rec.status === "ready" && (rec.cached ? <span style={badge("#d1e7dd")} data-testid="badge-cached">cached</span> : <span style={badge("#cfe2ff")}>live</span>)}
-                {rec.via && <span style={badge("#e2d9f3")} data-testid="badge-via">{rec.via}</span>}
+                {rec.recent && <span style={badge("#e2d9f3")}>recency hint</span>}
                 <span style={{ fontSize: 13 }}>
-                  {rec.papers.length} paper(s) · {rec.from} to {rec.to}
-                  {rec.searchedDays > rec.days ? ` (widened to ${rec.searchedDays} days)` : ""}
-                  {rec.ms != null ? ` · fetched in ${(rec.ms / 1000).toFixed(1)} s` : ""}
-                  {rec.fetchedAt ? ` · ${new Date(rec.fetchedAt).toLocaleString()}` : ""}
+                  {rec.items.length} page(s){rec.ms != null ? ` · ${(rec.ms / 1000).toFixed(1)} s` : ""}
+                  {rec.fetchedAt ? ` · fetched ${new Date(rec.fetchedAt).toLocaleString()}` : ""}
                 </span>
+                {rec.query && <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>search: {rec.query}</div>}
                 {rec.error && <p style={{ fontSize: 13, color: "#a33", margin: "8px 0 0" }}>{rec.error}</p>}
               </>
             )}
           </div>
           <div style={box}>
-            <div style={{ fontSize: 13, marginBottom: 6 }}>A beat citing a paper:</div>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>A beat citing a page:</div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               cite
-              {(rec?.papers ?? []).map((p) => (
-                <button key={p.n} type="button" onClick={() => setCite(p.n)} aria-pressed={cite === p.n} style={{ fontWeight: cite === p.n ? 700 : 400 }} data-testid={`cite-${p.n}`}>
-                  [{p.n}]
+              {(rec?.items ?? []).map((it) => (
+                <button key={it.n} type="button" onClick={() => setCite(it.n)} aria-pressed={cite === it.n} style={{ fontWeight: cite === it.n ? 700 : 400 }} data-testid={`cite-${it.n}`}>
+                  [{it.n}]
                 </button>
               ))}
-              <input value={line} onChange={(e) => setLine(e.target.value)} placeholder="the beat's line, e.g. it hit 40% better success" style={{ flex: 1, minWidth: 200, padding: 6 }} data-testid="research-line" />
+              <input value={line} onChange={(e) => setLine(e.target.value)} placeholder="the beat's line" style={{ flex: 1, minWidth: 200, padding: 6 }} data-testid="research-line" />
             </div>
           </div>
           <div style={box}>
@@ -127,13 +114,11 @@ export default function ResearchPage() {
         </section>
         <section style={{ ...box, background: "var(--paper)", minHeight: 200 }}>
           {run && (
-            <PaperCards
+            <ResearchCards
               key={run.n}
               layout="inline"
-              topic={run.topic}
-              days={run.days}
+              question={run.question}
               fresh={run.fresh}
-              only={run.only || undefined}
               currentCite={cite}
               currentLine={line}
               onRecord={setRec}

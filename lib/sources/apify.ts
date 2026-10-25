@@ -198,7 +198,7 @@ export function toParagraphs(md: string): string[] {
     const text = clean(raw);
     const words = text.split(/\s+/).length;
     if (words < 12 || text.length < 80) continue;
-    if (!/[.!?]["')\]]?$/.test(text)) continue; // menus and captions rarely end a sentence
+    if (!/[.!?]["'”’»)\]]?$/.test(text)) continue; // menus and captions rarely end a sentence
     if (/cookie|privacy policy|subscribe|sign up|log in|javascript|all rights reserved/i.test(text) && words < 60) continue;
     out.push(text.length > 900 ? shorten(text, 900) : text);
     total += text.length;
@@ -211,6 +211,7 @@ function clean(md: string): string {
   return md
     .replace(/\\([[\]()*_#>])/g, "$1") // markdown escapes: \[Ref. 1\] → [Ref. 1]
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+    .replace(/\[\[[^\]]*\]\]\([^)]*\)/g, "") // wiki footnote links: [[a]](https://…#cite_note-2)
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links keep their words
     .replace(/\[\d+\]|\[citation needed\]|\[edit\]/gi, "") // wiki footnotes
     .replace(/[*_`~]+/g, "")

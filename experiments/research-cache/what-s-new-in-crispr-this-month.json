@@ -1,0 +1,47 @@
+{
+  "question": "what's new in CRISPR this month",
+  "query": "what's new in CRISPR this month October 2026",
+  "recent": true,
+  "status": "ready",
+  "items": [
+    {
+      "n": 1,
+      "title": "News: CMN Weekly (23 October 2026) - Your Weekly CRISPR Medicine News - CRISPR Medicine",
+      "url": "https://crisprmedicinenews.com/news/cmn-weekly-23-october-2026-your-weekly-crispr-medicine-news/",
+      "site": "crisprmedicinenews.com",
+      "published": "2026-10-23",
+      "key": [
+        "A single infusion of Papillon Therapeutics’ CRISPR-Cas9 therapy PPL-001 edited haematopoietic stem and progenitor cells has corrected multisystemic disease in a humanised mouse model of Friedreich’s ataxia.",
+        "Excising the GAA expansion from FXN intron 1 raised frataxin levels, eased mitochondrial stress and inflammation, and preserved cerebellar architecture, cardiac tissue and pancreatic β cells."
+      ]
+    },
+    {
+      "n": 2,
+      "title": "A first for CRISPR: powerful prime editing alters DNA directly in the human body | Nature",
+      "url": "https://www.nature.com/articles/d41586-026-03371-x",
+      "site": "nature.com",
+      "published": "2026-10-22",
+      "key": [
+        "The milestone treatment is part of a clinical trial of prime editing, a technique that can alter DNA with more precision than standard CRISPR–Cas9 methods can.",
+        "Casgevy relies on CRISPR–Cas9 gene editing, which is often used to disable genes rather than to rewrite their sequences.",
+        "But the FDA is expected to issue a decision early next year about an in vivo CRISPR–Cas9 therapy for a condition called hereditary angioedema, which causes severe swelling."
+      ]
+    },
+    {
+      "n": 3,
+      "title": "A novel CRISPR system shreds cellular DNA",
+      "url": "https://cen.acs.org/biological-chemistry/biotechnology/novel-crispr-system-shreds-cellular/104/web/2026/10",
+      "site": "cen.acs.org",
+      "published": "2026-10-22",
+      "key": [
+        "A CRISPR system that kills its host cell could become a powerful platform for precision cancer therapies.",
+        "Around 2015, Matthew Begemann, senior director of R&D at agricultural technology business Confluence Genetics (formerly Benson Hill), based in Saint Louis, started looking for CRISPR gene-editing systems to engineer new plant varieties.",
+        "Called Cas12a2, the CRISPR system had some distinctive properties."
+      ]
+    }
+  ],
+  "material": "Recent web pages for \"what's new in CRISPR this month\" (searched 2026-10-25). Cite them as [1] to [3].\n\n[1] News: CMN Weekly (23 October 2026) - Your Weekly CRISPR Medicine News - CRISPR Medicine (crisprmedicinenews.com, 2026-10-23)\nA single infusion of Papillon Therapeutics’ CRISPR-Cas9 therapy PPL-001 edited haematopoietic stem and progenitor cells has corrected multisystemic disease in a humanised mouse model of Friedreich’s ataxia. Excising the GAA expansion from FXN intron 1 raised frataxin levels, eased mitochondrial stress and inflammation, and preserved cerebellar architecture, cardiac tissue and pancreatic β cells.\n\n[2] A first for CRISPR: powerful prime editing alters DNA directly in the human body | Nature (nature.com, 2026-10-22)\nThe milestone treatment is part of a clinical trial of prime editing, a technique that can alter DNA with more precision than standard CRISPR–Cas9 methods can. Casgevy relies on CRISPR–Cas9 gene editing, which is often used to disable genes rather than to rewrite their sequences. But the FDA is expected to issue a decision early next year about an in vivo CRISPR–Cas9 therapy for a condition called hereditary angioedema, which causes severe swelling.\n\n[3] A novel CRISPR system shreds cellular DNA (cen.acs.org, 2026-10-22)\nA CRISPR system that kills its host cell could become a powerful platform for precision cancer therapies. Around 2015, Matthew Begemann, senior director of R&D at agricultural technology business Confluence Genetics (formerly Benson Hill), based in Saint Louis, started looking for CRISPR gene-editing systems to engineer new plant varieties. Called Cas12a2, the CRISPR system had some distinctive properties.",
+  "startedAt": "2026-10-25T07:56:02.245Z",
+  "fetchedAt": "2026-10-25T07:56:07.171Z",
+  "ms": 4925
+}
