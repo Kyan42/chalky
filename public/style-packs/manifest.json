@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "palette": "palette.json",
+  "preferred": "ink-watercolor",
+  "iconCount": 23,
+  "styles": [
+    {
+      "id": "ink-watercolor",
+      "name": "Ink + watercolor",
+      "style": "ink-watercolor/style.json",
+      "icons": "ink-watercolor/icons.json"
+    },
+    {
+      "id": "editorial-doodle",
+      "name": "Editorial doodle",
+      "style": "editorial-doodle/style.json",
+      "icons": "editorial-doodle/icons.json"
+    },
+    {
+      "id": "monochrome-line",
+      "name": "Minimal ink line",
+      "style": "monochrome-line/style.json",
+      "icons": "monochrome-line/icons.json"
+    },
+    {
+      "id": "print-comic",
+      "name": "Print comic",
+      "style": "print-comic/style.json",
+      "icons": "print-comic/icons.json"
+    },
+    {
+      "id": "paper-cutout",
+      "name": "Paper cutout",
+      "style": "paper-cutout/style.json",
+      "icons": "paper-cutout/icons.json"
+    },
+    {
+      "id": "chalk-sketch",
+      "name": "Chalk sketch",
+      "style": "chalk-sketch/style.json",
+      "icons": "chalk-sketch/icons.json"
+    },
+    {
+      "id": "clean-diagram",
+      "name": "Clean diagram",
+      "style": "clean-diagram/style.json",
+      "icons": "clean-diagram/icons.json"
+    }
+  ]
+}

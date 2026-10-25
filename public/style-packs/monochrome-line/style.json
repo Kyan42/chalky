@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "id": "monochrome-line",
+  "name": "Minimal ink line",
+  "description": "The desk reference’s sparse linework, retaining each object’s shared color.",
+  "ink": "#302b24",
+  "paper": "#f7f5ef",
+  "accent": "#c69a34",
+  "width": 0.9,
+  "wobble": 0.3,
+  "texture": 0,
+  "mode": "mono",
+  "palette": "../palette.json",
+  "rendering": {
+    "engine": "svg",
+    "seed": 17,
+    "notes": "Texture and wobble are SVG filters. Clayzo needs a renderer adapter for these effects; geometry, parts and anchors remain compatible."
+  }
+}

@@ -1,0 +1,1803 @@
+{
+  "version": 2,
+  "style": "chalk-sketch",
+  "palette": "../palette.json",
+  "icons": [
+    {
+      "id": "sun",
+      "title": "Sun",
+      "describe": "a sun: circle with rays; source of light and energy",
+      "tags": [
+        "light",
+        "energy",
+        "photosynthesis",
+        "heat",
+        "seasons",
+        "food chain"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "disc",
+          "label": "sun",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 50,
+              "cy": 50,
+              "rx": 21,
+              "ry": 21,
+              "stroke": "#bb8144",
+              "fill": "#d2b163",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "rays",
+          "label": "sunlight",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M50.0 20.0 L50.0 6.0",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M71.2 28.8 L81.1 18.9",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M80.0 50.0 L94.0 50.0",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M71.2 71.2 L81.1 81.1",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M50.0 80.0 L50.0 94.0",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M28.8 71.2 L18.9 81.1",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M20.0 50.0 L6.0 50.0",
+              "stroke": "#bb8144",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M28.8 28.8 L18.9 18.9",
+              "stroke": "#bb8144",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ],
+        "top": [
+          50,
+          4
+        ],
+        "bottom": [
+          50,
+          96
+        ],
+        "left": [
+          4,
+          50
+        ],
+        "right": [
+          96,
+          50
+        ],
+        "bottom-right": [
+          83,
+          83
+        ],
+        "bottom-left": [
+          17,
+          83
+        ]
+      }
+    },
+    {
+      "id": "cloud",
+      "title": "Cloud",
+      "describe": "a puffy cloud; air, the sky, rain or water vapour",
+      "tags": [
+        "water cycle",
+        "rain",
+        "weather",
+        "evaporation",
+        "condensation",
+        "air"
+      ],
+      "size": [
+        100,
+        60
+      ],
+      "parts": [
+        {
+          "id": "cloud",
+          "label": "cloud",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M22 50 C 8 50, 6 32, 20 29 C 20 13, 42 8, 50 21 C 57 7, 82 11, 80 30 C 94 30, 95 50, 80 50 Z",
+              "stroke": "#4f8ba8",
+              "fill": "#79a6ba",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          34
+        ],
+        "top": [
+          50,
+          12
+        ],
+        "bottom": [
+          50,
+          52
+        ],
+        "left": [
+          8,
+          40
+        ],
+        "right": [
+          92,
+          40
+        ]
+      }
+    },
+    {
+      "id": "drop",
+      "title": "Water drop",
+      "describe": "a single water droplet; water, H2O, rain, moisture",
+      "tags": [
+        "water",
+        "H2O",
+        "rain",
+        "water cycle",
+        "osmosis",
+        "transpiration"
+      ],
+      "size": [
+        70,
+        100
+      ],
+      "parts": [
+        {
+          "id": "drop",
+          "label": "water",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M35 8 C 35 8, 62 46, 62 64 C 62 80, 50 92, 35 92 C 20 92, 8 80, 8 64 C 8 46, 35 8, 35 8 Z",
+              "stroke": "#4f8ba8",
+              "fill": "#79a6ba",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M20 66 C 20 58, 23 51, 27 45",
+              "stroke": "#4f8ba8",
+              "width": 1.52
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          35,
+          64
+        ],
+        "top": [
+          35,
+          8
+        ],
+        "bottom": [
+          35,
+          92
+        ],
+        "left": [
+          8,
+          64
+        ],
+        "right": [
+          62,
+          64
+        ]
+      }
+    },
+    {
+      "id": "energy",
+      "title": "Energy",
+      "describe": "a lightning bolt; energy, ATP, a signal or spark",
+      "tags": [
+        "energy",
+        "ATP",
+        "respiration",
+        "electricity",
+        "signal"
+      ],
+      "size": [
+        60,
+        100
+      ],
+      "parts": [
+        {
+          "id": "bolt",
+          "label": "energy",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M36 6 L 10 56 L 28 56 L 20 94 L 50 40 L 32 40 L 44 6 Z",
+              "stroke": "#bb8144",
+              "fill": "#d2b163",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          30,
+          50
+        ],
+        "top": [
+          40,
+          6
+        ],
+        "bottom": [
+          20,
+          94
+        ],
+        "left": [
+          10,
+          56
+        ],
+        "right": [
+          50,
+          40
+        ]
+      }
+    },
+    {
+      "id": "leaf",
+      "title": "Leaf",
+      "describe": "a single leaf with midrib, veins and stem; where photosynthesis happens",
+      "tags": [
+        "leaf",
+        "plant",
+        "photosynthesis",
+        "chlorophyll",
+        "stomata",
+        "transpiration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "stem",
+          "label": "stem",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M28 75 L 14 93",
+              "stroke": "#46894b",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "blade",
+          "label": "leaf",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M28 75 C 24 49, 49 23, 83 17 C 80 47, 58 75, 28 75 Z",
+              "stroke": "#46894b",
+              "fill": "#72a474",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "midrib",
+          "label": "midrib",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M28 75 C 44 56, 62 37, 83 17",
+              "stroke": "#46894b",
+              "width": 1.52
+            }
+          ]
+        },
+        {
+          "id": "veins",
+          "label": "veins",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M43.0 57.9 L39.8 41.9",
+              "stroke": "#46894b",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M43.0 57.9 L59.0 54.7",
+              "stroke": "#46894b",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M54.7 45.2 L52.1 32.2",
+              "stroke": "#46894b",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M54.7 45.2 L67.7 42.6",
+              "stroke": "#46894b",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M66.0 33.6 L64.0 23.6",
+              "stroke": "#46894b",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M66.0 33.6 L76.0 31.6",
+              "stroke": "#46894b",
+              "width": 1.14
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          52,
+          48
+        ],
+        "surface": [
+          45,
+          40
+        ],
+        "underside": [
+          64,
+          58
+        ],
+        "tip": [
+          83,
+          17
+        ],
+        "stem": [
+          16,
+          90
+        ],
+        "midrib": [
+          53.625,
+          46.375
+        ]
+      }
+    },
+    {
+      "id": "plant",
+      "title": "Plant",
+      "describe": "a small plant growing out of the soil, with two leaves and roots",
+      "tags": [
+        "plant",
+        "seedling",
+        "growth",
+        "roots",
+        "soil",
+        "photosynthesis",
+        "water uptake"
+      ],
+      "size": [
+        80,
+        100
+      ],
+      "parts": [
+        {
+          "id": "soil",
+          "label": "soil",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M4 80 L 76 80",
+              "stroke": "#87644e",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "roots",
+          "label": "roots",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M40 80 C 40 87, 34 91, 28 96",
+              "stroke": "#87644e",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "path",
+              "d": "M40 80 C 41 88, 47 91, 53 96",
+              "stroke": "#87644e",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "path",
+              "d": "M40 80 L 40 97",
+              "stroke": "#87644e",
+              "width": 1.3299999999999998
+            }
+          ]
+        },
+        {
+          "id": "stem",
+          "label": "stem",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M40 80 C 40 64, 37 50, 40 32",
+              "stroke": "#46894b",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "leaves",
+          "label": "leaves",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M39 56 C 30 43, 16 42, 8 46 C 14 57, 28 60, 39 56 Z",
+              "stroke": "#46894b",
+              "fill": "#72a474",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M40 40 C 49 28, 63 26, 72 30 C 66 41, 52 45, 40 40 Z",
+              "stroke": "#46894b",
+              "fill": "#72a474",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "leaf": [
+          58,
+          34
+        ],
+        "leaves": [
+          40,
+          42
+        ],
+        "stem": [
+          39,
+          66
+        ],
+        "roots": [
+          40,
+          92
+        ],
+        "soil": [
+          64,
+          80
+        ],
+        "top": [
+          40,
+          26
+        ],
+        "center": [
+          40,
+          50
+        ]
+      }
+    },
+    {
+      "id": "tree",
+      "title": "Tree",
+      "describe": "a tree with a round leafy crown, trunk and ground line",
+      "tags": [
+        "tree",
+        "plant",
+        "forest",
+        "carbon cycle",
+        "oxygen",
+        "ecosystem"
+      ],
+      "size": [
+        100,
+        110
+      ],
+      "parts": [
+        {
+          "id": "ground",
+          "label": "ground",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M18 104 L 82 104",
+              "stroke": "#87644e",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "trunk",
+          "label": "trunk",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M43 104 C 45 90, 46 78, 45 66 L 55 66 C 54 78, 55 90, 57 104 Z",
+              "stroke": "#87644e",
+              "fill": "#a38876",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "crown",
+          "label": "leaves",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M50.0 11.0 Q66.3 4.0 73.1 17.8 Q91.2 20.9 85.5 35.0 Q96.8 46.6 81.2 54.5 Q80.5 69.3 62.3 67.3 Q50.0 78.3 37.7 67.3 Q19.5 69.3 18.8 54.5 Q3.2 46.6 14.5 35.0 Q8.8 20.9 26.9 17.8 Q33.7 4.0 50.0 11.0 Z",
+              "stroke": "#46894b",
+              "fill": "#72a474",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "crown": [
+          50,
+          38
+        ],
+        "leaves": [
+          50,
+          38
+        ],
+        "top": [
+          50,
+          6
+        ],
+        "left": [
+          8,
+          40
+        ],
+        "right": [
+          92,
+          40
+        ],
+        "trunk": [
+          50,
+          88
+        ],
+        "ground": [
+          76,
+          104
+        ],
+        "roots": [
+          50,
+          106
+        ]
+      }
+    },
+    {
+      "id": "cell",
+      "title": "Cell",
+      "describe": "a simple animal cell: membrane, nucleus and a few organelle dots",
+      "tags": [
+        "cell",
+        "membrane",
+        "nucleus",
+        "cytoplasm",
+        "organism",
+        "eukaryote"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "membrane",
+          "label": "cell membrane",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M95.3 50 C95.2 56.6 91.1 63.6 87.3 69.6 C83.6 75.6 79.1 82.6 72.9 86 C66.7 89.4 57.4 90.4 50 90 C42.6 89.6 35.1 86.9 28.7 83.6 C22.2 80.3 14.8 76 11.1 70.4 C7.5 64.8 7 56.9 6.9 50 C6.8 43.1 6.9 35 10.4 29.2 C13.9 23.4 21.2 18 27.8 15 C34.4 12 42.6 11.3 50 11.2 C57.4 11.1 66.1 11.5 72.4 14.7 C78.8 17.8 84.3 24.1 88.1 30 C91.9 35.9 95.4 43.4 95.3 50 Z",
+              "stroke": "#9567a8",
+              "fill": "#ae8bba",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "nucleus",
+          "label": "nucleus",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 46,
+              "cy": 48,
+              "rx": 14,
+              "ry": 13,
+              "stroke": "#9567a8",
+              "fill": "#D6CAF6",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 49,
+              "cy": 51,
+              "rx": 4,
+              "ry": 4,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            }
+          ]
+        },
+        {
+          "id": "organelles",
+          "label": "organelles",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 74,
+              "cy": 36,
+              "rx": 3.5,
+              "ry": 3.5,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "ellipse",
+              "cx": 70,
+              "cy": 66,
+              "rx": 3.5,
+              "ry": 3.5,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "ellipse",
+              "cx": 28,
+              "cy": 70,
+              "rx": 3.5,
+              "ry": 3.5,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "ellipse",
+              "cx": 26,
+              "cy": 34,
+              "rx": 3.5,
+              "ry": 3.5,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            },
+            {
+              "type": "ellipse",
+              "cx": 56,
+              "cy": 78,
+              "rx": 3.5,
+              "ry": 3.5,
+              "stroke": "#9567a8",
+              "width": 1.3299999999999998
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ],
+        "nucleus": [
+          46,
+          48
+        ],
+        "membrane": [
+          94,
+          50
+        ],
+        "cytoplasm": [
+          70,
+          66
+        ],
+        "top": [
+          50,
+          8
+        ],
+        "bottom": [
+          50,
+          92
+        ],
+        "left": [
+          6,
+          50
+        ],
+        "right": [
+          94,
+          50
+        ]
+      }
+    },
+    {
+      "id": "mitochondrion",
+      "title": "Mitochondrion",
+      "describe": "a mitochondrion: capsule with a folded inner membrane; where respiration makes energy",
+      "tags": [
+        "mitochondria",
+        "respiration",
+        "ATP",
+        "energy",
+        "organelle",
+        "powerhouse"
+      ],
+      "size": [
+        100,
+        60
+      ],
+      "parts": [
+        {
+          "id": "outer",
+          "label": "outer membrane",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M74 7 C82.9 7.5 82.5 8.4 85.5 10.1 C88.5 11.8 92.2 15.5 93.9 18.5 C95.6 21.5 97 26.6 97 30 C97 33.5 95.6 38.5 93.9 41.5 C92.2 44.5 88.5 48.2 85.5 49.9 C82.5 51.6 82.9 52.5 74 53 C65.1 53.5 34.9 53.5 26 53 C17.1 52.5 17.5 51.6 14.5 49.9 C11.5 48.2 7.8 44.5 6.1 41.5 C4.4 38.5 3 33.5 3 30 C3 26.6 4.4 21.5 6.1 18.5 C7.8 15.5 11.5 11.8 14.5 10.1 C17.5 8.4 17.1 7.5 26 7 C34.9 6.5 65.1 6.5 74 7 Z",
+              "stroke": "#bb8144",
+              "fill": "#ca9e6f",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "cristae",
+          "label": "cristae",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M14 30 C14.4 31.3 15.7 35.9 16.6 37.8 C17.4 39.6 18.3 41 19.1 41 C20 41 20.9 39.6 21.7 37.8 C22.6 35.9 23.4 32.6 24.3 30 C25.1 27.4 26 24.1 26.9 22.2 C27.7 20.4 28.6 19 29.4 19 C30.3 19 31.1 20.4 32 22.2 C32.9 24.1 33.7 27.4 34.6 30 C35.4 32.6 36.3 35.9 37.1 37.8 C38 39.6 38.9 41 39.7 41 C40.6 41 41.4 39.6 42.3 37.8 C43.1 35.9 44 32.6 44.9 30 C45.7 27.4 46.6 24.1 47.4 22.2 C48.3 20.4 49.1 19 50 19 C50.9 19 51.7 20.4 52.6 22.2 C53.4 24.1 54.3 27.4 55.1 30 C56 32.6 56.9 35.9 57.7 37.8 C58.6 39.6 59.4 41 60.3 41 C61.1 41 62 39.6 62.9 37.8 C63.7 35.9 64.6 32.6 65.4 30 C66.3 27.4 67.1 24.1 68 22.2 C68.9 20.4 69.7 19 70.6 19 C71.4 19 72.3 20.4 73.1 22.2 C74 24.1 74.9 27.4 75.7 30 C76.6 32.6 77.4 35.9 78.3 37.8 C79.1 39.6 80 41 80.9 41 C81.7 41 82.6 39.6 83.4 37.8 C84.3 35.9 85.6 31.3 86 30",
+              "stroke": "#bb8144",
+              "width": 1.52
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          30
+        ],
+        "left": [
+          3,
+          30
+        ],
+        "right": [
+          97,
+          30
+        ],
+        "top": [
+          50,
+          7
+        ],
+        "bottom": [
+          50,
+          53
+        ]
+      }
+    },
+    {
+      "id": "dna",
+      "title": "DNA",
+      "describe": "a short stretch of DNA double helix with base pairs",
+      "tags": [
+        "DNA",
+        "gene",
+        "genetics",
+        "chromosome",
+        "heredity",
+        "base pair"
+      ],
+      "size": [
+        60,
+        100
+      ],
+      "parts": [
+        {
+          "id": "strand-a",
+          "label": "DNA strand",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M30 6 C31.7 6.6 37.1 8.4 40 9.7 C42.9 10.9 45.7 12.1 47.3 13.3 C49 14.6 50 15.8 50 17 C50 18.2 49 19.4 47.3 20.7 C45.7 21.9 42.9 23.1 40 24.3 C37.1 25.6 33.3 26.8 30 28 C26.7 29.2 22.9 30.4 20 31.7 C17.1 32.9 14.3 34.1 12.7 35.3 C11 36.6 10 37.8 10 39 C10 40.2 11 41.4 12.7 42.7 C14.3 43.9 17.1 45.1 20 46.3 C22.9 47.6 26.7 48.8 30 50 C33.3 51.2 37.1 52.4 40 53.7 C42.9 54.9 45.7 56.1 47.3 57.3 C49 58.6 50 59.8 50 61 C50 62.2 49 63.4 47.3 64.7 C45.7 65.9 42.9 67.1 40 68.3 C37.1 69.6 33.3 70.8 30 72 C26.7 73.2 22.9 74.4 20 75.7 C17.1 76.9 14.3 78.1 12.7 79.3 C11 80.6 10 81.8 10 83 C10 84.2 11 85.4 12.7 86.7 C14.3 87.9 17.1 89.1 20 90.3 C22.9 91.6 28.3 93.4 30 94",
+              "stroke": "#4f8ba8",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "strand-b",
+          "label": "DNA strand",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M30 6 C28.3 6.6 22.9 8.4 20 9.7 C17.1 10.9 14.3 12.1 12.7 13.3 C11 14.6 10 15.8 10 17 C10 18.2 11 19.4 12.7 20.7 C14.3 21.9 17.1 23.1 20 24.3 C22.9 25.6 26.7 26.8 30 28 C33.3 29.2 37.1 30.4 40 31.7 C42.9 32.9 45.7 34.1 47.3 35.3 C49 36.6 50 37.8 50 39 C50 40.2 49 41.4 47.3 42.7 C45.7 43.9 42.9 45.1 40 46.3 C37.1 47.6 33.3 48.8 30 50 C26.7 51.2 22.9 52.4 20 53.7 C17.1 54.9 14.3 56.1 12.7 57.3 C11 58.6 10 59.8 10 61 C10 62.2 11 63.4 12.7 64.7 C14.3 65.9 17.1 67.1 20 68.3 C22.9 69.6 26.7 70.8 30 72 C33.3 73.2 37.1 74.4 40 75.7 C42.9 76.9 45.7 78.1 47.3 79.3 C49 80.6 50 81.8 50 83 C50 84.2 49 85.4 47.3 86.7 C45.7 87.9 42.9 89.1 40 90.3 C37.1 91.6 31.7 93.4 30 94",
+              "stroke": "#b7684c",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "base-pairs",
+          "label": "base pairs",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M47.3 13.3 L12.7 13.3",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M47.3 20.7 L12.7 20.7",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M12.7 35.3 L47.3 35.3",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M12.7 42.7 L47.3 42.7",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M47.3 57.3 L12.7 57.3",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M47.3 64.7 L12.7 64.7",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M12.7 79.3 L47.3 79.3",
+              "stroke": "#302b24",
+              "width": 1.14
+            },
+            {
+              "type": "path",
+              "d": "M12.7 86.7 L47.3 86.7",
+              "stroke": "#302b24",
+              "width": 1.14
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          30,
+          50
+        ],
+        "top": [
+          30,
+          4
+        ],
+        "bottom": [
+          30,
+          96
+        ],
+        "left": [
+          8,
+          50
+        ],
+        "right": [
+          52,
+          50
+        ]
+      }
+    },
+    {
+      "id": "neuron",
+      "title": "Neuron",
+      "describe": "a nerve cell: cell body with dendrites, a long axon and its terminals, left to right",
+      "tags": [
+        "neuron",
+        "nerve",
+        "brain",
+        "signal",
+        "nervous system",
+        "synapse"
+      ],
+      "size": [
+        100,
+        50
+      ],
+      "parts": [
+        {
+          "id": "dendrites",
+          "label": "dendrites",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M18 22 L 8 10",
+              "stroke": "#9567a8",
+              "width": 1.52
+            },
+            {
+              "type": "path",
+              "d": "M14 26 L 3 26",
+              "stroke": "#9567a8",
+              "width": 1.52
+            },
+            {
+              "type": "path",
+              "d": "M18 30 L 9 42",
+              "stroke": "#9567a8",
+              "width": 1.52
+            },
+            {
+              "type": "path",
+              "d": "M23 19 L 26 6",
+              "stroke": "#9567a8",
+              "width": 1.52
+            }
+          ]
+        },
+        {
+          "id": "body",
+          "label": "cell body",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 22,
+              "cy": 26,
+              "rx": 9,
+              "ry": 9,
+              "stroke": "#9567a8",
+              "fill": "#ae8bba",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "axon",
+          "label": "axon",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M31 26 L 84 26",
+              "stroke": "#9567a8",
+              "width": 1.9
+            }
+          ]
+        },
+        {
+          "id": "terminals",
+          "label": "axon terminals",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M84 26 L 94 16 M84 26 L 96 26 M84 26 L 94 36",
+              "stroke": "#9567a8",
+              "width": 1.52
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "body": [
+          22,
+          26
+        ],
+        "dendrites": [
+          6,
+          14
+        ],
+        "axon": [
+          58,
+          26
+        ],
+        "terminals": [
+          96,
+          26
+        ],
+        "left": [
+          2,
+          26
+        ],
+        "right": [
+          98,
+          26
+        ]
+      }
+    },
+    {
+      "id": "co2",
+      "title": "Carbon dioxide",
+      "describe": "a CO2 molecule: grey carbon between two red oxygens",
+      "tags": [
+        "CO2",
+        "carbon dioxide",
+        "photosynthesis",
+        "respiration",
+        "gas",
+        "carbon cycle"
+      ],
+      "size": [
+        100,
+        40
+      ],
+      "parts": [
+        {
+          "id": "molecule",
+          "label": "carbon dioxide",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 21,
+              "cy": 20,
+              "rx": 15,
+              "ry": 15,
+              "stroke": "#b7684c",
+              "fill": "#c78b75",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 79,
+              "cy": 20,
+              "rx": 15,
+              "ry": 15,
+              "stroke": "#b7684c",
+              "fill": "#c78b75",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 50,
+              "cy": 20,
+              "rx": 15,
+              "ry": 15,
+              "stroke": "#302b24",
+              "fill": "#625e57",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          20
+        ],
+        "left": [
+          6,
+          20
+        ],
+        "right": [
+          94,
+          20
+        ]
+      }
+    },
+    {
+      "id": "o2",
+      "title": "Oxygen",
+      "describe": "an O2 molecule: two red oxygen atoms",
+      "tags": [
+        "O2",
+        "oxygen",
+        "photosynthesis",
+        "respiration",
+        "breathing",
+        "gas"
+      ],
+      "size": [
+        70,
+        40
+      ],
+      "parts": [
+        {
+          "id": "molecule",
+          "label": "oxygen",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 22,
+              "cy": 20,
+              "rx": 15,
+              "ry": 15,
+              "stroke": "#b7684c",
+              "fill": "#c78b75",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 48,
+              "cy": 20,
+              "rx": 15,
+              "ry": 15,
+              "stroke": "#b7684c",
+              "fill": "#c78b75",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          35,
+          20
+        ],
+        "left": [
+          7,
+          20
+        ],
+        "right": [
+          63,
+          20
+        ]
+      }
+    },
+    {
+      "id": "h2o",
+      "title": "Water molecule",
+      "describe": "an H2O molecule: a red oxygen with two white hydrogens",
+      "tags": [
+        "H2O",
+        "water",
+        "molecule",
+        "photosynthesis",
+        "respiration"
+      ],
+      "size": [
+        80,
+        60
+      ],
+      "parts": [
+        {
+          "id": "molecule",
+          "label": "water",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 17,
+              "cy": 40,
+              "rx": 10,
+              "ry": 10,
+              "stroke": "#302b24",
+              "fill": "#f7f5ef",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 63,
+              "cy": 40,
+              "rx": 10,
+              "ry": 10,
+              "stroke": "#302b24",
+              "fill": "#f7f5ef",
+              "width": 1.9
+            },
+            {
+              "type": "ellipse",
+              "cx": 40,
+              "cy": 26,
+              "rx": 17,
+              "ry": 17,
+              "stroke": "#b7684c",
+              "fill": "#c78b75",
+              "width": 1.9
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          40,
+          30
+        ],
+        "top": [
+          40,
+          9
+        ],
+        "left": [
+          7,
+          40
+        ],
+        "right": [
+          73,
+          40
+        ]
+      }
+    },
+    {
+      "id": "glucose",
+      "title": "Glucose",
+      "describe": "a glucose (sugar) molecule drawn as a hexagon ring; food, stored energy",
+      "tags": [
+        "glucose",
+        "sugar",
+        "food",
+        "photosynthesis",
+        "respiration",
+        "energy",
+        "carbohydrate"
+      ],
+      "size": [
+        80,
+        80
+      ],
+      "parts": [
+        {
+          "id": "ring",
+          "label": "glucose",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M40.0 8.0 L67.7 24.0 L67.7 56.0 L40.0 72.0 L12.3 56.0 L12.3 24.0 Z",
+              "stroke": "#bb8144",
+              "fill": "#d2b163",
+              "width": 1.9
+            },
+            {
+              "type": "path",
+              "d": "M40.0 20.0 L57.3 30.0 L57.3 50.0 L40.0 60.0 L22.7 50.0 L22.7 30.0 Z",
+              "stroke": "#bb8144",
+              "width": 1.14
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          40,
+          40
+        ],
+        "top": [
+          40,
+          8
+        ],
+        "bottom": [
+          40,
+          72
+        ],
+        "left": [
+          12,
+          40
+        ],
+        "right": [
+          68,
+          40
+        ]
+      }
+    },
+    {
+      "id": "forest-oak",
+      "title": "Old oak",
+      "describe": "Old oak",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Old oak",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M45 88 L47 43 L54 43 L57 88 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M48 58 C31 68 16 58 20 46 C7 35 20 20 31 24 C33 7 57 9 62 19 C81 12 92 28 82 39 C96 56 75 67 62 59 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M51 65 L34 48 M52 58 L69 43",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-pine",
+      "title": "Pine tree",
+      "describe": "Pine tree",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Pine tree",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M45 88 L47 43 L54 43 L57 88 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M50 8 l-15 24 h8 l-14 22 h13 l-15 22 h46 l-15 -22 h13 l-14 -22 h8 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-birch",
+      "title": "Birch tree",
+      "describe": "Birch tree",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Birch tree",
+          "shapes": [
+            {
+              "type": "ellipse",
+              "cx": 49,
+              "cy": 34,
+              "rx": 29,
+              "ry": 28,
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M43 90 L46 33 L53 30 L58 90 Z",
+              "fill": "#f7f5ef",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M46 47 L51 48 M51 59 L55 58 M44 73 L49 72 M52 83 L57 82",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-grove",
+      "title": "Forest grove",
+      "describe": "Forest grove",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Forest grove",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M8 90 Q50 80 92 90",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M24 84 L24 43 M74 85 L74 43",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M25 15 l-9.3 14.879999999999999 h4.96 l-8.68 13.64 h8.06 l-9.3 13.64 h28.52 l-9.3 -13.64 h8.06 l-8.68 -13.64 h4.96 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M75 13 l-9.9 15.84 h5.28 l-9.24 14.520000000000001 h8.58 l-9.9 14.520000000000001 h30.360000000000003 l-9.9 -14.520000000000001 h8.58 l-9.24 -14.520000000000001 h5.28 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M48 91 L48 58 L54 58 L54 91 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "ellipse",
+              "cx": 51,
+              "cy": 48,
+              "rx": 24,
+              "ry": 29,
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-sapling",
+      "title": "New sapling",
+      "describe": "New sapling",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "New sapling",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M24 87 Q50 78 77 87",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M50 84 Q46 59 54 30",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M49 61 C23 65 18 43 21 35 C42 34 52 47 49 61 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M51 45 C49 25 65 16 82 17 C81 35 68 49 51 45 Z",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-fern",
+      "title": "Fern",
+      "describe": "Fern",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Fern",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M47 90 Q48 54 65 12",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M49 75 Q22 77 21 61 Q41 59 49 75 M49 75 Q74 74 78 57 Q58 57 49 75",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M51 63 Q24 65 23 49 Q43 47 51 63 M51 63 Q76 62 80 45 Q60 45 51 63",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M53 51 Q26 53 25 37 Q45 35 53 51 M53 51 Q78 50 82 33 Q62 33 53 51",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M55 39 Q28 41 27 25 Q47 23 55 39 M55 39 Q80 38 84 21 Q64 21 55 39",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M57 27 Q30 29 29 13 Q49 11 57 27 M57 27 Q82 26 86 9 Q66 9 57 27",
+              "fill": "#72a474",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "forest-mushroom",
+      "title": "Woodland mushroom",
+      "describe": "Woodland mushroom",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Woodland mushroom",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M40 85 L45 48 L56 48 L62 85 Q52 93 40 85 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M12 51 C18 5 79 5 88 51 Q51 66 12 51 Z",
+              "fill": "#c78b75",
+              "stroke": "#b7684c",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "ellipse",
+              "cx": 34,
+              "cy": 37,
+              "rx": 5,
+              "ry": 4,
+              "fill": "#f7f5ef",
+              "stroke": "#b7684c",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "ellipse",
+              "cx": 58,
+              "cy": 28,
+              "rx": 6,
+              "ry": 4,
+              "fill": "#f7f5ef",
+              "stroke": "#b7684c",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "ellipse",
+              "cx": 72,
+              "cy": 45,
+              "rx": 4,
+              "ry": 3,
+              "fill": "#f7f5ef",
+              "stroke": "#b7684c",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M20 88 L16 78 M23 88 L28 79 M77 88 L81 77",
+              "stroke": "#46894b",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    },
+    {
+      "id": "computer-podium",
+      "title": "Computer on a podium",
+      "describe": "Computer on a podium",
+      "tags": [
+        "forest",
+        "illustration"
+      ],
+      "size": [
+        100,
+        100
+      ],
+      "parts": [
+        {
+          "id": "illustration",
+          "label": "Computer on a podium",
+          "shapes": [
+            {
+              "type": "path",
+              "d": "M25 65 L73 65 L78 93 L20 93 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M16 60 L82 60 L86 67 L13 67 Z",
+              "fill": "#d2b163",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M24 12 L77 12 L77 49 L24 49 Z",
+              "fill": "#79a6ba",
+              "stroke": "#4f8ba8",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M29 17 L72 17 L72 43 L29 43 Z",
+              "fill": "#79a6ba",
+              "stroke": "#4f8ba8",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M46 49 L55 49 L56 56 L65 59 L36 59 L45 56 Z",
+              "fill": "#a38876",
+              "stroke": "#87644e",
+              "width": 2.6599999999999997
+            },
+            {
+              "type": "path",
+              "d": "M36 25 L32 29 L36 33 M64 25 L68 29 L64 33 M54 23 L47 36",
+              "stroke": "#f7f5ef",
+              "width": 2.6599999999999997
+            }
+          ]
+        }
+      ],
+      "anchors": {
+        "center": [
+          50,
+          50
+        ]
+      }
+    }
+  ]
+}
