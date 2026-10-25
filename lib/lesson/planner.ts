@@ -59,10 +59,7 @@ Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
 - "point": draw nothing new; highlight parts already on the board while you talk about them. Use it when you're explaining something already drawn.
 - "talk": leave the board as it is. Use it for check-ins, analogies that need no picture, and the recap.
-Quizzes make the learner think, and they come regularly: every section after the first ends with one quiz beat, a "talk" beat whose "say" is the quiz question, put right after that section's check-in (in a lesson of more than four sections, every other section is enough). Never in the first section. Three kinds, rotating: never the same kind twice in a row, and a lesson with three or more quizzes uses all three.
-- "quiz": "label" when that section's picture has several labelled parts ("Quick quiz: can you name the parts I've numbered?").
-- "quiz": "predict" before a section whose content follows from what came before: "say" asks them to predict what the next section shows, without giving it away ("Before I show you: if blue scatters more, what color should a sunset be, and why?"). Their guess is checked against the next section's own sentences, so that section must answer it. Never on the lesson's last section.
-- "quiz": "sketch" when the section explained a process ("Your turn: draw how the water gets from the roots up to the leaf, then say done.").
+A quiz: right after a section's check-in you may add one quiz beat, at most two in the whole lesson, never in two sections in a row, never in the first section: a "talk" beat with "quiz": "label" when that section's picture has several labelled parts (its "say" asks them to name the numbered parts, like "Quick quiz: can you name the parts I've numbered?"), or "quiz": "sketch" when the section explained a process (its "say" asks them to draw it, like "Your turn: draw how the water gets from the roots up to the leaf, then say done.").
 Most lessons have about half draw beats. The first beat is always "draw".
 
 The board shows one picture at a time, called a scene. Group beats into scenes: a scene is one picture built up over at most 4 draw beats and then wiped, like moving to a clean part of the whiteboard. Start a new scene when the lesson zooms in, moves to a new stage, or switches to the example. Number scenes 1, 2, 3 in order; a scene's first beat is a draw beat; talk beats keep the current scene number. A new scene starts empty, so a beat can only point at things drawn earlier in its own scene.
@@ -131,7 +128,7 @@ interface PlanState {
  * Ask me first (Socratic, the learner's preference): appended to the planner's rules. The opener is a predict
  * quiz the page already knows how to ask and grade (the rubric: the rest of its section).
  */
-const SOCRATIC_RULES = `Ask me first (the learner's preference): the lesson plays as planned, with its check-ins, and with ONE question that lets them think first, in the whole lesson. Put it where it earns its place: the first beat of the section that holds the key mechanism (never the first section), a "talk" beat with "quiz": "predict" carrying that section's "section" title: one short setup line, then a real prediction about the mechanism, in plain words, answerable in one sentence ("If the leaf gets no light, what do you think happens to the sugar it makes, and why?"), without giving the answer away. That section then teaches the answer. Besides that one question, at most two quizzes in the whole lesson ("label" or "sketch", never "predict"), never in two sections in a row, never in the section with the question.`;
+const SOCRATIC_RULES = `Ask me first (the learner's preference): the lesson plays as planned, with its check-ins, and with ONE question that lets them think first, in the whole lesson. Put it where it earns its place: the first beat of the section that holds the key mechanism (never the first section), a "talk" beat with "quiz": "predict" carrying that section's "section" title: one short setup line, then a real prediction about the mechanism, in plain words, answerable in one sentence ("If the leaf gets no light, what do you think happens to the sugar it makes, and why?"), without giving the answer away. That section then teaches the answer. Quizzes as above (two at most, label or sketch), never in the section with the question.`;
 
 const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 
@@ -142,11 +139,15 @@ const QUIZ_KINDS: QuizKind[] = ["label", "predict", "sketch"];
 function quizKind(st: PlanState, asked: QuizKind | undefined, hasNext = true): QuizKind {
   const kinds = st.kinds ?? [];
   const last = kinds[kinds.length - 1];
-  const ok = (k: QuizKind) => k !== last && (hasNext || k !== "predict") && !(st.socratic && k === "predict");
+  // Label and sketch only: a predict question is the Socratic opener's alone.
+  const ok = (k: QuizKind) => k !== last && k !== "predict";
   const unused = QUIZ_KINDS.filter((k) => ok(k) && !kinds.includes(k));
   if (asked && ok(asked) && (!kinds.includes(asked) || !unused.length)) return asked;
   return unused[0] ?? QUIZ_KINDS.find(ok) ?? "sketch";
 }
+
+/** Add a quiz when a section past the first ends without one (the every-section cadence); off: the planner's own, two at most. */
+const ADD_QUIZZES = false;
 
 const QUIZ_SAY: Record<QuizKind, string> = {
   label: "Quick quiz: can you name the parts I've numbered?",
@@ -160,6 +161,8 @@ const QUIZ_SAY: Record<QuizKind, string> = {
  * every such section in lessons of up to four sections, every other one after that. Null when none is due.
  */
 function dueQuiz(st: PlanState, hasNext: boolean): Record<string, unknown> | null {
+  // The original cadence: the planner may add quizzes (two at most); none is added for it.
+  if (!ADD_QUIZZES) return null;
   if ((st.sections ?? 0) < 2 || st.quizzed) return null;
   // Socratic: a section that opened with a question has no quiz, and two quizzes is the lesson's most.
   if (st.socratic && (st.opened || st.quizzedPrev || (st.kinds?.length ?? 0) >= 2)) return null;
@@ -249,16 +252,18 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   }
   // A quiz beat is a talk beat that asks: one per section, never in the first, kinds rotating (quizKind).
   // Socratic: none in a section that opened with a question, none of kind predict, two in the lesson at most.
-  const allowed = !st.socratic || (asked !== "predict" && !st.opened && !st.quizzedPrev && (st.kinds?.length ?? 0) < 2);
+  // Either approach: label or sketch, two in the lesson at most, never in two sections in a row, none in the
+  // section with the Socratic question.
+  const allowed = asked !== "predict" && !st.opened && !st.quizzedPrev && (st.kinds?.length ?? 0) < 2;
   const quiz = opener ? asked : asked && allowed && (st.sections ?? 0) >= 2 && !st.quizzed ? quizKind(st, asked) : undefined;
   // A quiz Socratic mode doesn't allow keeps its teaching words, not its question; with nothing left it goes.
   let sayOut = say;
   let checkOut = check;
-  if (asked && !quiz && st.socratic) {
+  if (asked && !quiz) {
     sayOut = say.split(/(?<=[.!?])\s+/).filter((t) => !t.trim().endsWith("?")).join(" ").replace(/^(quick quiz|your turn|before i go on)[:,]?\s*/i, "").trim();
     checkOut = b.check === true && !!sayOut;
     st.drop = !sayOut;
-    console.info(`[plan] socratic: ${asked} quiz at beat ${index + 1} not allowed here: ${sayOut ? "kept as a talk beat" : "left out"}`);
+    console.info(`[plan] ${asked} quiz at beat ${index + 1} not allowed here: ${sayOut ? "kept as a talk beat" : "left out"}`);
   }
   if (quiz && !opener) {
     if (quiz !== asked) console.info(`[plan] quiz ${asked} -> ${quiz} (kinds so far: ${(st.kinds ?? []).join(", ") || "none"})`);
