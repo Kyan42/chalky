@@ -504,6 +504,8 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (level === "detour" || level === "replan") sketch = null;
   const cues = groundCues(cursor, spoken, input.board);
   // Shown something elsewhere on the board: they get to look before the lesson moves the camera back.
+  // Recent papers take a while: a lesson started on them always asks the intake question meanwhile.
+  if (research && lesson && !check && !input.beats.length) check = `While I find those, how much do you already know about ${research.topic}?`;
   // The check is the question the learner actually heard: the reply's own question when it asked one
   // (the page looks for the check in what was said, and says it again only when it is missing).
   if (check) {
