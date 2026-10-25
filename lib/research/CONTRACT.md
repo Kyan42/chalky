@@ -1,114 +1,105 @@
-# Research route contract (frozen 2026-10-24)
+# Research route contract (v2, 2026-10-25: open web, replaces the arXiv papers version)
 
-"Teach me what's new": the learner asks for the latest on a topic; the lesson fetches recent
-papers, the planner teaches from them and cites them, and the cards show the paper being taught.
-Types: `lib/research/types.ts` (`ResearchRecord`, `Paper`, `ResearchEvent`). Owner of this route:
-the apify-sources session. Changes to this file are additive only (new optional fields).
+Time-sensitive questions ("what's new in CRISPR this month", "what changed in Python 3.14", "who
+won the 2026 Nobel in physics and for what"): the lesson asks the route, the route runs one Apify
+rag-web-browser call (Google search plus page extraction), and the planner teaches from up to 3
+pages and cites them. Types: `lib/research/types.ts` (`ResearchRecord`, `ResearchItem`,
+`ResearchEvent`). Owner: the apify-sources session.
+
+## What changed from v1 (papers)
+
+| v1 | v2 |
+|---|---|
+| request `{ topic, days }` | request `{ question, wait? }` (`topic` still accepted as an alias; `days` ignored) |
+| `papers: Paper[]` | `items: ResearchItem[]` (0 to 3) |
+| `Paper.arxivId, authors, authorCount, pdfUrl, category, abstract` | gone |
+| `Paper.published` (always set) | `ResearchItem.published`: `"YYYY-MM-DD"` or `null` |
+| — | `ResearchItem.site` (e.g. `"nobelprize.org"`) |
+| `topic, days, searchedDays, from, to, via` | `question, query, recent` |
+| status `"failed"` | status `"none"` (also: over budget, nothing usable) |
+| events `research-failed` | `research-none` |
+| `components/PaperCards.tsx` | `components/ResearchCards.tsx` (same props, minus `topic`/`days`, plus `question`) |
+
+Unchanged: `id`, `status: "running" | "ready"`, `material`, `cached`, `startedAt`, `fetchedAt`,
+`ms`, `error`, `n` and `key` on each item, `cite: n` on beats, the GET poll.
 
 ## Request
 
 ```
 POST /api/research
-{ "topic": "vision-language-action models", "days": 14 }
+{ "question": "what's new in CRISPR this month", "wait": true }
 ```
 
-- `topic`: string, 1 to 200 chars. Pass the subject, not the whole utterance ("LLM agents", not
-  "teach me the latest on LLM agents this week"); the route also strips filler like "the latest
-  on", "newest papers on", "this week" if it is left in.
-  Matching is by keywords against arXiv titles and abstracts, so research wording finds better
-  papers: "voice AI" catches HCI papers that mention "voice", while "spoken dialogue models" or
-  "speech language models" finds the speech papers. If the converse model rewrites the topic, it
-  should use the words a paper title would use.
-- `days`: optional window, 1 to 90, default 14. "this week" → 7, "this month" → 30.
-- The record comes back **at once**. Cached topics (same normalised topic and `days`) come back
-  with `status: "ready"` and `cached: true` in a few ms. Otherwise `status: "running"`: poll
+- `question`: the learner's question as asked, 1 to 300 chars. No rewriting needed: the route
+  adds the recency hint itself.
+- `wait` (optional): `true` holds the response until the record settles, **8 s at most**, so one
+  request is enough. Without it, the record comes back at once and you poll
+  `GET /api/research/<id>` every ~1 s until `status` is not `"running"`.
+- A cached question (same normalised question) comes back `"ready"` with `cached: true` in a few ms.
 
-```
-GET /api/research/<id>      every ~1.5 s, until status is "ready" or "failed"
-```
+## The 8 s budget
 
-- Budget: a fresh fetch is expected to take 5 to 30 s (measured numbers in `lib/research/README.md`
-  once the token is in). Suggested: give up after 45 s and teach from memory, saying so.
-- 400 for a bad request; 404 from GET for an unknown id (server restarted). Network trouble is
-  never an HTTP error: it is a record with `status: "failed"` and `error`.
+- If the pages are not in hand 8 s after the request, the record settles as `status: "none"`,
+  `items: []`, `error: "over the 8 s budget"`. Actor errors and "no usable pages" are `"none"` too.
+  The route never throws for any of these; the lesson says it couldn't find anything recent.
+- The fetch itself keeps going in the background (up to ~40 s) and, if it succeeds, writes the
+  cache, so asking the same question again a little later is instant. That late result never
+  changes a record that already settled as `"none"`.
+- 400 only for a bad request; 404 from GET for an unknown id (server restarted).
 
 ## Response (`ResearchRecord`)
 
 ```jsonc
 {
-  "id": "vision-language-action-models-14d-cache",
-  "topic": "vision-language-action models",
-  "days": 14,
-  "searchedDays": 14,          // widened to 30, then 90, when fewer than 3 papers came back
-  "from": "2026-10-10", "to": "2026-10-24",
-  "status": "ready",           // "running" | "ready" | "failed"
-  "papers": [ /* Paper, 0 to 5, newest first */ ],
-  "material": "…",             // see below; "" while running, on failure, and when papers is empty
-  "via": "apify-arxiv",        // "apify-arxiv" | "apify-rag" | "arxiv-api" (free fallback) | "fixture"
+  "id": "what-s-new-in-crispr-this-month-cache",
+  "question": "what's new in CRISPR this month",
+  "query": "what's new in CRISPR this month October 2026",
+  "recent": true,
+  "status": "ready",            // "running" | "ready" | "none"
+  "items": [
+    {
+      "n": 1,
+      "title": "CRISPR Medicine News",
+      "url": "https://crisprmedicinenews.com/",
+      "site": "crisprmedicinenews.com",
+      "published": "2026-10-21",  // or null when the page gives no date
+      "key": ["…", "…", "…"]      // 2 or 3 sentences from the page, verbatim
+    }
+  ],
+  "material": "…",               // "" unless ready
   "cached": true,
-  "startedAt": "…", "fetchedAt": "…", "ms": 8400,
-  "error": "…"                 // only on failure
+  "startedAt": "…", "fetchedAt": "…", "ms": 5700,
+  "error": "…"                   // only when status is "none"
 }
 ```
-
-`Paper`:
-
-```jsonc
-{
-  "n": 1,                                   // citation number: [1] in material, cite: 1 on a beat
-  "arxivId": "2610.12345",
-  "title": "…",
-  "authors": ["A. Author", "B. Author"],    // at most 8
-  "authorCount": 14,
-  "published": "2026-10-22",
-  "url": "https://arxiv.org/abs/2610.12345",
-  "pdfUrl": "https://arxiv.org/pdf/2610.12345",
-  "category": "cs.RO",
-  "abstract": "…",
-  "key": ["…", "…", "…"]                    // 2 or 3 sentences from the abstract, verbatim
-}
-```
-
-`status: "ready"` with `papers: []` means nothing recent was found even at 90 days (e.g. a topic
-with no arXiv presence). The planner should then teach from memory and say it found no recent
-papers.
 
 ## Material (for the planner prompt)
 
-Plain text, under ~1,500 words (5 papers at most, each paragraph built from the paper's own
-abstract sentences: what it claims, how, one number when the abstract has one). Exact shape:
+Plain text, **under ~500 words**, built from the pages' own sentences (no model rewrite):
 
 ```
-Recent papers on "vision-language-action models", submitted 2026-10-10 to 2026-10-24 (arXiv). Cite them as [1] to [4].
+Recent web pages for "what's new in CRISPR this month" (searched 2026-10-25). Cite them as [1] to [3].
 
-[1] Title of the newest paper (Firstauthor et al., 2026-10-22, arXiv:2610.12345)
-Claim sentence from the abstract. Method sentence. Sentence with the number.
+[1] Page title (crisprmedicinenews.com, 2026-10-21)
+Key sentence. Key sentence. Key sentence.
 
-[2] …
+[2] Page title (innovativegenomics.org, undated)
+…
 ```
 
-- One header line, a blank line, then one block per paper: a tag line `[n] Title (Author et al.,
-  date, arXiv:id)` (`Author and Other` for two authors, `Author` for one) and one paragraph.
-- Text is verbatim from the abstract (no model rewrite), so anything the planner says can be traced
-  to the paper. LaTeX is flattened to plain text (`$\sim$40\%` → `~40%`).
-- If `searchedDays` > `days`, the header says the window was widened: `… submitted 2026-07-26 to
-  2026-10-24 (arXiv; nothing in the last 14 days, so the last 90).`
+- One header line, a blank line, then one block per page: `[n] Title (site, date or "undated")`
+  and its key sentences on one line.
+- Over 500 words, the third sentence of each page goes first, then the last page.
+- Teach "as of" the dates shown; an undated page may be older than it looks.
 
-## Citation tags on beats
+## Citation tags on beats (unchanged)
 
-- The planner marks each beat that teaches from a paper with **`cite: n`** (one number, the
-  paper's `n`; a new optional `PlannedBeat` field the conversation session adds). Beats not taken
-  from a paper leave it out.
-- Tags never appear in `say` (Sonic would read them aloud). Speech may name the paper naturally
-  ("a paper from last week out of Stanford…").
-- The cards (`components/PaperCards.tsx`) take `currentCite` (that beat's `cite`) and
-  `currentLine` (that beat's `say`): the cited paper's card opens, and the key sentence that best
-  matches the line is highlighted (word overlap, `lib/sources/match.ts`). A beat with no `cite`
-  leaves the last opened card as it was.
+- Beats that teach from a page carry `cite: n` (the item's `n`); never put `[n]` in `say`.
+- `components/ResearchCards.tsx` takes `record` (or `question` to fetch itself), `currentCite`
+  and `currentLine`: the cited page's card opens (site, date, title, link) with the key sentence
+  that best matches the line highlighted.
 
 ## Events (for the transcript)
 
-`PaperCards` calls `onEvent` with `research-started | research-cached | research-ready |
-research-failed` (shapes in `types.ts`); pass `logRef.current`. If the conversation session does
-the POST itself (to hand `material` to the planner), pass the same record to `PaperCards` through
-its `record` prop and it will not fetch again.
+`research-started | research-cached | research-ready | research-none` (shapes in `types.ts`).
+The server also logs one `[research] {...}` line per call with status and latency.

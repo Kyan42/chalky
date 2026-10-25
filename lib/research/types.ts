@@ -1,67 +1,56 @@
 /**
- * "Teach me what's new": recent research papers on a topic, fetched through Apify (or arXiv's own
- * API as the fallback), cached per topic and window, and turned into plain-text material the
- * planner teaches from, with citation numbers. The contract is lib/research/CONTRACT.md; these
- * types are its source of truth. Shared by the server and the browser.
+ * Time-sensitive questions answered from the open web ("what's new in CRISPR this month"): one
+ * Apify rag-web-browser call searches Google and extracts the top pages; the route returns up to 3
+ * pages with verbatim key sentences and plain-text material the planner teaches from, with
+ * citation numbers. The contract is lib/research/CONTRACT.md; these types are its source of truth.
+ * Shared by the server and the browser.
  */
 
-/** One paper. `n` is its citation number: [1] in the material, `cite: 1` on a beat. */
-export interface Paper {
-  /** 1-based, newest first. */
+/** One web page. `n` is its citation number: [1] in the material, `cite: 1` on a beat. */
+export interface ResearchItem {
+  /** 1-based, in the order shown. */
   n: number;
-  /** "2610.12345" (no version suffix). */
-  arxivId: string;
   title: string;
-  /** In paper order; at most 8, then "et al." is implied by `authorCount`. */
-  authors: string[];
-  authorCount: number;
-  /** First submission date, "YYYY-MM-DD". */
-  published: string;
-  /** The abstract page, https://arxiv.org/abs/<id>. */
   url: string;
-  pdfUrl: string;
-  /** Primary arXiv category, e.g. "cs.RO"; "" when unknown. */
-  category: string;
-  /** The whole abstract, whitespace collapsed. */
-  abstract: string;
-  /** Two or three sentences from the abstract, in abstract order: the claim, the method, a number when there is one. */
+  /** The host without "www.", e.g. "nobelprize.org". */
+  site: string;
+  /** When the page says it was published (or last updated), "YYYY-MM-DD"; null when it does not say. */
+  published: string | null;
+  /** Two or three sentences from the page, verbatim, in page order: the claim, a detail, a number when there is one. */
   key: string[];
 }
 
-export type ResearchStatus = "running" | "ready" | "failed";
-
-/** Where the papers came from. "arxiv-api" is the free fallback when Apify is unavailable. */
-export type ResearchVia = "apify-arxiv" | "apify-rag" | "arxiv-api" | "fixture";
+/** "running" while the fetch is out; "ready" with items; "none" when nothing came back in the 8 s budget, the actor failed, or nothing usable was found. */
+export type ResearchStatus = "running" | "ready" | "none";
 
 /** POST /api/research and GET /api/research/<id> both return this. */
 export interface ResearchRecord {
   id: string;
-  topic: string;
-  /** The window asked for, in days. */
-  days: number;
-  /** The window actually searched (widened to 30, then 90 days when fewer than 3 papers came back). */
-  searchedDays: number;
-  /** Date range searched, "YYYY-MM-DD", inclusive. */
-  from: string;
-  to: string;
+  /** The learner's question as sent. */
+  question: string;
+  /** The search sent to Google (the question, plus a recency hint when it asks for something recent). */
+  query: string;
+  /** The question asked for something recent (new, latest, this month, a year, a version), so the query got a hint and dated pages were preferred. */
+  recent: boolean;
   status: ResearchStatus;
-  /** 0 to 5, newest first. Empty with status "ready" means nothing recent was found. */
-  papers: Paper[];
-  /** Plain text for the planner (format in CONTRACT.md); "" until ready, and when no papers. */
+  /** 0 to 3. */
+  items: ResearchItem[];
+  /** Plain text for the planner (format in CONTRACT.md); "" unless status is "ready". */
   material: string;
-  via: ResearchVia | null;
   /** Served from experiments/research-cache without touching the network. */
   cached: boolean;
   startedAt: string;
+  /** When the pages were fetched (for a cached record, the original fetch). */
   fetchedAt?: string;
-  /** Fetch latency (request to papers in hand). */
+  /** Fetch latency in ms (request to pages in hand), or the time until the budget ran out. */
   ms?: number;
+  /** Why status is "none". */
   error?: string;
 }
 
 /** Research events, in the lesson transcript's shape (logEv({ kind, ... })). */
 export type ResearchEvent =
-  | { kind: "research-started"; id: string; topic: string; days: number }
-  | { kind: "research-cached"; id: string; papers: number; fetchedAt?: string }
-  | { kind: "research-ready"; id: string; papers: number; ms?: number; via: ResearchVia | null; searchedDays: number }
-  | { kind: "research-failed"; id: string | null; error: string; ms?: number };
+  | { kind: "research-started"; id: string; query: string }
+  | { kind: "research-cached"; id: string; items: number; fetchedAt?: string }
+  | { kind: "research-ready"; id: string; items: number; ms?: number }
+  | { kind: "research-none"; id: string | null; error: string; ms?: number };
