@@ -1,0 +1,125 @@
+{
+  "topic": "photosynthesis",
+  "days": 14,
+  "searchedDays": 90,
+  "from": "2026-07-27",
+  "to": "2026-10-25",
+  "status": "ready",
+  "papers": [
+    {
+      "n": 1,
+      "arxivId": "2609.38063",
+      "title": "Variations of atmospheric 12CO2 and 13CO2 from the year 1000 to 2024",
+      "authors": [
+        "W. A. van Wijngaarden",
+        "W. Happer"
+      ],
+      "authorCount": 2,
+      "published": "2026-09-29",
+      "url": "https://arxiv.org/abs/2609.38063",
+      "pdfUrl": "https://arxiv.org/pdf/2609.38063",
+      "category": "physics.ao-ph",
+      "abstract": "A simple model gives good agreement between observed emissions of CO2 into the atmosphere from the combustion of fossil fuels and observed increases of the atmospheric concentrations C of CO2 and decreases of the isotope delta value delta13C. If fossil fuel emissions were to cease the model predicts that: (1) the difference between the CO2 concentration C and the preindustrial value, Co = 280 ppm, would decay exponentially with time constant of 60 y; (2) the difference between the concentration-delta-value product C x delta13C and the preindustrial value Co x delta13Co = (280 ppm) x (-6.5%%), would decay exponentially with a time constant of 8 y. The decay times are different because of isotopic exchange, largely driven by photosynthesis and respiration on the land.",
+      "key": [
+        "A simple model gives good agreement between observed emissions of CO2 into the atmosphere from the combustion of fossil fuels and observed increases of the atmospheric concentrations C of CO2 and decreases of the isotope delta value delta13C.",
+        "If fossil fuel emissions were to cease the model predicts that: (1) the difference between the CO2 concentration C and the preindustrial value, Co = 280 ppm, would decay exponentially with time constant of 60 y; (2) the difference between the concentration-delta-value product C x delta13C and the preindustrial value Co x delta13Co = (280 ppm) x (-6.5%%), would decay exponentially with a time constant of 8 y.",
+        "The decay times are different because of isotopic exchange, largely driven by photosynthesis and respiration on the land."
+      ]
+    },
+    {
+      "n": 2,
+      "arxivId": "2609.34966",
+      "title": "Safe Greenhouse Climate Control Using Lagrangian-Constrained PPO with Kolmogorov-Arnold Networks",
+      "authors": [
+        "Hangzun Liu",
+        "Yuling Fan",
+        "Fang Tian",
+        "Zhilong Bie",
+        "Zaiwen Feng",
+        "Yongliang Qiao"
+      ],
+      "authorCount": 6,
+      "published": "2026-09-28",
+      "url": "https://arxiv.org/abs/2609.34966",
+      "pdfUrl": "https://arxiv.org/pdf/2609.34966",
+      "category": "cs.AI",
+      "abstract": "Greenhouse climate control balances economic return with maintaining temperature, humidity and CO2 within crop-adapted growth ranges. Conventional reinforcement learning (RL) greenhouse controllers use fixed reward penalties to limit climate constraint violations, yet such heuristic penalties cannot explicitly constrain long-term cumulative violations. Poorly tuned weights either lead to overly conservative policies and lower yields, or fail to suppress persistent climate deviations that harm photosynthesis and induce crop diseases. To address this issue, we formulate greenhouse climate regulation as a Constrained Markov Decision Process (CMDP) and use a Lagrangian safe RL framework RCPO-PPO to separate economic optimization and cumulative safety constraints, enabling adaptive penalty adjustment without manual tuning. To handle strong nonlinear, time-varying coupling between greenhouse microclimate and crop growth, Kolmogorov-Arnold Networks (KANs) replace Multi-Layer Perceptrons (MLPs) as policy and value approximators for improved nonlinear representation. Sinusoidal cyclic time features are embedded in observations to capture diurnal environmental periodicity. Simulations use a classic winter lettuce greenhouse model driven by 40-day real weather disturbances. Compared with vanilla penalty-based PPO, our method cuts cumulative climate violations by 18.65% and raises lettuce economic profit by 2.91%, keeping violations stable near the safety threshold. This decoupled CMDP optimization with KAN-based policy representation mitigates long-term climate risks and boosts planting profits, offering a constraint-aware control strategy for precision greenhouse cultivation.",
+      "key": [
+        "Greenhouse climate control balances economic return with maintaining temperature, humidity and CO2 within crop-adapted growth ranges.",
+        "To address this issue, we formulate greenhouse climate regulation as a Constrained Markov Decision Process (CMDP) and use a Lagrangian safe RL framework RCPO-PPO to separate economic optimization and cumulative safety constraints, enabling adaptive penalty adjustment without manual tuning.",
+        "Compared with vanilla penalty-based PPO, our method cuts cumulative climate violations by 18.65% and raises lettuce economic profit by 2.91%, keeping violations stable near the safety threshold."
+      ]
+    },
+    {
+      "n": 3,
+      "arxivId": "2609.27118",
+      "title": "From greenhouse climate to individual leaves: an organ-resolved model of lettuce growth",
+      "authors": [
+        "Md Hasibur Rahman",
+        "Faraz Ahmed",
+        "Hafiz Muhammad Bilal",
+        "Daniel Wells",
+        "Dylan Tobin",
+        "Tanzeel U. Rehman"
+      ],
+      "authorCount": 6,
+      "published": "2026-09-22",
+      "url": "https://arxiv.org/abs/2609.27118",
+      "pdfUrl": "https://arxiv.org/pdf/2609.27118",
+      "category": "cs.CV",
+      "abstract": "Greenhouse climate management aims to improve crop production while limiting energy use. This requires knowing how a crop will respond before conditions are changed. A crop digital twin can support this decision only if it represents how plant physiology and structure develop together. A unified framework was developed to simulate lettuce growth from the physiology of individual leaves. Each leaf received the conditions at its position in the canopy and contributed carbon through photosynthesis. Part of this carbon was used for maintenance and the remainder supported growth, distributed among leaves by their age, size and local environment. The predicted leaf mass, area and age generated an evolving three-dimensional plant in NVIDIA Isaac Sim. Ray tracing calculated the radiation intercepted by each leaf and returned it to photosynthesis, so structure and growth influenced each other over time. Against greenhouse measurements, the relative root mean square error was 9.5% for total dry weight and 9.2%, 12.7% and 13.1% for leaf number, canopy diameter and largest-leaf area, respectively. A 30% decrease in incident radiation reduced final dry weight by 10.4%, while the same increase raised it by 6.9%, and adding 200 ppm carbon dioxide raised it by 46.1%. Within a simulated 40-plant block, interior plants accumulated 8.6% less dry weight than border plants with identical initial states, and the leaf-specific tipburn index rose in the enclosed leaves over the period in which tipburn appeared on the greenhouse plants. Resolving individual leaves therefore explains how local exposure changes plant growth within the greenhouse. The framework provides the forward plant model needed for a bidirectional digital twin, where observations of the physical plant can update predictions and support greenhouse climate decisions.",
+      "key": [
+        "Greenhouse climate management aims to improve crop production while limiting energy use.",
+        "A unified framework was developed to simulate lettuce growth from the physiology of individual leaves.",
+        "Against greenhouse measurements, the relative root mean square error was 9.5% for total dry weight and 9.2%, 12.7% and 13.1% for leaf number, canopy diameter and largest-leaf area, respectively."
+      ]
+    },
+    {
+      "n": 4,
+      "arxivId": "2609.23615",
+      "title": "Attosecond charge migration timescales are dominated by transition dipoles, not correlations",
+      "authors": [
+        "Km Akanksha Dubey",
+        "Ofer Neufeld"
+      ],
+      "authorCount": 2,
+      "published": "2026-09-20",
+      "url": "https://arxiv.org/abs/2609.23615",
+      "pdfUrl": "https://arxiv.org/pdf/2609.23615",
+      "category": "physics.chem-ph",
+      "abstract": "Attosecond charge migration (CM) is an ultrafast process occurring when a molecule is irradiated by ultrashort laser pulses, creating a localized hole. The hole propagates rapidly through the molecule, generating electric currents and transferring charge across the molecular backbone. CM is a key ingredient in solar energy conversion, photosynthesis, and radiation damage. Despite its importance and intensive research, the fundamental physical and chemical mechanisms of CM remain not fully understood. Especially, a deeper insight into the role correlations play in the dynamics, and which chemical attributes determine CM timescales, is needed. Here we study with ab-initio time-dependent density functional theory CM in the benchmark molecule, BrC_4H. We thoroughly explore CM under different initial conditions at the electronic and structural levels, including with theories of varying degrees of electronic correlations. We uncover a universal behavior where the hole moment (connecting to experimental observables) dominant frequency is roughly independent of all of these characteristics. In contrast, the timescales of the hole density evolution do vary with the chemical conditions and level of correlations. Employing a semi-analytical theory that reconstructs the hole moments in the cationic reference frame, we show that the attosecond timescale of CM is determined by molecular dipoles that filter out specific frequency responses with an analogy to optical selection rules. Our results provide essential insight into CM physics, which should be useful for interpreting attosecond experiments and engineering CM timescales by tailoring transition dipoles.",
+      "key": [
+        "Here we study with ab-initio time-dependent density functional theory CM in the benchmark molecule, BrC_4H.",
+        "Employing a semi-analytical theory that reconstructs the hole moments in the cationic reference frame, we show that the attosecond timescale of CM is determined by molecular dipoles that filter out specific frequency responses with an analogy to optical selection rules."
+      ]
+    },
+    {
+      "n": 5,
+      "arxivId": "2608.16826",
+      "title": "Tuning single-molecule fluorescence by atomic-scale control of the local environment",
+      "authors": [
+        "Thiago G. L. Brito",
+        "Daniel Arribas",
+        "Sofia Canola",
+        "Klaus Kuhnke",
+        "Tomáš Neuman",
+        "Anna Rosławska"
+      ],
+      "authorCount": 6,
+      "published": "2026-08-17",
+      "url": "https://arxiv.org/abs/2608.16826",
+      "pdfUrl": "https://arxiv.org/pdf/2608.16826",
+      "category": "cond-mat.mes-hall",
+      "abstract": "Molecules that absorb and emit light play a central role in microscopy, light-emitting devices and photosynthesis. Their fluorescence arises from well-defined radiative transitions that are governed by the electronic states and their coupling to the nuclear motion that are influenced by the local environment. Yet the effect of controlled atomic-scale variations in the emitter surroundings remains unexplored. Here, we use scanning tunneling microscopy combined with optical spectroscopy to investigate the optical response of a single phthalocyanine to the change in the position of a nearby molecule, controlled with precision better than 100 pm. Upon decreasing the intermolecular distance, the molecular emission energy redshifts and its line profile evolves. Supported by theoretical calculations, we disentangle the electronic and nuclear contributions to the changes in fluorescence. We find that the redshift originates from the interaction between the excitations of the two molecules, while the lineshape changes reflect modifications of the molecular rotational degree of freedom and non-equilibrium dynamics. We extend this control to larger assemblies, where one molecule tunes the energies of two chromophores, mimicking the environmental tuning in photosynthetic systems. Our study provides atomic-scale insight into how the local environment affects the optical properties of molecular systems.",
+      "key": [
+        "Here, we use scanning tunneling microscopy combined with optical spectroscopy to investigate the optical response of a single phthalocyanine to the change in the position of a nearby molecule, controlled with precision better than 100 pm.",
+        "Supported by theoretical calculations, we disentangle the electronic and nuclear contributions to the changes in fluorescence."
+      ]
+    }
+  ],
+  "material": "Recent papers on \"photosynthesis\", submitted 2026-07-27 to 2026-10-25 (arXiv; nothing in the last 14 days, so the last 90). Cite them as [1] to [5].\n\n[1] Variations of atmospheric 12CO2 and 13CO2 from the year 1000 to 2024 (Wijngaarden and Happer, 2026-09-29, arXiv:2609.38063)\nA simple model gives good agreement between observed emissions of CO2 into the atmosphere from the combustion of fossil fuels and observed increases of the atmospheric concentrations C of CO2 and decreases of the isotope delta value delta13C. If fossil fuel emissions were to cease the model predicts that: (1) the difference between the CO2 concentration C and the preindustrial value, Co = 280 ppm, would decay exponentially with time constant of 60 y; (2) the difference between the concentration-delta-value product C x delta13C and the preindustrial value Co x delta13Co = (280 ppm) x (-6.5%%), would decay exponentially with a time constant of 8 y. The decay times are different because of isotopic exchange, largely driven by photosynthesis and respiration on the land.\n\n[2] Safe Greenhouse Climate Control Using Lagrangian-Constrained PPO with Kolmogorov-Arnold Networks (Liu et al., 2026-09-28, arXiv:2609.34966)\nGreenhouse climate control balances economic return with maintaining temperature, humidity and CO2 within crop-adapted growth ranges. To address this issue, we formulate greenhouse climate regulation as a Constrained Markov Decision Process (CMDP) and use a Lagrangian safe RL framework RCPO-PPO to separate economic optimization and cumulative safety constraints, enabling adaptive penalty adjustment without manual tuning. Compared with vanilla penalty-based PPO, our method cuts cumulative climate violations by 18.65% and raises lettuce economic profit by 2.91%, keeping violations stable near the safety threshold.\n\n[3] From greenhouse climate to individual leaves: an organ-resolved model of lettuce growth (Rahman et al., 2026-09-22, arXiv:2609.27118)\nGreenhouse climate management aims to improve crop production while limiting energy use. A unified framework was developed to simulate lettuce growth from the physiology of individual leaves. Against greenhouse measurements, the relative root mean square error was 9.5% for total dry weight and 9.2%, 12.7% and 13.1% for leaf number, canopy diameter and largest-leaf area, respectively.\n\n[4] Attosecond charge migration timescales are dominated by transition dipoles, not correlations (Dubey and Neufeld, 2026-09-20, arXiv:2609.23615)\nHere we study with ab-initio time-dependent density functional theory CM in the benchmark molecule, BrC_4H. Employing a semi-analytical theory that reconstructs the hole moments in the cationic reference frame, we show that the attosecond timescale of CM is determined by molecular dipoles that filter out specific frequency responses with an analogy to optical selection rules.\n\n[5] Tuning single-molecule fluorescence by atomic-scale control of the local environment (Brito et al., 2026-08-17, arXiv:2608.16826)\nHere, we use scanning tunneling microscopy combined with optical spectroscopy to investigate the optical response of a single phthalocyanine to the change in the position of a nearby molecule, controlled with precision better than 100 pm. Supported by theoretical calculations, we disentangle the electronic and nuclear contributions to the changes in fluorescence.",
+  "via": "arxiv-api",
+  "startedAt": "2026-10-25T06:32:43.181Z",
+  "ms": 252,
+  "fetchedAt": "2026-10-25T06:32:43.433Z"
+}

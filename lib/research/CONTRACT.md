@@ -15,6 +15,10 @@ POST /api/research
 - `topic`: string, 1 to 200 chars. Pass the subject, not the whole utterance ("LLM agents", not
   "teach me the latest on LLM agents this week"); the route also strips filler like "the latest
   on", "newest papers on", "this week" if it is left in.
+  Matching is by keywords against arXiv titles and abstracts, so research wording finds better
+  papers: "voice AI" catches HCI papers that mention "voice", while "spoken dialogue models" or
+  "speech language models" finds the speech papers. If the converse model rewrites the topic, it
+  should use the words a paper title would use.
 - `days`: optional window, 1 to 90, default 14. "this week" → 7, "this month" → 30.
 - The record comes back **at once**. Cached topics (same normalised topic and `days`) come back
   with `status: "ready"` and `cached: true` in a few ms. Otherwise `status: "running"`: poll

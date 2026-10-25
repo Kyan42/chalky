@@ -1,0 +1,139 @@
+{
+  "topic": "retrieval-augmented generation",
+  "days": 14,
+  "searchedDays": 14,
+  "from": "2026-10-11",
+  "to": "2026-10-25",
+  "status": "ready",
+  "papers": [
+    {
+      "n": 1,
+      "arxivId": "2610.31606",
+      "title": "How Ground Truth Shapes Retrieval Scores: Evidence-Aware Evaluation of a Retrieval-Augmented Generation System for Breast Lesions",
+      "authors": [
+        "Miguel Mochizuki Silva",
+        "Samuel Ismael",
+        "Mateus C. Dias",
+        "Thaís Gaudêncio",
+        "Yuri Malheiros",
+        "Barufaldi"
+      ],
+      "authorCount": 6,
+      "published": "2026-10-22",
+      "url": "https://arxiv.org/abs/2610.31606",
+      "pdfUrl": "https://arxiv.org/pdf/2610.31606",
+      "category": "cs.CL",
+      "abstract": "Purpose: To describe an evidence-aware retrieval evaluation protocol for a clinical retrieval-augmented generation (RAG) system over breast lesion management literature, addressing the dependence of retrieval scores on annotation coverage. Methods: An 18-document corpus and an 18-query development benchmark, with one Yes/No or WH-question per document, were used. Retrieval combined dense embeddings, BM25, and cross-encoder reranking. Chunk sizes of 128 to 1024 tokens, overlaps of 0 to 20%, and four retriever configurations were evaluated. Relevance was defined by evidence spans mapped to all containing chunks, treating overlapping chunks with equivalent evidence as relevant. Retrieval was evaluated using R-Precision, Recall@K, MRR, and nDCG@K. Separately, generation was assessed on a 512-token index at K=1 to 5 using DeepEval claim-level metrics, with deepseek-v4-pro as the LLM judge, and BLEU/ROUGE metrics. Results: The selected hybrid retriever, using 384-token chunks and 20% overlap, retrieved accepted evidence in the top three results for 17 of 18 queries. Recall@3, R-Precision, MRR@3, and nDCG@3 each reached 0.94. Ground-truth curation increased evidence spans from 25 to 37 and accepted chunk targets from 36 to 51 without changing retrieval rankings. Conclusion: Cross-encoder reranking achieved the highest retrieval scores. Expanded relevance annotations increased recognized evidence without changing rankings, highlighting annotation sensitivity. The small development set and retrieval-informed curation require independent validation, including radiologist assessment of evidence sufficiency.",
+      "key": [
+        "Purpose: To describe an evidence-aware retrieval evaluation protocol for a clinical retrieval-augmented generation (RAG) system over breast lesion management literature, addressing the dependence of retrieval scores on annotation coverage.",
+        "Methods: An 18-document corpus and an 18-query development benchmark, with one Yes/No or WH-question per document, were used.",
+        "Chunk sizes of 128 to 1024 tokens, overlaps of 0 to 20%, and four retriever configurations were evaluated."
+      ]
+    },
+    {
+      "n": 2,
+      "arxivId": "2610.30728",
+      "title": "Federated Graph Retrieval-Augmented Generation",
+      "authors": [
+        "Xiaobao Wang",
+        "Renda Han",
+        "Zhiliang Xia",
+        "Meng Liu",
+        "Renxiang Guan",
+        "Di Jin"
+      ],
+      "authorCount": 6,
+      "published": "2026-10-22",
+      "url": "https://arxiv.org/abs/2610.30728",
+      "pdfUrl": "https://arxiv.org/pdf/2610.30728",
+      "category": "cs.LG",
+      "abstract": "Graph Retrieval-Augmented Generation (GraphRAG) leverages centralized knowledge graphs to enhance large language models with structured knowledge retrieval. However, real-world knowledge is inherently distributed across multiple organizations rather than being centrally accessible. Privacy constraints further prohibit sharing entire local knowledge graphs, preventing GraphRAG from effectively retrieving and utilizing distributed knowledge. To this end, we propose Federated GraphRAG (FedGRAG), a unified framework for distributed graph retrieval and knowledge-enhanced generation over multiple clients with knowledge graphs. Specifically, we address two fundamental challenges in federated GraphRAG. First, the absence of a global knowledge graph makes unified retrieval impossible. To address this, we develop a Federated Knowledge Routing mechanism that efficiently identifies relevant clients through lightweight knowledge indices without exposing local graph structures. Second, local graph memory cannot be shared directly because it contains sensitive entities and knowledge information. We therefore propose a controlled-disclosure evidence construction method. It extracts retrieved evidence subgraphs and converts them into an evidence abstract, enabling evidence conversion and reconstruction on the server. Extensive experiments demonstrate that Federated GraphRAG consistently outperforms existing baselines in both retrieval and downstream generation tasks, establishing a new paradigm for deploying GraphRAG in federated environments.",
+      "key": [
+        "To this end, we propose Federated GraphRAG (FedGRAG), a unified framework for distributed graph retrieval and knowledge-enhanced generation over multiple clients with knowledge graphs.",
+        "To address this, we develop a Federated Knowledge Routing mechanism that efficiently identifies relevant clients through lightweight knowledge indices without exposing local graph structures.",
+        "Extensive experiments demonstrate that Federated GraphRAG consistently outperforms existing baselines in both retrieval and downstream generation tasks, establishing a new paradigm for deploying GraphRAG in federated environments."
+      ]
+    },
+    {
+      "n": 3,
+      "arxivId": "2610.29933",
+      "title": "Graph Topology Meets Energy-Driven Pathfinding: Preserving Contextual Consistency in Retrieval-Augmented Generation",
+      "authors": [
+        "Yufeng Li",
+        "Zaijing Li",
+        "Fuchen Zhang",
+        "Zongzong Wu",
+        "Ming Zhao",
+        "Fengxiao Tang"
+      ],
+      "authorCount": 6,
+      "published": "2026-10-21",
+      "url": "https://arxiv.org/abs/2610.29933",
+      "pdfUrl": "https://arxiv.org/pdf/2610.29933",
+      "category": "cs.CL",
+      "abstract": "Retrieval-augmented generation (RAG) frequently integrates knowledge graphs (KGs) for complex multi-hop question answering. However, their performance is increasingly bottlenecked by the knowledge structuring and reasoning processes. (i) Severe semantic loss: Distilling continuous texts into discrete symbols strips away contextual nuances and narrative coherence. (ii) Pronounced modality mismatch: Fragmented graph structures clash with the continuous texts LLMs are pre-trained on, while rewriting them into natural language introduces generative noise and omits information. To address these limitations, we propose ThreadRAG, a semantic-topology-based RAG framework for context-preserving knowledge structuring and modality-native evidence reasoning. ThreadRAG introduces a Semantic Topology Mapper (STM), which organizes retrieved documents into context-intact Semantic Nodes and constructs a Semantic Topology Graph (STG) through narrative, semantic, and lexical edges. It further incorporates Energy-Driven Pathfinding (EDP), which identifies query-relevant subgraphs via energy diffusion and deterministically linearizes them into coherent textual evidence paths. Experiments on three multi-hop QA benchmarks demonstrate that ThreadRAG consistently outperforms strong baselines. Notably, it achieves a 14.4% EM improvement over text-centric methods on HotpotQA and surpasses the best baseline by 5.8% EM on 2WikiMultihop, while reducing token cost to 23.3% of the strongest baseline.",
+      "key": [
+        "To address these limitations, we propose ThreadRAG, a semantic-topology-based RAG framework for context-preserving knowledge structuring and modality-native evidence reasoning.",
+        "ThreadRAG introduces a Semantic Topology Mapper (STM), which organizes retrieved documents into context-intact Semantic Nodes and constructs a Semantic Topology Graph (STG) through narrative, semantic, and lexical edges.",
+        "Experiments on three multi-hop QA benchmarks demonstrate that ThreadRAG consistently outperforms strong baselines."
+      ]
+    },
+    {
+      "n": 4,
+      "arxivId": "2610.29792",
+      "title": "MAPS: Macro-Adaptive Parallel Reasoning for Regulating Search Momentum in Retrieval-Augmented Generation",
+      "authors": [
+        "Xinze Li",
+        "Dingwen Zhang",
+        "Zhenghao Liu",
+        "Yukun Yan",
+        "Shuo Wang",
+        "Yu Gu",
+        "Ge Yu",
+        "Maosong Sun"
+      ],
+      "authorCount": 8,
+      "published": "2026-10-21",
+      "url": "https://arxiv.org/abs/2610.29792",
+      "pdfUrl": "https://arxiv.org/pdf/2610.29792",
+      "category": "cs.CL",
+      "abstract": "Retrieval-Augmented Generation (RAG) improves the performance of Large Language Models (LLMs) by retrieving external knowledge. Recently, some RAG methods interleave reasoning and retrieval, enabling LLMs to progressively generate sub-queries and retrieve external knowledge. However, these methods may suffer from redundant or ineffective sub-queries and insufficiently diverse query exploration. Moreover, due to the tightly interleaved nature of reasoning and retrieval, it remains unclear how the evolving reasoning process influences query intent. To characterize the evolution of query intent during reasoning, we introduce search momentum, which captures the accumulated retrieval tendency induced by historical changes in generated sub-queries along the reasoning trajectory. Through momentum-based analysis, we find that the query generation process tends to continuously evolve along existing retrieval trajectories. Based on this observation, we propose MAPS, a Macro-Adaptive Parallel Reasoning framework for regulating search momentum and mitigating query-intent drift. MAPS first retains the retrieved knowledge and a refined reasoning state, thereby reducing the influence of historical reasoning trajectories on subsequent sub-query generation. Subsequently, MAPS extends the conventional sequential reasoning process into a parallel reasoning paradigm. At each iteration, MAPS identifies complementary retrieval directions, generates corresponding sub-queries for parallel retrieval, and consolidates the retrieved evidence to update the knowledge and reasoning states. Experiments on six question-answering benchmarks demonstrate that MAPS consistently outperforms representative RAG methods across different backbone models. All code and resources are available at https://github.com/NEUIR/MAPS.",
+      "key": [
+        "To characterize the evolution of query intent during reasoning, we introduce search momentum, which captures the accumulated retrieval tendency induced by historical changes in generated sub-queries along the reasoning trajectory.",
+        "Through momentum-based analysis, we find that the query generation process tends to continuously evolve along existing retrieval trajectories.",
+        "Experiments on six question-answering benchmarks demonstrate that MAPS consistently outperforms representative RAG methods across different backbone models."
+      ]
+    },
+    {
+      "n": 5,
+      "arxivId": "2610.29223",
+      "title": "C^2U in RAG: Compositional Concept Unlearning in Retrieval-Augmented Generation",
+      "authors": [
+        "Yiyang Duan",
+        "Fan Wu",
+        "Tiantong Wu",
+        "Che Wang",
+        "Zhiren Gong",
+        "Wei Guo",
+        "Yang Cao",
+        "Wei Yang Bryan Lim"
+      ],
+      "authorCount": 8,
+      "published": "2026-10-21",
+      "url": "https://arxiv.org/abs/2610.29223",
+      "pdfUrl": "https://arxiv.org/pdf/2610.29223",
+      "category": "cs.CL",
+      "abstract": "Retrieval-augmented generation can expose unwanted concepts through retrieved evidence even when the generator is moderated. We study query-side concept suppression with a fixed encoder and document index. Compositional Concept Unlearning (C^2U) routes a profile-derived direction through an augmented atom bank, adding only a bounded edited-minus-original delta to the raw query. Across five datasets, four encoders, and three seeds, the validation-selected configuration reduces pooled binary target Hit@5 by 4.25 percentage points with non-positive control degradation and target-exposure changes. Under the evaluated query transforms, it suppresses target density without increasing budgeted control-query exposure. Separately, ArXiv four-concept composition improves over an averaged-direction comparator after independent validation gates and first-use test evaluation.",
+      "key": [
+        "We study query-side concept suppression with a fixed encoder and document index.",
+        "Compositional Concept Unlearning (C^2U) routes a profile-derived direction through an augmented atom bank, adding only a bounded edited-minus-original delta to the raw query.",
+        "Across five datasets, four encoders, and three seeds, the validation-selected configuration reduces pooled binary target Hit@5 by 4.25 percentage points with non-positive control degradation and target-exposure changes."
+      ]
+    }
+  ],
+  "material": "Recent papers on \"retrieval-augmented generation\", submitted 2026-10-11 to 2026-10-25 (arXiv). Cite them as [1] to [5].\n\n[1] How Ground Truth Shapes Retrieval Scores: Evidence-Aware Evaluation of a Retrieval-Augmented Generation System for Breast Lesions (Silva et al., 2026-10-22, arXiv:2610.31606)\nPurpose: To describe an evidence-aware retrieval evaluation protocol for a clinical retrieval-augmented generation (RAG) system over breast lesion management literature, addressing the dependence of retrieval scores on annotation coverage. Methods: An 18-document corpus and an 18-query development benchmark, with one Yes/No or WH-question per document, were used. Chunk sizes of 128 to 1024 tokens, overlaps of 0 to 20%, and four retriever configurations were evaluated.\n\n[2] Federated Graph Retrieval-Augmented Generation (Wang et al., 2026-10-22, arXiv:2610.30728)\nTo this end, we propose Federated GraphRAG (FedGRAG), a unified framework for distributed graph retrieval and knowledge-enhanced generation over multiple clients with knowledge graphs. To address this, we develop a Federated Knowledge Routing mechanism that efficiently identifies relevant clients through lightweight knowledge indices without exposing local graph structures. Extensive experiments demonstrate that Federated GraphRAG consistently outperforms existing baselines in both retrieval and downstream generation tasks, establishing a new paradigm for deploying GraphRAG in federated environments.\n\n[3] Graph Topology Meets Energy-Driven Pathfinding: Preserving Contextual Consistency in Retrieval-Augmented Generation (Li et al., 2026-10-21, arXiv:2610.29933)\nTo address these limitations, we propose ThreadRAG, a semantic-topology-based RAG framework for context-preserving knowledge structuring and modality-native evidence reasoning. ThreadRAG introduces a Semantic Topology Mapper (STM), which organizes retrieved documents into context-intact Semantic Nodes and constructs a Semantic Topology Graph (STG) through narrative, semantic, and lexical edges. Experiments on three multi-hop QA benchmarks demonstrate that ThreadRAG consistently outperforms strong baselines.\n\n[4] MAPS: Macro-Adaptive Parallel Reasoning for Regulating Search Momentum in Retrieval-Augmented Generation (Li et al., 2026-10-21, arXiv:2610.29792)\nTo characterize the evolution of query intent during reasoning, we introduce search momentum, which captures the accumulated retrieval tendency induced by historical changes in generated sub-queries along the reasoning trajectory. Through momentum-based analysis, we find that the query generation process tends to continuously evolve along existing retrieval trajectories. Experiments on six question-answering benchmarks demonstrate that MAPS consistently outperforms representative RAG methods across different backbone models.\n\n[5] C^2U in RAG: Compositional Concept Unlearning in Retrieval-Augmented Generation (Duan et al., 2026-10-21, arXiv:2610.29223)\nWe study query-side concept suppression with a fixed encoder and document index. Compositional Concept Unlearning (C^2U) routes a profile-derived direction through an augmented atom bank, adding only a bounded edited-minus-original delta to the raw query. Across five datasets, four encoders, and three seeds, the validation-selected configuration reduces pooled binary target Hit@5 by 4.25 percentage points with non-positive control degradation and target-exposure changes.",
+  "via": "arxiv-api",
+  "startedAt": "2026-10-25T06:32:41.949Z",
+  "ms": 214,
+  "fetchedAt": "2026-10-25T06:32:42.164Z"
+}
