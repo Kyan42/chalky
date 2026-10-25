@@ -509,7 +509,13 @@ export default function Lesson() {
   const cursorClockRef = useRef<() => number>(() => 0);
   const cursorClock = useCallback(() => cursorClockRef.current(), []);
   const [pausedAt, setPausedAt] = useState<{ beatId: string; wordIndex: number } | null>(null);
-  const [lastLevel, setLastLevel] = useState<string | null>(null);
+  const [lastLevel, setLastLevelRaw] = useState<string | null>(null);
+  /** Turns settled so far (data-turn on the "Last turn" line), so a test can tell two alike turns apart. */
+  const [turns, setTurns] = useState(0);
+  const setLastLevel = useCallback((level: string | null) => {
+    setLastLevelRaw(level);
+    setTurns((n) => n + 1);
+  }, []);
   const [learnerView, setLearnerView] = useState<LearnerRecord | null>(null);
   const [intakeView, setIntakeView] = useState<string | null>(null);
   const [prefetchStats, setPrefetchStats] = useState<PrefetchStats>(NO_PREFETCH);
@@ -2242,7 +2248,7 @@ export default function Lesson() {
           )}
           {layoutMs !== null && <p className="beat-meta" data-testid="layout-ms">Layout pass took {(layoutMs / 1000).toFixed(1)} s.</p>}
           {lastReplyMs !== null && <p className="beat-meta" data-testid="reply-ms">Last answer: first sound {(lastReplyMs / 1000).toFixed(1)} s after the learner finished.</p>}
-          {lastLevel && <p className="beat-meta" data-testid="last-level">Last turn: {lastLevel}</p>}
+          {lastLevel && <p className="beat-meta" data-testid="last-level" data-turn={turns}>Last turn: {lastLevel}</p>}
           {intakeView && <p className="beat-meta" data-testid="intake">Intake: {intakeView}</p>}
           {prefetchStats.fetched > 0 && (
             <p className="beat-meta" data-testid="prefetch">
