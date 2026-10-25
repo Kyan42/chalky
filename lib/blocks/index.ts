@@ -31,10 +31,10 @@ export function blockById(id: string): Block | undefined {
 }
 
 /**
- * Blocks a slow-mode lesson drew for itself and kept (lib/moss/learned.ts): registered on the server
- * when they load from Moss, and in the browser when a draw response carries them, so they place and
- * render like any catalog block. An id the catalog already has is never replaced. Held on globalThis
- * so a dev hot reload of this module doesn't forget them.
+ * Blocks a slow-mode lesson drew for itself and kept (lib/blocks/learned.ts, a local file, never Moss):
+ * registered on the server when the file loads, and in the browser when a draw response carries them,
+ * so they place and render like any catalog block. An id the catalog already has is never replaced.
+ * Held on globalThis so a dev hot reload of this module doesn't forget them.
  */
 type LearnedStore = { list: Block[]; byId: Map<string, Block>; version: number };
 const gl = globalThis as typeof globalThis & { __chalkyLearnedBlocks?: LearnedStore };

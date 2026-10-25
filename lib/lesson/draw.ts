@@ -11,7 +11,7 @@
  *
  * Draw modes (lib/lesson/language.ts DrawMode): fast draws every beat from presets; slow makes about
  * FREE_SHARE of beats (never the first) free, allowed freehand kinds and one new block, which is kept
- * in Moss (lib/moss/learned.ts) for later lessons.
+ * in a local file (lib/blocks/learned.ts) for later lessons; the Moss index stays the catalog alone.
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -24,7 +24,7 @@ import type { CallLog, PlannedBeat } from "./types";
 import { blockById, isLearned, registerBlocks, type Block } from "@/lib/blocks";
 import { cleanNewBlock } from "@/lib/blocks/learn";
 import { blocksForBeat } from "@/lib/moss/blocks";
-import { loadLearned, saveLearned } from "@/lib/moss/learned";
+import { loadLearned, saveLearned } from "@/lib/blocks/learned";
 
 const FAST_MODEL = process.env.DRAW_FAST_MODEL || "claude-haiku-5-5";
 const MODEL = process.env.DRAW_MODEL || "claude-sonnet-5-5";

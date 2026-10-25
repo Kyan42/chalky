@@ -34,7 +34,7 @@ function plannerThinking(model: string) {
   return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
 }
 const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
-/** The planner's list of ready-made drawings: the catalog and every learned block (lib/moss/learned.ts). */
+/** The planner's list of ready-made drawings: the catalog and every learned block (lib/blocks/learned.ts). */
 const BLOCK_IDS = "{{BLOCK_IDS}}";
 const withBlocks = (system: string) => system.replace(BLOCK_IDS, allBlocks().map((b) => b.id).join(", "));
 const plannerSystem = () => withVoiceRules(withBlocks(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
