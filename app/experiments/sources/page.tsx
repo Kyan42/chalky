@@ -59,6 +59,7 @@ export default function SourcesPage() {
   const [events, setEvents] = useState<(SourcesEvent & { t: number })[]>([]);
   const [t0, setT0] = useState(0);
   const [fixture, setFixture] = useState(false);
+  const [overlay, setOverlay] = useState(false);
   useEffect(() => setFixture(new URLSearchParams(location.search).get("fixture") === "1"), []);
 
   const beats = beatText
@@ -82,7 +83,10 @@ export default function SourcesPage() {
         apify/rag-web-browser via /api/sources; cached per question in experiments/sources-cache. Beats are sample lines, not a plan.
         {fixture && <b> Fixture mode: hand-written test cards, not a fetch.</b>}
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1fr) 380px", gap: 16, alignItems: "start" }}>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 12 }}>
+        <input type="checkbox" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} data-testid="sources-overlay" /> Show them as the lesson would: in the corner of a 16:9 board
+      </label>
+      <div style={{ display: "grid", gridTemplateColumns: overlay ? "minmax(320px, 1fr) minmax(480px, 2fr)" : "minmax(320px, 1fr) 380px", gap: 16, alignItems: "start" }}>
         <section style={{ display: "grid", gap: 12 }}>
           <div style={box}>
             <form
@@ -158,11 +162,19 @@ export default function SourcesPage() {
             </pre>
           </div>
         </section>
-        <section style={{ ...box, background: "var(--paper)", minHeight: 200 }}>
+        <section
+          style={
+            overlay
+              ? { position: "relative", aspectRatio: "16 / 9", background: "var(--paper)", borderRadius: 8, display: "grid", placeItems: "center", overflow: "hidden" }
+              : { ...box, background: "var(--paper)", minHeight: 200 }
+          }
+        >
+          {/* Overlay preview: a 3:2 stand-in for the board drawing, as the lesson's stage centres it. */}
+          {overlay && <div style={{ height: "82%", aspectRatio: "3 / 2", border: "1px dashed var(--rule)", borderRadius: 6, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 13 }}>board drawing</div>}
           {run && (
             <SourceCards
               key={run.n}
-              layout="inline"
+              layout={overlay ? "overlay" : "inline"}
               question={run.question}
               title={run.question}
               beats={beats}
