@@ -166,13 +166,13 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
  * Teaching from research material (recent papers, each with a citation tag like [1]): the lesson is built from
  * the material, not from memory, and every beat that uses a paper says which.
  */
-const MATERIAL_RULES = `Teach this lesson from the research material below (recent papers, each with a citation tag like [1]), not from memory:
-- Each section covers one or two of the papers: what problem they take on, what they did (the method), and what they found (the results, with their numbers where the material gives them).
-- Every beat that teaches from a paper carries "cite": n, that paper's number (one number: the paper the beat is mostly about). A beat that uses no paper has no "cite". Never write the tags ([1]) in "say": it is spoken aloud. Name a paper naturally instead ("a paper from last week", "the second paper").
-- You may give background from general knowledge, but say so out loud ("as background, ..."), and never present it as something a paper found.
-- Drawings are diagrams of methods and results: boxes and arrows for a pipeline, a simple chart of a result. No pictures of things.
-- The recap names the papers by short title and what each showed.
-- Never invent a paper, an author, a number or a result that is not in the material.`;
+const MATERIAL_RULES = `Teach this from the material below (recent sources found just now: web pages, each numbered [1], [2]...), not from memory, wherever it covers the question:
+- Each section draws on one or two of the sources: what is new, what changed, what it means, with the dates and numbers the sources give.
+- Every beat that teaches from a source carries "cite": n, that source's number (one number: the source the beat is mostly about). A beat that uses no source has no "cite". Never write the tags ([1]) in "say": it is spoken aloud. Name a source naturally instead ("the release notes", "a report from this week").
+- You may give background from general knowledge, but say so out loud ("as background, ..."), and never present it as something a source said.
+- Drawings are diagrams of what the sources describe: a timeline, boxes and arrows for how something works, a simple chart of a number. Nothing decorative.
+- The recap names what is new and where it came from.
+- Never invent a source, a date, a version, a number or a claim that is not in the material.`;
 
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT, material?: string): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
