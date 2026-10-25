@@ -39,6 +39,7 @@ import type { BeatAudioEvent } from "@/lib/sonic";
 import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
 import { unlockAudio } from "@/lib/voice/audio";
+import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
 const TPS = 240;
@@ -54,12 +55,11 @@ const HIGHLIGHT_SECONDS = 1.8;
 const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
 /** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
-/** Words Ink-2 should expect: Chalky's own name, which it otherwise hears as "Chucky". */
-const BASE_KEYTERMS = ["Chalky"];
 /** Seconds of silence after the intake question before the lesson just goes on. */
 const INTAKE_SILENCE_MS = 4000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
+const SEED_TERMS = buildKeyterms();
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
 const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
@@ -362,6 +362,8 @@ export default function Lesson() {
   const lessonBusyRef = useRef<() => boolean>(() => false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
   const voice = useHybridMic({
+    // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
+    keyterms: SEED_TERMS,
     speaking: MUTED.has(status) || speakingAudio,
     // Chalky asked something (intake, check-in, a reply's check): a pause mid-answer must not end the turn.
     patient: status === "waiting",
@@ -608,6 +610,8 @@ export default function Lesson() {
     const t0 = performance.now();
     const since = () => Math.round(performance.now() - t0);
     setHeardNote(null);
+    // The question's own words help Ink hear the intake answer (applied between turns, never mid-speech).
+    voice.setKeyterms(buildKeyterms(topicWords(q)));
     // The planning filler counts silence from the question, not from page load.
     lastSpokeRef.current = performance.now();
     let heard = false;
@@ -826,7 +830,7 @@ export default function Lesson() {
           setTitle(event.title);
           transcript.title = event.title;
           logEv({ kind: "plan-title", title: event.title });
-          voice.setKeyterms([...BASE_KEYTERMS, ...[...event.title.split(/\s+/), ...q.split(/\s+/)].filter((w) => w.length > 4)]);
+          voice.setKeyterms(buildKeyterms(topicWords(q, event.title)));
         } else if (event.type === "error") throw new Error(`planner: ${event.message}`);
         else if (event.type === "done") logEv({ kind: "plan-done", inputTokens: event.inputTokens, outputTokens: event.outputTokens, call: event.call ?? null });
         else if (event.type === "beat") {
@@ -1513,7 +1517,7 @@ export default function Lesson() {
   const startTalking = useCallback(async () => {
     try {
       await voice.start();
-      voice.setKeyterms(BASE_KEYTERMS);
+      // The first connection already carries Chalky's name and the seed science vocabulary.
       const abort = new AbortController();
       abortRef.current = abort;
       setStatus("speaking");

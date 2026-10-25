@@ -52,6 +52,8 @@ export interface HybridMicOptions {
   onPartial?: (text: string) => void;
   onUtterance?: (text: string, meta: { via: "open" | "barge"; turns: number; holdMs?: number }) => void;
   onError?: (message: string) => void;
+  /** Ink-2 key terms for the first connection (at most 100; see lib/voice/keyterms.ts). */
+  keyterms?: string[];
 }
 
 export function useHybridMic(options: HybridMicOptions) {
@@ -115,6 +117,7 @@ export function useHybridMic(options: HybridMicOptions) {
         lastPartial.current = "";
         refreshMode();
         opts.current.onUtterance?.(text, { via, turns, ...(holdMs !== undefined ? { holdMs } : {}) });
+        applyKeyterms();
       });
       const session = new InkSession(cartesiaToken, {
         onStart: () => merger.current?.turnStart(),
@@ -128,6 +131,7 @@ export function useHybridMic(options: HybridMicOptions) {
           lastPartial.current = "";
           setPartial("");
           merger.current?.turnEnd(t);
+          applyKeyterms();
           // The key is up and Ink has ended the turn: no need to wait any longer.
           if (tail.current) merger.current?.flush();
         },
@@ -135,7 +139,7 @@ export function useHybridMic(options: HybridMicOptions) {
           setError(message);
           opts.current.onError?.(message);
         },
-      });
+      }, opts.current.keyterms ?? []);
       ink.current = session;
       await session.connect();
       mic.current = await startMicrophone((pcm) => {
@@ -246,7 +250,26 @@ export function useHybridMic(options: HybridMicOptions) {
     [endTail],
   );
 
-  const setKeyterms = useCallback((terms: string[]) => ink.current?.setKeyterms(terms), []);
+  /**
+   * Changing key terms reconnects Ink's socket, which would drop a turn in
+   * progress: a change asked for mid-turn (or while a turn may still merge, or
+   * the barge-in key is down) waits until the utterance is complete.
+   */
+  const pendingTerms = useRef<string[] | null>(null);
+  const applyKeyterms = useCallback(() => {
+    const terms = pendingTerms.current;
+    if (!terms || !ink.current) return;
+    if (merger.current?.active || merger.current?.buffered || held.current || tail.current || lastPartial.current.trim()) return;
+    pendingTerms.current = null;
+    ink.current.setKeyterms(terms);
+  }, []);
+  const setKeyterms = useCallback(
+    (terms: string[]) => {
+      pendingTerms.current = terms;
+      applyKeyterms();
+    },
+    [applyKeyterms],
+  );
   const level = useCallback(() => (gateOpen() ? (mic.current?.level() ?? 0) : 0), [gateOpen]);
 
   return { start, started, mode, partial, error, level, setKeyterms };
