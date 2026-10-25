@@ -51,7 +51,7 @@ export type ConverseAction =
   | { type: "sketch"; sketch: NonNullable<ConverseTrailer["sketch"]> }
   /** Edit the lesson's beat timeline (1-based beat numbers): a detour, a new ending, or dropping beats. */
   | { type: "amend"; op: AmendAction; index: number; note: string; count?: number }
-  | { type: "resume"; how: ConverseResume }
+  | { type: "resume"; how: ConverseResume; why?: string }
   /** Move the board's camera to a scene's place, or to frame one element (in any scene). */
   | { type: "go_to"; scene?: number; element?: string }
   /** The cursor circles an element of the scene in view, or a spot (a rectangle on that scene's grid). */
@@ -394,7 +394,7 @@ export function groundCues(cues: CursorCue[], spoken: string, board: BoardElemen
 }
 
 /** Checks the model's actions and fixes what it can; cursor targets must be on the board and anchored to a spoken word. */
-export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalation" | "board" | "utterance" | "beatIndex" | "beats" | "scenes" | "candidates">, spoken: string): ConverseTrailer {
+export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalation" | "board" | "utterance" | "beatIndex" | "wordIndex" | "beats" | "scenes" | "candidates">, spoken: string): ConverseTrailer {
   const t = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const ids = new Set(input.board.map((e) => e.id));
   const spokenWords = spoken.split(/\s+/).map(normWord);
@@ -489,6 +489,25 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   }
   if (check && resume !== "wait") resume = "wait";
   if (escalated && resume === "wait") resume = "replay_beat";
+  // Cut off mid-beat: say the beat again only when the cut came early and they asked about the beat itself.
+  // Late in the beat, or when the reply already said what the rest of it says, the lesson goes on.
+  let resumeWhy: string | undefined;
+  if (resume === "replay_beat" && input.wordIndex >= 0 && input.beats[input.beatIndex]) {
+    const said = input.beats[input.beatIndex].say.split(/\s+/);
+    const spokenFrac = Math.min(1, (input.wordIndex + 1) / Math.max(1, said.length));
+    const KEY_STOP = new Set(["about", "there", "their", "these", "those", "which", "would", "could", "every", "other", "think", "really", "where", "while"]);
+    const keys = (t: string) => new Set(t.split(/\s+/).map(normWord).filter((w) => w.length >= 5 && !KEY_STOP.has(w)));
+    const rest = keys(said.slice(input.wordIndex + 1).join(" "));
+    const reply = keys(spoken);
+    const shared = [...rest].filter((w) => reply.has(w) || reply.has(w.replace(/s$/, "")) || reply.has(`${w}s`));
+    const covered = rest.size >= 2 && shared.length / rest.size >= 0.5;
+    const aboutBeat = isStillLost(input.utterance) || /\b(what did you (just )?say|say that again|repeat that|come again|pardon|didn'?t (hear|catch))\b/i.test(input.utterance);
+    if (!aboutBeat && (spokenFrac > 0.6 || covered)) {
+      resume = "continue";
+      resumeWhy = `replay_beat overridden: cut at ${Math.round(spokenFrac * 100)}% of the beat${covered ? `, and the reply covered the rest (${shared.slice(0, 4).join(", ")})` : ""}`;
+      console.info(`[converse] ${resumeWhy}`);
+    }
+  }
   // The cleaned list, in the model's order, with what the executor will really do.
   const actions: ConverseAction[] = [];
   for (const a of list) {
@@ -505,7 +524,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (cues.length && !actions.some((x) => x.type === "point")) actions.push({ type: "point", cues });
   if (lesson && !actions.some((x) => x.type === "start_lesson")) actions.push({ type: "start_lesson", ...lesson });
   if (amend && !actions.some((x) => x.type === "amend")) actions.push({ type: "amend", ...amend });
-  actions.push({ type: "resume", how: resume });
+  actions.push({ type: "resume", how: resume, ...(resumeWhy ? { why: resumeWhy } : {}) });
   return { actions, lesson, amend, level, resume, cursor: cues, check, planner_note: amend?.note ?? "", sketch, goTo: escalated ? null : goTo, highlights: escalated ? [] : highlights, delegate: escalated ? null : delegate };
 }
 
