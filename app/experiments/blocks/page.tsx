@@ -7,14 +7,15 @@
  * her photosynthesis script re-expressed as scene-language elements and compiled by the live
  * preset compiler (lib/lesson/presets.ts), the same path a lesson beat takes. Both documents go
  * through checkCoverage. Add ?t=<seconds> to open both boards paused at that time; a capture
- * script can call window.seekBoards(seconds).
+ * script can call window.seekBoards(seconds). ?theme=chalk|chalkboard|whiteboard picks the look
+ * (lib/board/theme.ts); the page around the boards follows it.
  */
 import { checkCoverage, createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BLOCKS } from "@/lib/blocks";
 import { galleryDoc, PART_COLORS, PHOTOSYNTHESIS, photosynthesisDoc } from "@/lib/blocks/demo";
-import { PALETTE } from "@/experiments/visual-flex/doc";
+import { currentTheme, envTheme, THEMES, type Theme } from "@/lib/board/theme";
 
 const TPS = 240;
 /** The last frame's tick: documents are 20 s and draw nothing at their end tick. */
@@ -36,7 +37,7 @@ const fontLoader = (() => {
 
 type Coverage = { supported: boolean; reasons: readonly string[] } | null;
 
-function Board({ doc, label, register }: { doc: AnimationDocument; label: string; register: (key: string, p: PlayerHandle | null) => void }) {
+function Board({ doc, label, register, theme }: { doc: AnimationDocument; label: string; register: (key: string, p: PlayerHandle | null) => void; theme: Theme }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [coverage, setCoverage] = useState<Coverage>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +65,16 @@ function Board({ doc, label, register }: { doc: AnimationDocument; label: string
     };
   }, [doc, label, register]);
   return (
-    <figure style={styles.figure}>
-      <canvas ref={ref} style={styles.canvas} aria-label={label} />
+    <figure style={{ ...styles.figure, background: theme.colors.board, borderColor: theme.colors["grey-tint"] }}>
+      <canvas ref={ref} style={{ ...styles.canvas, background: theme.colors.board }} aria-label={label} />
       <figcaption style={styles.caption}>
         <b>{label}</b>{" "}
-        {coverage === null ? <span style={{ color: "#8a857a" }}>checking coverage…</span> : coverage.supported ? (
-          <span data-testid="coverage" style={{ color: PALETTE.green }}>checkCoverage: supported</span>
+        {coverage === null ? <span style={{ color: theme.colors.grey }}>checking coverage…</span> : coverage.supported ? (
+          <span data-testid="coverage" style={{ color: theme.colors.green }}>checkCoverage: supported</span>
         ) : (
-          <span data-testid="coverage" style={{ color: PALETTE.red }}>checkCoverage: unsupported ({coverage.reasons.join("; ")})</span>
+          <span data-testid="coverage" style={{ color: theme.colors.red }}>checkCoverage: unsupported ({coverage.reasons.join("; ")})</span>
         )}
-        {error && <span style={{ color: PALETTE.red }}> · player error: {error}</span>}
+        {error && <span style={{ color: theme.colors.red }}> · player error: {error}</span>}
       </figcaption>
     </figure>
   );
@@ -81,9 +82,20 @@ function Board({ doc, label, register }: { doc: AnimationDocument; label: string
 
 export default function BlocksPage() {
   const [overlay, setOverlay] = useState(false);
+  // The build's theme first (the server renders with it), then the page's ?theme= once we are in the browser.
+  const [theme, setTheme] = useState<Theme>(envTheme);
+  useEffect(() => setTheme(currentTheme()), []);
   const players = useRef(new Map<string, PlayerHandle>());
-  const gallery = useMemo(() => galleryDoc(overlay), [overlay]);
-  const photo = useMemo(() => photosynthesisDoc(), []);
+  const gallery = useMemo(() => galleryDoc(overlay, theme), [overlay, theme]);
+  const photo = useMemo(() => photosynthesisDoc(false, theme), [theme]);
+  const dark = theme.id === "chalkboard";
+  const ink = theme.colors.ink, muted = theme.colors.grey, board = theme.colors.board;
+  const page = dark ? "#1B2622" : "#EFECE4";
+  const themeHref = (id: string) => {
+    const q = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
+    q.set("theme", id);
+    return `?${q.toString()}`;
+  };
 
   const register = useCallback((key: string, p: PlayerHandle | null) => {
     if (p) players.current.set(key, p);
@@ -107,22 +119,27 @@ export default function BlocksPage() {
   });
 
   return (
-    <main style={styles.page}>
+    <main style={{ ...styles.page, background: page, color: ink }} data-theme={theme.id}>
       <header style={styles.header}>
         <div>
-          <div style={styles.kicker}>Chalky · experiments</div>
+          <div style={{ ...styles.kicker, color: muted }}>Chalky · experiments · theme <b data-testid="theme">{theme.id}</b></div>
           <h1 style={styles.title}>Janani&apos;s biology blocks on our board</h1>
         </div>
         <div style={styles.controls}>
+          <span style={{ fontSize: 14, color: muted }}>
+            {THEMES.map((t) => (
+              <a key={t.id} href={themeHref(t.id)} data-testid={`theme-${t.id}`} style={{ marginRight: 10, color: t.id === theme.id ? ink : muted, fontWeight: t.id === theme.id ? 700 : 400 }}>{t.id}</a>
+            ))}
+          </span>
           <label style={styles.toggle}>
             <input type="checkbox" data-testid="overlay" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} /> Show part boxes and anchors
           </label>
-          <button style={styles.button} onClick={replay}>Replay</button>
+          <button style={{ ...styles.button, background: board, color: ink, borderColor: theme.colors["grey-tint"] }} onClick={replay}>Replay</button>
         </div>
       </header>
       <section style={styles.boards}>
-        <Board doc={gallery} label={overlay ? "All 15 blocks (parts and anchors)" : "All 15 blocks"} register={register} />
-        <Board doc={photo.doc} label="Photosynthesis, through the preset compiler" register={register} />
+        <Board doc={gallery} label={overlay ? "All 15 blocks (parts and anchors)" : "All 15 blocks"} register={register} theme={theme} />
+        <Board doc={photo.doc} label="Photosynthesis, through the preset compiler" register={register} theme={theme} />
       </section>
       <section style={styles.notes}>
         <div>
@@ -134,10 +151,10 @@ export default function BlocksPage() {
                   <td style={styles.td}><b>{b.id}</b></td>
                   <td style={styles.td}>
                     {b.parts.map((p, k) => (
-                      <span key={p.id} style={{ color: PALETTE[PART_COLORS[k % PART_COLORS.length]], marginRight: 10 }}>{p.id}</span>
+                      <span key={p.id} style={{ color: theme.colors[PART_COLORS[k % PART_COLORS.length]], marginRight: 10 }}>{p.id}</span>
                     ))}
                   </td>
-                  <td style={{ ...styles.td, color: "#8a857a" }}>{Object.keys(b.anchors).join(", ")}</td>
+                  <td style={{ ...styles.td, color: muted }}>{Object.keys(b.anchors).join(", ")}</td>
                 </tr>
               ))}
             </tbody>
@@ -150,16 +167,15 @@ export default function BlocksPage() {
             {photo.report.dangling.length ? `: ${photo.report.dangling.join("; ")}` : ""}, {photo.report.nudged} nudged.
           </p>
           <h2 style={styles.h2}>The beat, in scene language</h2>
-          <pre style={styles.pre}>{PHOTOSYNTHESIS.map((e) => JSON.stringify(e)).join("\n")}</pre>
+          <pre style={{ ...styles.pre, background: board, borderColor: theme.colors["grey-tint"] }}>{PHOTOSYNTHESIS.map((e) => JSON.stringify(e)).join("\n")}</pre>
         </div>
       </section>
     </main>
   );
 }
 
-const ink = "#1F2A44";
 const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: "#EFECE4", color: ink, fontFamily: "Inter, system-ui, sans-serif", padding: "20px 28px", boxSizing: "border-box" },
+  page: { minHeight: "100vh", fontFamily: "Inter, system-ui, sans-serif", padding: "20px 28px", boxSizing: "border-box" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap", marginBottom: 14 },
   kicker: { fontSize: 14, color: "#6b6b6b" },
   title: { fontSize: 28, margin: "4px 0 0", fontWeight: 700 },

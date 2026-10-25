@@ -31,18 +31,14 @@ import {
   type SceneNode,
   type Vec3,
 } from "@clayzo/animation/authoring";
-import { END, H, PALETTE, PAPER, Scene, safeId, tick, W } from "@/experiments/visual-flex/doc";
+import { END, H, hatchContour, Scene, safeId, tick, W, type Box } from "@/experiments/visual-flex/doc";
+import { DEFAULT_THEME, themeHex, tintHex, type Theme } from "@/lib/board/theme";
 import type { Block, Paint, Shape } from "./types";
 
 // ---- Units ----
 
 export type Pt = [number, number];
-export interface Box {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
+export type { Box };
 
 /** Grid x / y to stage pixels. */
 export const gx = (x: number) => (x / 100) * W;
@@ -53,30 +49,13 @@ export const ungy = (px: number) => (px / H) * 100;
 
 // ---- Look ----
 
-/** Her colour names on our palette. Tints are her stroke colours pulled 80% toward the paper. */
-const mix = (a: string, b: string, t: number) => {
-  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
-  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
-  return `#${pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
-const BASE_COLORS: Record<string, string> = {
-  ...PALETTE,
-  orange: "#E8862A",
-  brown: "#8B5A3C",
-};
-export const BLOCK_COLORS: Record<string, string> = {
-  ...BASE_COLORS,
-  ...Object.fromEntries(Object.entries(BASE_COLORS).map(([k, v]) => [`${k}-tint`, mix(v, PAPER, 0.8)])),
-  board: PAPER,
-  highlighter: "#FFE45C",
-};
-export function paint(p: Paint | undefined, fallback = "ink"): Color {
-  const v = p && (BLOCK_COLORS[p] ?? (/^#[0-9a-f]{6}$/i.test(p) ? p : undefined));
-  return hex(v ?? BLOCK_COLORS[fallback]);
+/** A colour name or hex on the theme (the scene's own theme when drawing). */
+export function paint(p: Paint | undefined, fallback = "ink", theme: Theme = DEFAULT_THEME): Color {
+  return hex(themeHex(theme, p, fallback));
 }
 
-/** Marker thickness in stage pixels, whatever size a block is drawn at (hers: 5 px on a 1920 board). */
-export const MARKER = 4;
+/** Marker thickness in stage pixels on the default theme (CHALK); a scene draws with its own theme's. */
+export const MARKER = DEFAULT_THEME.marker;
 /** How fast the marker moves when drawing, in stage pixels per second (hers: 1500 on 1920). */
 const DRAW_SPEED = 940;
 
@@ -311,7 +290,8 @@ function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number
     return [from, t] as const;
   });
 
-  const markerWidth = (shape: Shape) => ((shape.width ?? 1) * MARKER) / o.scale;
+  const { theme } = scene;
+  const markerWidth = (shape: Shape) => ((shape.width ?? 1) * theme.marker) / o.scale;
   const partChildren: Record<string, string[]> = {};
   shapes.forEach(({ part, shape }, i) => {
     const sid = `${rootId}-${part}-${i}`;
@@ -322,14 +302,31 @@ function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number
       const fid = `${sid}-fill`;
       // The tint arrives once its outline is drawn (or with the previous outline when it has none).
       const at = shape.stroke ? to : from;
-      const fillOpacity = new Keys(drawing ? 0 : 1);
-      if (drawing) fillOpacity.to(tk(at), 1, 0.3, EASE.out);
-      child(scene, {
-        ...base(fid, { outTick: END }),
-        type: "path",
-        path: constant({ contours }),
-        style: { fill: fill(paint(shape.fill), fillOpacity.track(`${fid}.o`)) },
-      });
+      if (theme.fill === "hatch" && theme.hatch && shape.fill.endsWith("-tint")) {
+        // Shaded in with the side of the chalk: a zigzag scribble clipped to the shape.
+        const { spacing, width, opacity, angle, seconds } = theme.hatch;
+        const clip = `${fid}-clip`, scribble = `${fid}-hatch`;
+        child(scene, { ...base(clip, { outTick: END }), type: "path", path: constant({ contours }), style: {} } as SceneNode);
+        child(scene, {
+          ...base(scribble, { outTick: END }),
+          type: "path",
+          path: constant({ contours: [hatchContour(shapeBox(shape), spacing / o.scale, angle, i)] }),
+          style: { stroke: stroke(hex(tintHex(theme, shape.fill)), width / o.scale, { opacity }) },
+          ...(drawing ? { operators: [trim(`${scribble}.trim`, { end: drawOn(`${scribble}.end`, at, at + seconds) })] } : {}),
+        } as SceneNode);
+        child(scene, { ...base(fid, { outTick: END }), type: "group", children: [scribble], clipPathId: clip } as SceneNode);
+      } else {
+        // With no fills, a tint becomes the board colour, arriving as its outline starts.
+        const blank = theme.fill === "none" && shape.fill.endsWith("-tint");
+        const fillOpacity = new Keys(drawing ? 0 : 1);
+        if (drawing) fillOpacity.to(tk(blank ? from : at), 1, blank ? 0.1 : 0.3, EASE.out);
+        child(scene, {
+          ...base(fid, { outTick: END }),
+          type: "path",
+          path: constant({ contours }),
+          style: { fill: fill(paint(blank ? "board" : shape.fill, "ink", theme), fillOpacity.track(`${fid}.o`)) },
+        });
+      }
       partChildren[part].push(fid);
     }
     if (shape.stroke) {
@@ -337,7 +334,7 @@ function compileBlock(scene: Scene, block: Block, o: { id: string; scale: number
         ...base(sid, { outTick: END }),
         type: "path",
         path: constant({ contours: drawing ? polyline(contours) : contours }),
-        style: { stroke: stroke(paint(shape.stroke), markerWidth(shape)) },
+        style: { stroke: stroke(paint(shape.stroke, "ink", theme), markerWidth(shape)) },
         ...(drawing ? { operators: [trim(`${sid}.trim`, { end: drawOn(`${sid}.end`, from, to) })] } : {}),
       });
       partChildren[part].push(sid);
@@ -507,29 +504,9 @@ export function renderTravel(scene: Scene, block: Block, o: RenderTravelOptions)
 }
 
 /**
- * Her hand-drawn circle highlight: a marker loop a little more than one turn around a stage
- * box, its radius drifting so the ends don't meet. `at < 0` draws it finished.
+ * Her hand-drawn loop around a stage box (now Scene.loop, drawn by theme). `at < 0` draws it
+ * finished; `until` fades it.
  */
-export function renderLoop(scene: Scene, box: Box, o: { at: number; dur?: number; color?: string; pad?: number; width?: number; until?: number }): string {
-  const pad = o.pad ?? 14;
-  const cx = (box.x1 + box.x2) / 2, cy = (box.y1 + box.y2) / 2;
-  const rx = (box.x2 - box.x1) / 2 + pad, ry = (box.y2 - box.y1) / 2 + pad;
-  const vs: PathVertex[] = [];
-  for (let i = 0; i <= 56; i++) {
-    const t = i / 56, a = (-110 + t * 385) * (Math.PI / 180), k = 1.04 - t * 0.1;
-    vs.push(vtx(cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k));
-  }
-  const id = nextId(scene, "loop");
-  const finished = o.at < 0;
-  const start = Math.max(0, o.at), seconds = Math.max(0.2, o.dur ?? 0.6);
-  const opacity = new Keys(1);
-  if (!finished && o.until !== undefined) opacity.to(tk(Math.max(start + seconds, o.until)), 0, 0.3, EASE.inOut);
-  root(scene, {
-    ...base(id, { outTick: END, inTick: finished ? 0 : tk(start) }),
-    type: "path",
-    path: constant({ contours: [{ closed: false, vertices: vs }] }),
-    style: { stroke: stroke(paint(o.color, "red"), o.width ?? MARKER + 1, { opacity: opacity.track(`${id}.o`) }) },
-    ...(finished ? {} : { operators: [trim(`${id}.trim`, { end: drawOn(`${id}.end`, start, start + seconds) })] }),
-  } as SceneNode);
-  return id;
+export function renderLoop(scene: Scene, box: Box, o: { at: number; dur?: number; color?: string; pad?: number; width?: number; until?: number; word?: boolean }): string {
+  return scene.loop(box, o);
 }

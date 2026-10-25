@@ -164,10 +164,10 @@ export function drawBlockElement(ctx: BlockContext, e: ElementLike, at: number) 
  * the soft yellow mark) and a bounce of the block (her script circles the leaves and pulses
  * the plant together). Returns false for anything else.
  */
-export function highlightBlock(ctx: BlockContext, target: PlacedLike, at: number, dur: number): boolean {
+export function highlightBlock(ctx: BlockContext, target: PlacedLike, at: number, dur: number, color = "red"): boolean {
   if (target.kind !== "block" && target.kind !== "part") return false;
   if (at < 0) return true; // an earlier beat's highlight is over
-  renderLoop(ctx.scene, target.box, { at, dur: 0.6, color: "red", until: at + Math.max(1.6, dur), pad: target.kind === "part" ? 10 : 16 });
+  renderLoop(ctx.scene, target.box, { at, dur: 0.6, color, until: at + Math.max(1.6, dur), pad: target.kind === "part" ? 10 : 16 });
   const owner = target.kind === "block" ? target.id : ownerOf.get(ctx.scene)?.get(target.id);
   if (owner) rendered.get(ctx.scene)?.get(owner)?.pulse(at + 0.35);
   return true;

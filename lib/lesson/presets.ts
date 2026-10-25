@@ -15,7 +15,8 @@
  * counted.
  */
 import type { AnimationDocument } from "@clayzo/animation/authoring";
-import { H, PAPER, Scene, W, type Pt } from "@/experiments/visual-flex/doc";
+import { H, Scene, W, type Pt } from "@/experiments/visual-flex/doc";
+import type { Theme } from "@/lib/board/theme";
 import { compileFn } from "@/experiments/visual-flex/scene";
 import { BLOCK_KINDS, blockExtent, drawBlockElement, highlightBlock, scaleBlockArgs, shapesFirst, type BlockContext } from "@/lib/blocks/compile";
 
@@ -68,6 +69,8 @@ const grow = (b: Box, d: number): Box => ({ x1: b.x1 - d, y1: b.y1 - d, x2: b.x2
 const centre = (b: Box): Pt => [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
 const MARGIN = 14;
 const STAGE: Box = { x1: MARGIN, y1: MARGIN, x2: W - MARGIN, y2: H - MARGIN };
+/** The chalk loop is red unless the model chose another marker colour (the old mark was yellow; a yellow loop is lost on white). */
+const loopColor = (c: string) => (!c || c === "ink" || c === "yellow" ? "red" : c);
 
 /** Approximate size of a single line of Inter SemiBold. */
 function textSize(str: string, size: number) {
@@ -78,8 +81,8 @@ function outside(b: Box) {
   return area(b) - overlap(b, STAGE);
 }
 
-export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string): { doc: AnimationDocument; report: LayoutReport } {
-  const s = new Scene();
+export function compilePresetBoard(beats: PresetElement[][], currentBeat: number, docId: string, theme?: Theme): { doc: AnimationDocument; report: LayoutReport } {
+  const s = new Scene(theme);
   const placed = new Map<string, Placed>();
   const occupied: { id: string; box: Box; text: boolean }[] = [];
   const report: LayoutReport = { texts: [], shapes: [], dangling: [], nudged: 0 };
@@ -112,6 +115,8 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
     s.text(str, best.c[0], best.c[1], { at: o.at, size: best.size, color: o.color, width: best.box.x2 - best.box.x1 + 24 });
     occupy(id, best.box, true);
     report.texts.push({ id, box: best.box, owner });
+    // Words can be circled too: a label answers to its own id (so `highlight` can loop it).
+    if (!placed.has(id)) placed.set(id, { id, kind: "text", box: best.box });
   };
 
   /** Candidate label centres around a box: inside first if asked, then below, above, right, left. */
@@ -168,7 +173,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
       case "circle": {
         const cx = sx(a[0]), cy = sy(a[1]), r = Math.max(8, (a[2] / 100) * W);
         const filled = a[3] !== 0;
-        s.circle(cx, cy, r, { at, color: col, filled });
+        s.circle(cx, cy, r, { at, color: col, filled, dur });
         const box = { x1: cx - r, y1: cy - r, x2: cx + r, y2: cy + r };
         register({ id, kind: "circle", box, circle: { cx, cy, r } });
         occupy(id, box);
@@ -181,7 +186,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
       case "box": {
         const x = sx(a[0]), y = sy(a[1]), w = Math.max(16, sx(a[2])), h = Math.max(16, sy(a[3]));
         const filled = a[4] === 1;
-        s.box(x, y, w, h, { at, color: col, filled });
+        s.box(x, y, w, h, { at, color: col, filled, dur });
         const box = { x1: x, y1: y, x2: x + w, y2: y + h };
         register({ id, kind: "box", box });
         occupy(id, box);
@@ -213,7 +218,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
           const start: Pt = [p0[0] + nx * off, p0[1] + ny * off];
           const end: Pt = [p1[0] + nx * off, p1[1] + ny * off];
           if (Math.hypot(end[0] - start[0], end[1] - start[1]) < 24) continue;
-          s.arrow(start, end, { at: at < 0 ? at : at + i * 0.12, dur, color: col, width: e.kind === "rays" ? 5 : 6 });
+          s.arrow(start, end, { at: at < 0 ? at : at + i * 0.12, dur, color: col, width: e.kind === "rays" ? s.marker : s.marker * 1.2 });
           pts.push(start, end);
         }
         if (!pts.length) return;
@@ -241,7 +246,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         steps.forEach((label, i) => {
           const bx = x + i * (bw + gap);
           const t = at < 0 ? at : at + (i * dur) / n;
-          s.box(bx, top, bw, bh, { at: t, color: col, filled: false });
+          s.box(bx, top, bw, bh, { at: t, color: col, filled: false, dur: Math.max(0.3, dur / n) });
           const box = { x1: bx, y1: top, x2: bx + bw, y2: top + bh };
           register({ id: `${id}.${i}`, kind: "box", box });
           occupy(`${id}.${i}`, box);
@@ -265,8 +270,8 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
             arc.push([cx + Math.cos(t) * r, cy + Math.sin(t) * r]);
           }
           const t = at < 0 ? at : at + (i * dur) / n;
-          s.stroke(arc.slice(0, -1), { at: t, dur: dur / n, color: col, width: 6 });
-          s.arrow(arc[arc.length - 2], arc[arc.length - 1], { at: at < 0 ? at : t + dur / n, dur: 0.05, color: col, width: 6 });
+          s.stroke(arc.slice(0, -1), { at: t, dur: dur / n, color: col, width: s.marker * 1.2 });
+          s.arrow(arc[arc.length - 2], arc[arc.length - 1], { at: at < 0 ? at : t + dur / n, dur: 0.05, color: col, width: s.marker * 1.2 });
           const px = cx + Math.cos(a0) * r, py = cy + Math.sin(a0) * r;
           const node = { x1: px - 10, y1: py - 10, x2: px + 10, y2: py + 10 };
           s.circle(px, py, 9, { at: t, color: col });
@@ -289,7 +294,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
       }
       case "arrow": {
         const p0: Pt = [sx(a[0]), sy(a[1])], p1: Pt = [sx(a[2]), sy(a[3])];
-        s.arrow(p0, p1, { at, dur, color: col, width: 6 });
+        s.arrow(p0, p1, { at, dur, color: col });
         const box = lineBox([p0, p1]);
         register({ id, kind: "arrow", box });
         occupy(id, box);
@@ -303,7 +308,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         const pts: Pt[] = [];
         for (let i = 0; i + 1 < a.length; i += 2) pts.push([sx(a[i]), sy(a[i + 1])]);
         if (pts.length < 2) return;
-        s.stroke(pts, { at, dur, color: col, width: 6 });
+        s.stroke(pts, { at, dur, color: col, width: s.marker * 1.2 });
         const box = lineBox(pts);
         register({ id, kind: "line", box });
         occupy(id, box);
@@ -318,7 +323,7 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         const ys = xs.map(f).map((v) => (Number.isFinite(v) ? v : 0));
         const lo = Math.min(...ys), hi = Math.max(...ys) === lo ? lo + 1 : Math.max(...ys);
         const pts: Pt[] = xs.map((_, i) => [sx(bx + (bw * i) / 120), sy(by + bh * (1 - (ys[i] - lo) / (hi - lo)))]);
-        s.stroke(pts, { at, dur, color: col, width: 7 });
+        s.stroke(pts, { at, dur, color: col, width: s.marker * 1.4 });
         const box = { x1: sx(bx), y1: sy(by), x2: sx(bx + bw), y2: sy(by + bh) };
         register({ id, kind: "plot", box });
         occupy(id, box);
@@ -355,20 +360,23 @@ export function compilePresetBoard(beats: PresetElement[][], currentBeat: number
         const [target] = resolve(e, 1) ?? [];
         if (!target) return;
         dimmed.delete(target.id);
-        if (highlightBlock(blocks, target, at, dur)) return;
-        const b = grow(target.box, 14);
-        const minW = 90, minH = 70;
+        if (highlightBlock(blocks, target, at, dur, loopColor(e.color))) return;
+        if (still) return; // an earlier beat's loop has faded
+        // Her chalk loop, once, on cue: around a word it clears the letters; around a drawing it hugs the box.
+        const word = target.kind === "text" || target.kind === "equation";
+        const b = word ? target.box : grow(target.box, 4);
+        const minW = word ? 0 : 60, minH = word ? 0 : 50;
         const [cx, cy] = centre(b);
         const w = Math.max(minW, b.x2 - b.x1), h = Math.max(minH, b.y2 - b.y1);
-        s.overlay(cx - w / 2, cy - h / 2, w, h, { at: still ? -1 : at, color: "yellow", opacity: still ? 0 : 0.42, behind: true, until: still ? undefined : at + Math.max(1.6, dur) });
+        s.loop({ x1: cx - w / 2, y1: cy - h / 2, x2: cx + w / 2, y2: cy + h / 2 }, { at, dur: 0.6, color: loopColor(e.color), pad: word ? 8 : 14, until: at + Math.max(1.6, dur), word });
         return;
       }
       case "dim": {
         const [target] = resolve(e, 1) ?? [];
         if (!target) return;
         dimmed.add(target.id);
-        const b = grow(target.box, 8);
-        s.overlay(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1, { at, color: PAPER, opacity: 0.45, behind: false });
+        // Half-wiped: the side of an eraser once across it, so it fades back but stays legible.
+        s.wipe(grow(target.box, 6), { at });
         return;
       }
     }

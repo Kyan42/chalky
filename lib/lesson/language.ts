@@ -41,8 +41,8 @@ Free drawing (only when nothing above fits; you place it yourself):
 - move: args x1, y1, x2, y2, r. A dot that travels.
 - text: args x, y, size. A free label (it is nudged if it would cover something).
 Edits on what is already drawn (refs = the target id, args []):
-- highlight: a soft yellow mark behind it for about 1.5 s, timed to the word that names it. Use it to point while you talk about something already there.
-- dim: fades it back so new things stand out.
+- highlight: circles it once with a quick chalk loop that fades after about 1.5 s, timed to the word that names it. Use it to point while you talk about something already there (a shape, a block, a part or a label).
+- dim: half-wipes it so new things stand out.
 
 Rules: keep shapes inside your region and leave room around them for their labels; draw few, large, clear shapes rather than many small ones (a beat usually adds 2 to 6 elements); never redraw what is already there, connect to it or highlight it instead. Colors: ${COLORS.join(", ")}.`;
 
