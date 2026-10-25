@@ -497,7 +497,6 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   // A question gets an answer and a wait, unless they also said to go on ("why? ok, keep going").
   if (input.beats.length && isQuestion(input.utterance) && !isResume(input.utterance) && !/\b(go on|keep going|carry on|continue|move on)\b/i.test(input.utterance)) {
     if (level === "confirm") level = "answer";
-    if (resume === "continue") resume = "wait";
   }
   if (check && resume !== "wait") resume = "wait";
   if (escalated && resume === "wait") resume = "replay_beat";
@@ -523,6 +522,12 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       resumeWhy = `replay_beat overridden; ${why}`;
     } else resumeWhy = why;
     console.info(`[converse] ${resumeWhy}`);
+  }
+  // Last word on resume: a question gets an answer and a wait (a mid-beat cut then goes on from where the
+  // learner's "ok" takes it), unless they also said to go on, or a plan change takes the lesson elsewhere.
+  if (input.beats.length && isQuestion(input.utterance) && !isResume(input.utterance) && !/\b(go on|keep going|carry on|continue|move on)\b/i.test(input.utterance) && level !== "detour" && level !== "replan" && resume !== "wait") {
+    resumeWhy = `${resumeWhy ? `${resumeWhy}; ` : ""}a question: waits for the learner`;
+    resume = "wait";
   }
   // The cleaned list, in the model's order, with what the executor will really do.
   const actions: ConverseAction[] = [];
