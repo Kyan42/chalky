@@ -1120,6 +1120,12 @@ export default function Lesson() {
      */
     const converseAt = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
       setStatus("waiting");
+      // Cut off during a check-in beat: whatever the learner says next settles that check, so going on
+      // continues after it instead of replaying it and asking the same question again.
+      if (wordIndex >= 0 && list[i]?.beat.check && resumeAt === i) {
+        resumeAt = i + 1;
+        logEv({ kind: "check-in-settled", beatId: list[i].beat.id, why: "cut off during its check-in; not replayed" });
+      }
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
         if (abort.signal.aborted) return -1;
@@ -1202,11 +1208,14 @@ export default function Lesson() {
             logEv({ kind: "detour", at: resumeAt, beats: detour.map((d) => ({ beatId: d.beat.id, mode: d.beat.mode, say: d.beat.say })) });
             dropPrefetches("detour inserted");
             // A talk or check-in beat cut off for this detour is not replayed: the detour's own closing check replaces it.
-            const cut = wordIndex >= 0 ? list[resumeAt] : undefined;
+            const cut = wordIndex >= 0 ? list[i] : undefined;
             if (cut && (cut.beat.mode === "talk" || cut.beat.check)) {
-              list.splice(resumeAt, 1, ...detour);
+              list.splice(i, 1, ...detour);
               logEv({ kind: "replaced-by-detour", beatId: cut.beat.id, why: cut.beat.check ? "check-in" : "talk" });
-            } else list.splice(resumeAt, 0, ...detour);
+              setBeats([...list]);
+              return i;
+            }
+            list.splice(resumeAt, 0, ...detour);
             setBeats([...list]);
             return resumeAt;
           }
