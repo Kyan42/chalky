@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { BLOCKS } from '../lib/blocks';
 // Leo's forest icons (./forest-icons.ts, kept as he wrote it) are now catalog blocks in
 // lib/blocks/scenery.ts, so BLOCKS already has them; spreading FOREST_ICONS in again would double them.
-import type { Shape } from '../lib/blocks/types';
+import type { Shape } from '../presets/types';
 const root='public/style-packs';
 const revision = 'forest-v4';
 const styles=[

@@ -7,7 +7,7 @@
  * fills are the board colour here (a theme has no white), and the code marks on the computer screen
  * are blue instead of white, which would vanish on a chalk theme where a tint is the board colour.
  */
-import type { Block, Shape } from "./types";
+import type { Block, Shape } from "@/presets/types";
 
 const path = (d: string, stroke: string, fill?: string, width?: number): Shape => ({ type: "path", d, stroke, ...(fill ? { fill } : {}), ...(width ? { width } : {}) });
 const ellipse = (cx: number, cy: number, rx: number, ry: number, stroke: string, fill?: string): Shape => ({ type: "ellipse", cx, cy, rx, ry, stroke, ...(fill ? { fill } : {}) });
