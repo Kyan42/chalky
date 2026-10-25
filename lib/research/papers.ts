@@ -71,7 +71,8 @@ export async function startResearch(rawTopic: string, days = 14, opts: { fresh?:
   const topic = cleanTopic(rawTopic) || rawTopic.trim();
   days = Math.min(90, Math.max(1, Math.round(days)));
   const key = opts.fixture ? "_fixture" : cacheKey(topic, days);
-  if (!opts.fresh || opts.fixture) {
+  // Forcing a path is a measurement: never served from (or written to) the cache.
+  if ((!opts.fresh && !opts.only) || opts.fixture) {
     const cached = await readCache(key);
     if (cached) {
       const rec: ResearchRecord = { ...cached, id: `${key}-cache`, cached: true };
@@ -331,7 +332,7 @@ function fromActorItem(it: Record<string, unknown>): Raw {
     arxivId: s("arxivId", "arxiv_id", "paperId") || (url.match(/(\d{4}\.\d{4,5})/)?.[1] ?? ""),
     title: flat(s("title")),
     authors: authors.map(flat).filter(Boolean),
-    published: s("published", "publishedDate", "submittedDate", "firstSubmitted", "submitted", "date").slice(0, 10),
+    published: s("publishedAt", "published", "publishedDate", "submittedDate", "firstSubmitted", "submitted", "date").slice(0, 10),
     category: s("primaryCategory", "primary_category", "category") || (Array.isArray(it.categories) ? String(it.categories[0] ?? "") : ""),
     abstract: flat(s("abstract", "summary")),
   };
