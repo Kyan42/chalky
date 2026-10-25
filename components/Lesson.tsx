@@ -127,29 +127,35 @@ interface BeatState {
   speech?: { events: BeatAudioEvent[]; done: boolean };
 }
 
-/** One paper from /api/research, as the cards and the transcript use it. */
+/** One paper of a research record (lib/research/types.ts on the Apify branch; the fields the page uses). */
 interface Paper {
-  tag: string;
+  n: number;
   title: string;
-  authors?: string;
-  published?: string;
-  url?: string;
+  authors: string[];
+  authorCount: number;
+  published: string;
+  url: string;
+  key: string[];
 }
 
-/** /api/research's answer, read leniently (the contract is lib/research/CONTRACT.md on the Apify branch). */
-function readResearch(r: Record<string, unknown> | null): { papers: Paper[]; material: string; cached: boolean } | null {
-  if (!r || typeof r !== "object") return null;
-  const raw = (Array.isArray(r.papers) ? r.papers : Array.isArray(r.results) ? r.results : []) as Record<string, unknown>[];
-  const str = (v: unknown) => (typeof v === "string" ? v : Array.isArray(v) ? v.filter((x) => typeof x === "string").join(", ") : "");
-  const papers = raw.slice(0, 12).flatMap((x, k) => {
-    const title = str(x.title).trim();
-    if (!title) return [];
-    const tag = str(x.tag ?? x.cite ?? x.citation).trim() || `[${k + 1}]`;
-    return [{ tag: tag.startsWith("[") ? tag : `[${tag}]`, title, authors: str(x.authors) || undefined, published: str(x.published ?? x.date) || undefined, url: str(x.url ?? x.link) || undefined }];
-  });
-  const material = str(r.material ?? r.text).trim();
-  return { papers, material, cached: r.cached === true || r.cacheHit === true };
+/** POST /api/research and GET /api/research/<id> (lib/research/CONTRACT.md): the fields the page uses. */
+interface ResearchRecord {
+  id: string;
+  topic: string;
+  days: number;
+  searchedDays: number;
+  status: "running" | "ready" | "failed";
+  papers: Paper[];
+  material: string;
+  via: string | null;
+  cached: boolean;
+  ms?: number;
+  error?: string;
 }
+
+/** A fresh fetch: poll this often, and give up (teach from memory) after this long. */
+const RESEARCH_POLL_MS = 1500;
+const RESEARCH_BUDGET_MS = 45_000;
 
 /**
  * A beat's recorded speech from `sec` on: audio before it is cut away (whole samples) and every timestamp
@@ -741,7 +747,7 @@ export default function Lesson() {
   /** Recent papers the lesson is taught from (research), the "finding papers" state, and the beat's citations. */
   const [papers, setPapers] = useState<Paper[] | null>(null);
   const [researching, setResearching] = useState(false);
-  const [currentCite, setCurrentCite] = useState<string[]>([]);
+  const [currentCite, setCurrentCite] = useState<number | null>(null);
   /** A request handed to the slow executor is pending (the badge says so). */
   const [delegating, setDelegating] = useState(false);
   /** Any pause (stopped or listening), for the buttons. */
@@ -1298,7 +1304,8 @@ export default function Lesson() {
             // Taught from recent papers when the first reply asked for them; from memory if none came back.
             const found = researchJob ? await researchJob : null;
             const material = found?.papers.length && found.material ? found.material : null;
-            if (researchJob && !material) researchNote = "I couldn't find recent papers on that, so I'll teach it from what I know.";
+            if (researchJob && !material)
+              researchNote = found && found.status === "ready" ? "I couldn't find any recent papers on that, so I'll teach you the fundamentals from what I know." : "I couldn't pull up the recent papers just now, so I'll teach it from what I know.";
             return post("/api/plan", { question: q, ...(material ? { material } : {}) });
           })();
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
@@ -1314,7 +1321,7 @@ export default function Lesson() {
           if (planReplaced) continue;
           const beat = event.beat;
           const state: BeatState = { beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null) };
-          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say, ...(beat.cite?.length ? { cite: beat.cite } : {}), ...(beat.quiz ? { quiz: beat.quiz } : {}) });
+          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say, ...(beat.cite ? { cite: beat.cite } : {}), ...(beat.quiz ? { quiz: beat.quiz } : {}) });
           list.push(state);
           if (beat.mode !== "talk") {
             visualBeats.push(state);
@@ -1357,27 +1364,36 @@ export default function Lesson() {
     };
     if (direct) startPlanning();
     /** Recent papers asked for by the first reply's "research" action: the planner waits for their material. */
-    let researchJob: Promise<{ papers: Paper[]; material: string; cached: boolean } | null> | null = null;
+    let researchJob: Promise<ResearchRecord | null> | null = null;
     /** Said before beat 1 when the research came back empty or failed (the lesson is taught from memory). */
     let researchNote: string | null = null;
     const startResearch = (r: NonNullable<ConverseTrailer["research"]>) => {
       if (researchJob) return;
       const t0r = performance.now();
       setResearching(true);
-      logEv({ kind: "research-start", topic: r.topic, window: r.window });
-      researchJob = post("/api/research", { topic: r.topic, window: r.window })
-        .then(async (res) => (res.ok ? readResearch((await res.json()) as Record<string, unknown>) : (logEv({ kind: "research", topic: r.topic, window: r.window, papers: 0, ms: Math.round(performance.now() - t0r), error: `status ${res.status}` }), null)))
-        .then((out) => {
-          if (out) {
-            logEv({ kind: "research", topic: r.topic, window: r.window, papers: out.papers.length, ms: Math.round(performance.now() - t0r), cached: out.cached, tags: out.papers.map((x) => `${x.tag} ${x.title.slice(0, 60)}`) });
-            if (out.papers.length) setPapers(out.papers);
-          }
-          return out;
-        })
-        .catch((e) => {
-          logEv({ kind: "research", topic: r.topic, window: r.window, papers: 0, ms: Math.round(performance.now() - t0r), error: String((e as Error).message ?? e) });
-          return null;
-        })
+      logEv({ kind: "research-started", topic: r.topic, days: r.days });
+      const fail = (error: string, id: string | null = null) => {
+        logEv({ kind: "research", topic: r.topic, days: r.days, id, papers: 0, ms: Math.round(performance.now() - t0r), error });
+        return null;
+      };
+      researchJob = (async (): Promise<ResearchRecord | null> => {
+        const res = await post("/api/research", { topic: r.topic, days: r.days });
+        if (!res.ok) return fail(`status ${res.status}`);
+        let rec = (await res.json()) as ResearchRecord;
+        // A fresh fetch comes back running: poll until it is ready or failed, within the budget.
+        while (rec.status === "running" && performance.now() - t0r < RESEARCH_BUDGET_MS && !abort.signal.aborted) {
+          await sleep(RESEARCH_POLL_MS);
+          const g = await fetch(`/api/research/${encodeURIComponent(rec.id)}`, { signal: abort.signal });
+          if (!g.ok) return fail(`poll status ${g.status}`, rec.id);
+          rec = (await g.json()) as ResearchRecord;
+        }
+        if (rec.status === "running") return fail(`still running after ${RESEARCH_BUDGET_MS / 1000} s`, rec.id);
+        if (rec.status === "failed") return fail(rec.error ?? "failed", rec.id);
+        logEv({ kind: "research", topic: rec.topic, days: rec.days, searchedDays: rec.searchedDays, id: rec.id, papers: rec.papers.length, ms: Math.round(performance.now() - t0r), fetchMs: rec.ms ?? null, cached: rec.cached, via: rec.via, titles: rec.papers.map((x) => `[${x.n}] ${x.title.slice(0, 80)}`) });
+        if (rec.papers.length) setPapers(rec.papers);
+        return rec;
+      })()
+        .catch((e) => fail(String((e as Error).message ?? e)))
         .finally(() => setResearching(false));
     };
     /** The intake question the conversation model asked next to its start_lesson, already spoken. */
@@ -2481,7 +2497,8 @@ export default function Lesson() {
         }
         setCurrent(i);
         currentBeatIdRef.current = list[i].beat.id;
-        setCurrentCite(list[i].beat.cite ?? []);
+        // A beat with no citation leaves the last paper open (the cards' rule).
+        if (list[i].beat.cite) setCurrentCite(list[i].beat.cite!);
         setStatus("speaking");
         // A quiz beat asks, waits and grades; then the lesson goes on.
         if (list[i].beat.quiz) {
@@ -2556,7 +2573,7 @@ export default function Lesson() {
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
         const playedBeat = list[i];
-        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre, ...(list[i].beat.cite?.length ? { cite: list[i].beat.cite } : {}) };
+        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre, ...(list[i].beat.cite ? { cite: list[i].beat.cite } : {}) };
         if (resumeFrom && resumeFrom.state !== list[i]) resumeFrom = null;
         if (resumeFrom) {
           timing.fromWord = resumeFrom.word;
@@ -2962,19 +2979,19 @@ export default function Lesson() {
               // The papers the lesson is taught from; the one the current beat cites is lit.
               <div data-testid="research-cards" style={{ position: "absolute", left: 8, bottom: 8, maxWidth: "38%", display: "grid", gap: 4, pointerEvents: "auto" }}>
                 {papers.map((p) => {
-                  const lit = currentCite.includes(p.tag);
+                  const lit = currentCite === p.n;
                   return (
                     <a
-                      key={p.tag}
+                      key={p.n}
                       href={p.url}
                       target="_blank"
                       rel="noreferrer"
-                      data-testid={`paper-${p.tag.replace(/\D/g, "")}`}
+                      data-testid={`paper-${p.n}`}
                       data-cited={lit ? "true" : "false"}
-                      style={{ display: "block", padding: "4px 8px", borderRadius: 6, font: "500 12px/1.3 Inter, system-ui, sans-serif", color: "#23262f", textDecoration: "none", background: lit ? "#fff4d6" : "rgba(255,255,255,.85)", boxShadow: lit ? "0 0 0 2px #E4572E" : "0 1px 3px rgba(0,0,0,.12)", opacity: lit || !currentCite.length ? 1 : 0.6, transition: "all .25s" }}
+                      style={{ display: "block", padding: "4px 8px", borderRadius: 6, font: "500 12px/1.3 Inter, system-ui, sans-serif", color: "#23262f", textDecoration: "none", background: lit ? "#fff4d6" : "rgba(255,255,255,.85)", boxShadow: lit ? "0 0 0 2px #E4572E" : "0 1px 3px rgba(0,0,0,.12)", opacity: lit || currentCite === null ? 1 : 0.6, transition: "all .25s" }}
                     >
-                      <strong>{p.tag}</strong> {p.title}
-                      {p.published ? <span style={{ opacity: 0.6 }}> · {p.published.slice(0, 10)}</span> : null}
+                      <strong>[{p.n}]</strong> {p.title}
+                      <span style={{ opacity: 0.6 }}> · {p.authors[0] ?? ""}{p.authorCount > 1 ? " et al." : ""}, {p.published}</span>
                     </a>
                   );
                 })}

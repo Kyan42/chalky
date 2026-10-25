@@ -103,7 +103,8 @@ interface PlanState {
 function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const b = raw as Record<string, unknown>;
   if (typeof b.say !== "string") throw new Error(`beat ${index + 1} is missing say`);
-  const say = b.say.trim();
+  // A citation tag ("[2]") is never spoken: Sonic would read it aloud.
+  const say = b.say.replace(/\s*\[\d{1,2}(?:\s*[,-]\s*\d{1,2})*\]/g, "").replace(/\s{2,}/g, " ").trim();
   const tokens = say.split(/\s+/);
   const words = tokens.map(norm);
   // Fall back to the first content word if the anchor isn't in the sentence.
@@ -154,9 +155,11 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   // A quiz beat is a talk beat that asks; at most two in a lesson.
   const quiz = (b.quiz === "label" || b.quiz === "sketch") && (st.quizzes ?? 0) < 2 ? (b.quiz as "label" | "sketch") : undefined;
   if (quiz) st.quizzes = (st.quizzes ?? 0) + 1;
-  // Citation tags of the papers a beat uses (taught from research material): "[1]", "[2]"...
-  const cite = Array.isArray(b.cite) ? [...new Set(b.cite.filter((c): c is string => typeof c === "string").map((c) => c.trim()).filter((c) => /^\[\d{1,2}\]$/.test(c)))].slice(0, 3) : [];
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(cite.length ? { cite } : {}) };
+  // The paper a beat teaches from (research material): its number, 1 to 9. An array or "[2]" is read as its first number.
+  const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
+  const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
+  const cite = citeN >= 1 && citeN <= 9 ? Math.round(citeN) : undefined;
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(cite ? { cite } : {}) };
 }
 
 /**
@@ -165,7 +168,7 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
  */
 const MATERIAL_RULES = `Teach this lesson from the research material below (recent papers, each with a citation tag like [1]), not from memory:
 - Each section covers one or two of the papers: what problem they take on, what they did (the method), and what they found (the results, with their numbers where the material gives them).
-- Every beat that uses a paper's content carries "cite": ["[1]"] with that paper's tag (or tags). A beat that uses no paper has no "cite".
+- Every beat that teaches from a paper carries "cite": n, that paper's number (one number: the paper the beat is mostly about). A beat that uses no paper has no "cite". Never write the tags ([1]) in "say": it is spoken aloud. Name a paper naturally instead ("a paper from last week", "the second paper").
 - You may give background from general knowledge, but say so out loud ("as background, ..."), and never present it as something a paper found.
 - Drawings are diagrams of methods and results: boxes and arrows for a pipeline, a simple chart of a result. No pictures of things.
 - The recap names the papers by short title and what each showed.

@@ -61,7 +61,7 @@ export type ConverseAction =
   /** A quiz on the scene in view: name the numbered parts (label), or draw something (sketch). */
   | { type: "quiz"; kind: "label" | "sketch"; question: string }
   /** Recent papers on a topic, to teach the lesson from (Apify, /api/research). */
-  | { type: "research"; topic: string; window: string };
+  | { type: "research"; topic: string; days: number };
 export type AmendAction = "insert_after" | "replace_from" | "delete";
 
 export interface ConverseTrailer {
@@ -100,7 +100,7 @@ export interface ConverseTrailer {
   /** quiz's kind and question, if any. */
   quiz?: { kind: "label" | "sketch"; question: string } | null;
   /** research's topic and time window, if any. */
-  research?: { topic: string; window: string } | null;
+  research?: { topic: string; days: number } | null;
 }
 
 /** A scene of the one board, as the fast model sees it: its number, a title, and the ids drawn there. */
@@ -208,7 +208,7 @@ The actions (several per turn, applied in order):
 - "highlight" {"element"} or {"region": {"x", "y", "w", "h"}}: the cursor circles an element of the scene in view, or a spot on that scene's grid (the same coordinates as the element positions) when what they ask about is a place, not an element.
 - "delegate" {"request"}: when you cannot settle the request from what you are given here (they ask about something from another scene and neither the scene list nor the candidates name it, or it needs the whole lesson at once), say ONE short line that covers the wait ("Let me find that.") and hand over the request, in one sentence, to a slower helper who sees the whole board and lesson; its actions arrive a moment later. Never delegate pointing at something in the scene in view, or anything the candidates name.
 - "quiz" {"kind", "question"}: they ask to be quizzed or tested ("quiz me", "test me on this"): say one short line ("Okay, quick quiz.") and give the quiz on the scene in view: "label" (they name parts you number) when it has several labelled parts, "sketch" (they draw it) when it shows a process. "question" is what you ask, said right after your line ("Name the parts I've numbered." / "Draw how the light gets split into colors, then say done.").
-- "research" {"topic", "window"}: they ask about recent papers, what is new in a field, or anything "latest", "newest", "this week", "recent" about a research topic. Say ONE line that covers the wait ("Let me pull up what came out recently, give me a few seconds."), and use it together with "start_lesson" (the lesson is taught from those papers) and, before a lesson, an "ask" as usual. "topic": a short search topic ("vision-language-action models"); "window": "week", "month" or "year" (default "month").
+- "research" {"topic", "days"}: they ask about recent papers, what is new in a field, or anything "latest", "newest", "this week", "recent" about a research topic. Say ONE line that covers the wait ("Let me pull up what came out recently, give me a few seconds."), and use it together with "start_lesson" (the lesson is taught from those papers) and, before a lesson, an "ask" as usual. "topic": the subject only ("vision-language-action models", "LLM agents"); "days": how far back, 7 for "this week", 30 for "this month", 90 at most (default 14).
 - "resume" {"how"}: how the lesson goes on after your reply: "continue" (go on from where it was), "replay_beat" (say the beat you were cut off in again), or "wait" (wait for them). If you leave it out: "wait" after an "ask", else "continue".
 
 Choosing:
@@ -228,7 +228,7 @@ The learner can draw on the board with a pen (blue, green, orange or dark stroke
 Everything between the first line and the trailer line is spoken aloud to the learner, word for word. Speak to them directly: never describe what you are going to do, never talk about "the learner", actions, levels, resume or cues there.
 
 Output format, exactly: a first line "actions: " with the action names in order (write amend with its op, e.g. "actions: say" or "actions: point, sketch" or "actions: amend:insert_after" or "actions: ask, start_lesson"), then the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"actions": [{"type": "say"} | {"type": "start_lesson", "question": "...", "focus": "...", "level": "..."} | {"type": "ask", "question": "the question you ended with"} | {"type": "point", "cues": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}]} | {"type": "sketch", "visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}], "near": "element-id", "side": "above" | "below" | "left" | "right" | "on"} | {"type": "amend", "op": "insert_after" | "replace_from" | "delete", "index": 3, "note": "...", "count": 2} | {"type": "resume", "how": "continue" | "replay_beat" | "wait"} | {"type": "go_to", "scene": 2} | {"type": "go_to", "element": "element-id"} | {"type": "highlight", "element": "element-id"} | {"type": "highlight", "region": {"x": 10, "y": 20, "w": 30, "h": 20}} | {"type": "delegate", "request": "..."} | {"type": "quiz", "kind": "label" | "sketch", "question": "..."} | {"type": "research", "topic": "...", "window": "month"}]}
+{"actions": [{"type": "say"} | {"type": "start_lesson", "question": "...", "focus": "...", "level": "..."} | {"type": "ask", "question": "the question you ended with"} | {"type": "point", "cues": [{"at": "word" | "word#2", "target": "element-id", "gesture": "circle" | "underline" | "tap" | "point" | "sweep", "to": "element-id"}]} | {"type": "sketch", "visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}], "near": "element-id", "side": "above" | "below" | "left" | "right" | "on"} | {"type": "amend", "op": "insert_after" | "replace_from" | "delete", "index": 3, "note": "...", "count": 2} | {"type": "resume", "how": "continue" | "replay_beat" | "wait"} | {"type": "go_to", "scene": 2} | {"type": "go_to", "element": "element-id"} | {"type": "highlight", "element": "element-id"} | {"type": "highlight", "region": {"x": 10, "y": 20, "w": 30, "h": 20}} | {"type": "delegate", "request": "..."} | {"type": "quiz", "kind": "label" | "sketch", "question": "..."} | {"type": "research", "topic": "...", "days": 14}]}
 Nothing else: no code fences, no commentary.`;
 
 /** Spoken sentences allowed, by the actions named on the first line; the board does the rest. */
@@ -445,7 +445,10 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       if (element && anyIds.has(element)) highlights.push({ element });
       else if (box && box.x > -60 && box.x < 260 && box.y > -60 && box.y < 260) highlights.push({ region: box });
     } else if (a.type === "delegate" && typeof a.request === "string" && a.request.trim()) delegate = a.request.trim().slice(0, 400);
-    else if (a.type === "research" && typeof a.topic === "string" && a.topic.trim()) research = { topic: a.topic.trim().slice(0, 120), window: ["week", "month", "year"].includes(a.window as string) ? (a.window as string) : "month" };
+    else if (a.type === "research" && typeof a.topic === "string" && a.topic.trim()) {
+      const d = Math.round(Number(a.days));
+      research = { topic: a.topic.trim().slice(0, 200), days: Number.isFinite(d) && d >= 1 ? Math.min(90, d) : 14 };
+    }
     else if (a.type === "quiz" && (a.kind === "label" || a.kind === "sketch")) quiz = { kind: a.kind, question: str(a.question, 300) || (a.kind === "label" ? "Can you name the parts I've numbered?" : "Draw it for me, then say done.") };
     else if (a.type === "start_lesson") {
       const question = str(a.question, 300) || input.utterance;
