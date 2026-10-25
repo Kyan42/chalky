@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       index,
       note: typeof body.note === "string" ? body.note.slice(0, 600) : "",
       heard: typeof body.heard === "string" ? body.heard.slice(0, 600) : undefined,
+      said: typeof body.said === "string" ? body.said.slice(0, 600) : undefined,
       prefix,
       intake: body.intake === true,
       learner: cleanLearner(body.learner),

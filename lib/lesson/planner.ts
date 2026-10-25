@@ -223,6 +223,8 @@ export interface AmendRequest {
   note: string;
   /** What the learner said that led here. */
   heard?: string;
+  /** What Chalky has just said aloud before these beats (the hand-off or answer); they continue from it. */
+  said?: string;
   /** Unique id prefix for the new beats, e.g. "d1" → d1-1, d1-2… */
   prefix: string;
   /** The intake changed the lesson: rewrite the rest of a whole lesson, continuing on the current board. */
@@ -244,6 +246,8 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     `The lesson answers: ${r.question}`,
     `The lesson planned so far:\n${lines.join("\n")}`,
     r.heard ? `The learner just said: "${r.heard}"` : "",
+    r.said ? `You have just said aloud, right before these beats: "${r.said}". Continue from it: do not restate it or the learner's question, do not greet or acknowledge again.` : "",
+    `Never open a beat with "good question", "great question" or similar, and never repeat the learner's question back to them.`,
     describeLearner(r.learner),
     `What didn't land and what to try next: ${r.note || "(no note)"}`,
     task,
@@ -298,6 +302,14 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
     if (r.op === "insert_after" && obj.mode !== "talk") obj.scene = newScene;
     // index n + 1 (never 0): checkBeat treats beat 0 as the lesson's very first beat.
+    // The first beat goes straight in: no "good question", no restating the learner's question (they just heard a hand-off).
+    if (n === 0 && typeof obj.say === "string") {
+      let say = obj.say.trim().replace(/^(good|great|nice|excellent|fair|interesting|fun)\s+(question|one)\s*[-:,.!—]\s*/i, "");
+      const sentences = say.split(/(?<=[.!?])\s+/);
+      if (sentences.length > 1 && sentences[0].trim().endsWith("?")) say = sentences.slice(1).join(" ");
+      if (say !== obj.say) console.info(`[amend] trimmed the opener of ${r.prefix}-1: "${String(obj.say).slice(0, 80)}" -> "${say.slice(0, 80)}"`);
+      obj.say = say.charAt(0).toUpperCase() + say.slice(1);
+    }
     const beat = checkBeat(obj, n + 1, st);
     n++;
     yield { type: "beat", beat: { ...beat, id: `${r.prefix}-${n}` }, tMs: ms() };

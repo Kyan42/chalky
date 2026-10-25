@@ -91,3 +91,8 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
   background: var(--ink); color: #fff; cursor: pointer; }
 .caption .heard { color: #2E86E4; font-style: italic; }
 .topic .orb { margin-left: 0.6em; }
+/* The topic written on the board while the first beat is planned. */
+.chalk-title { position: absolute; inset: 0; display: grid; place-items: center; padding: 0 12%; text-align: center; pointer-events: none;
+  font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive; font-size: clamp(18px, 3vw, 46px); color: var(--ink);
+  opacity: 0.78; animation: chalk-in 1.2s ease-out both; }
+@keyframes chalk-in { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 0.78; clip-path: inset(0 0 0 0); } }

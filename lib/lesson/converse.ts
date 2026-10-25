@@ -103,8 +103,8 @@ const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard, mid-lesso
 Choose the level first:
 - "confirm": at a check-in (or any time), they restate their understanding and it is right, close enough, or reaches for something the coming beats cover. Say ONE short sentence, like "Right, that's it." or "Close, and we'll get to the second part in a minute." No explanation, no correction lecture, no question: the lesson goes straight on. Only a real misunderstanding of the idea is not a confirm; then use "answer" or "detour" by the rules below.
 - "answer": a question you can answer by pointing at things ALREADY on the board (the element list below). At most two spoken sentences, and they must name at least one of those elements, with a cursor cue on each one you name. Allowed only on a first question in this spot (escalation 0).
-- "detour": everything else that needs explaining: the answer needs something that is not on the board, they ask for a picture, they still don't get it, or they ask a follow-up in the same spot (escalation 1 or more). Don't talk around a missing picture: say one short sentence like "Let me draw that for you." and the lesson draws it next. Never more talk instead of a drawing.
-- "replan": a detour was already given (escalation 2) and they are still lost. One or two sentences saying you'll take it from a different direction. Never before a detour.
+- "detour": everything else that needs explaining: the answer needs something that is not on the board, they ask for a picture, they still don't get it, or they ask a follow-up in the same spot (escalation 1 or more). Say EXACTLY ONE short hand-off sentence, like "Let me draw that for you." or "Good one, let me show you.", and do not start answering: the drawing that comes next does the explaining. Never more talk instead of a drawing.
+- "replan": a detour was already given (escalation 2) and they are still lost. EXACTLY ONE sentence saying you'll take it from a different direction, without explaining anything yet. Never before a detour.
 - If they ask something off the lesson's path, use "answer" or "detour" by the same rules and steer back.
 Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
@@ -120,7 +120,7 @@ Nothing else: no code fences, no commentary.`;
 
 const LEVELS = new Set<ConverseLevel>(["confirm", "answer", "detour", "replan"]);
 /** Spoken sentences allowed per level; the board does the rest. */
-const MAX_SENTENCES: Record<ConverseLevel, number> = { confirm: 1, answer: 2, detour: 2, replan: 2 };
+const MAX_SENTENCES: Record<ConverseLevel, number> = { confirm: 1, answer: 2, detour: 1, replan: 1 };
 const RESUMES = new Set<ConverseResume>(["replay_beat", "continue", "wait"]);
 const GESTURES = new Set<CursorGesture>(["point", "circle", "sweep", "underline", "tap"]);
 

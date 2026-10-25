@@ -7,7 +7,7 @@
  * Replies that just mean "carry on": Janani's session-controller list, widened
  * so a string of acknowledgements ("yeah ok keep going") also counts.
  */
-const ACK = "ok(ay)?|sure|yes|yeah|yep|yup|right|alright|got it|i see|makes sense|that makes sense|thanks?( you)?|cool|great|good|fine|uh huh|mhm";
+const ACK = "u+h+|u+m+|hmm+|mm+|oh|ah|ok(ay)?|sure|yes|yeah|yep|yup|right|alright|got it|i see|makes sense|that makes sense|thanks?( you)?|cool|great|good|fine|uh huh|mhm";
 const GO = "resume|continue|keep going|go on|carry on|next|never ?mind|move on|go ahead";
 const GAP = "[^a-z0-9]*";
 const RESUME = new RegExp(`^${GAP}((${ACK})${GAP})*((${GO})${GAP})?$`, "i");

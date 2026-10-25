@@ -60,6 +60,13 @@ const BASE_KEYTERMS = ["Chalky"];
 const INTAKE_SILENCE_MS = 4000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
+/** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
+const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
+/** If nothing has been heard for this long while a beat is still being planned, say a short line. */
+const FILLER_AFTER_MS = 8000;
+const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching this out, just a moment."];
+/** A confirm that already looks ahead makes the bridge redundant. */
+const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up)\b/i;
 /** Answers to the intake question that mean "just start". */
 const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
@@ -315,6 +322,8 @@ export default function Lesson() {
   }, []);
   /** The word of the current beat being spoken; read when the learner pauses Chalky. */
   const wordIndexRef = useRef(-1);
+  /** When Chalky last finished saying something (for the planning filler). */
+  const lastSpokeRef = useRef(0);
   /** Where Chalky stopped when the learner cut in: the beat to replay and the word reached. */
   const resumeRef = useRef<{ beatId: string; wordIndex: number } | null>(null);
   /** Set while the lesson waits for the learner; resolves with what they said (null = just carry on). */
@@ -555,6 +564,7 @@ export default function Lesson() {
         await new Promise((r) => setTimeout(r, GAP_SECONDS * 1000));
       }
     } finally {
+      lastSpokeRef.current = performance.now();
       playing = false;
       cancelAnimationFrame(raf);
       if (signal.aborted) audio?.stop();
@@ -863,12 +873,12 @@ export default function Lesson() {
     };
 
     /** Plans a 2-4 beat detour to play at list position `at`, and starts drawing it; nothing is inserted yet. */
-    const planDetour = (at: number, note: string, heardText: string) => {
+    const planDetour = (at: number, note: string, heardText: string, said?: string) => {
       const ctl = new AbortController();
       abort.signal.addEventListener("abort", () => ctl.abort(), { once: true });
       const prefix = `d${++amendCount}`;
       const beats = (async () => {
-        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, prefix, learner }, ctl.signal);
+        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
@@ -886,7 +896,7 @@ export default function Lesson() {
     };
 
     /** Replaces the lesson from list position `from` with a new ending, streamed in as it is planned. */
-    const replan = (from: number, note: string, heardText: string, intake = false) => {
+    const replan = (from: number, note: string, heardText: string, intake = false, said?: string) => {
       dropDraft();
       dropPrefetches(intake ? "the intake rewrote the plan" : "replan");
       logEv({ kind: "replan", from, fromBeat: list[from]?.beat.id ?? null, intake, note });
@@ -897,7 +907,7 @@ export default function Lesson() {
       amending++;
       const prefix = `r${++amendCount}`;
       void (async () => {
-        const res = await post("/api/amend", { question: q, beats: before, op: "replace_from", index: from, note, heard: heardText, prefix, intake, learner });
+        const res = await post("/api/amend", { question: q, beats: before, op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
@@ -1074,6 +1084,7 @@ export default function Lesson() {
         cancelAnimationFrame(raf);
         abort.signal.removeEventListener("abort", onStop);
         if (replyAbortRef.current === replyAbort) replyAbortRef.current = null;
+        lastSpokeRef.current = performance.now();
         if (signal.aborted) audio?.stop();
         const mine = audio;
         setTimeout(() => {
@@ -1128,7 +1139,7 @@ export default function Lesson() {
         const reply = await speakReply(heardText, i, wordIndex, (level) => {
           if (level === "detour" && !(draft && draft.at === resumeAt)) {
             dropDraft();
-            draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText);
+            draft = planDetour(resumeAt, `The learner said: "${heardText}". Show it with a drawing of what is missing from the board.`, heardText, "a one-sentence hand-off, like \"Let me draw that for you.\"");
           }
         });
         if (abort.signal.aborted) return -1;
@@ -1144,27 +1155,29 @@ export default function Lesson() {
         }
         setLastLevel(`${trailer.level} / ${trailer.resume}${trailer.cursor.length ? ` · cursor ${trailer.cursor.map((c) => `${c.gesture} ${c.target}`).join(", ")}` : ""}`);
         /** Going on from a check-in: say its bridge first (written by the planner, no model call). */
-        const goOn = async () => {
+        const goOn = async (spoken?: string) => {
           escalation = 0;
           dropDraft();
           setPausedAt(null);
-          if (bridge && !abort.signal.aborted) {
+          // Either the reply or the bridge carries the lesson forward, not both.
+          if (bridge && spoken && LOOKS_AHEAD.test(spoken)) logEv({ kind: "bridge-skipped", reason: "the reply already looked ahead", bridge });
+          else if (bridge && !abort.signal.aborted) {
             logEv({ kind: "say", who: "chalky", role: "bridge", text: bridge });
             setStatus("speaking");
             await playBeat(line(bridge), abort.signal, null).catch(() => {});
           }
           return resumeAt;
         };
-        if (trailer.level === "confirm") return await goOn();
+        if (trailer.level === "confirm") return await goOn(reply.said);
         if (trailer.level === "replan") {
           escalation = 0;
           setPausedAt(null);
-          replan(resumeAt, trailer.planner_note, heardText);
+          replan(resumeAt, trailer.planner_note, heardText, false, reply.said);
           return resumeAt;
         }
         if (trailer.level === "detour") {
           escalation = 2;
-          const d = draft && draft.at === resumeAt ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText));
+          const d = draft && draft.at === resumeAt ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText, reply.said));
           draft = null;
           setStatus("planning");
           const detour = await d.beats.catch(() => [] as BeatState[]);
@@ -1172,7 +1185,12 @@ export default function Lesson() {
           if (detour.length) {
             logEv({ kind: "detour", at: resumeAt, beats: detour.map((d) => ({ beatId: d.beat.id, mode: d.beat.mode, say: d.beat.say })) });
             dropPrefetches("detour inserted");
-            list.splice(resumeAt, 0, ...detour);
+            // A talk or check-in beat cut off for this detour is not replayed: the detour's own closing check replaces it.
+            const cut = wordIndex >= 0 ? list[resumeAt] : undefined;
+            if (cut && (cut.beat.mode === "talk" || cut.beat.check)) {
+              list.splice(resumeAt, 1, ...detour);
+              logEv({ kind: "replaced-by-detour", beatId: cut.beat.id, why: cut.beat.check ? "check-in" : "talk" });
+            } else list.splice(resumeAt, 0, ...detour);
             setBeats([...list]);
             return resumeAt;
           }
@@ -1183,7 +1201,7 @@ export default function Lesson() {
         // A brief answer: draft the detour now, in case they are still lost.
         escalation = Math.max(escalation, 1) as 1 | 2;
         if (!draft) draft = planDetour(resumeAt, trailer.planner_note, heardText);
-        if (trailer.resume === "continue" || trailer.resume === "replay_beat") return await goOn();
+        if (trailer.resume === "continue" || trailer.resume === "replay_beat") return await goOn(reply.said);
         setStatus("waiting");
       }
     };
@@ -1226,9 +1244,8 @@ export default function Lesson() {
           logEv({ kind: "intake-decision", skipped: true, reason: answer ? "skip phrase" : "silence", intakeMs: waitedMs });
         } else {
           learner.replies = [answer];
-          setStatus("replying");
           const tDecide = performance.now();
-          const decision: { amend?: boolean; note?: string; learner?: Partial<LearnerRecord>; error?: string } = await post("/api/converse", {
+          const deciding: Promise<{ amend?: boolean; note?: string; learner?: Partial<LearnerRecord>; error?: string; call?: unknown }> = post("/api/converse", {
             intent: "intake_answer",
             question: q,
             asked: iq.say,
@@ -1237,6 +1254,13 @@ export default function Lesson() {
           })
             .then((r) => r.json())
             .catch((e) => ({ error: String(e) }));
+          // Answer the learner at once, while the fast model decides: never silence after they speak.
+          const ack = INTAKE_ACKS[Math.floor(Math.random() * INTAKE_ACKS.length)];
+          logEv({ kind: "say", who: "chalky", role: "intake-ack", text: ack });
+          setStatus("speaking");
+          await playBeat(line(ack), abort.signal, null).catch(() => {});
+          setStatus("replying");
+          const decision = await deciding;
           Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
           noteLearner();
           const decideMs = Math.round(performance.now() - tDecide);
@@ -1259,7 +1283,17 @@ export default function Lesson() {
       let i = 0;
       for (;;) {
         if (i >= list.length && planOpen()) setStatus("planning");
-        while (i >= list.length && planOpen() && !abort.signal.aborted) await changed();
+        let fillers = 0;
+        while (i >= list.length && planOpen() && !abort.signal.aborted) {
+          const timedOut = await Promise.race([changed().then(() => false), sleep(500).then(() => true)]);
+          // Nothing heard for a while and the next beat is still being planned: say so, briefly, at most twice.
+          if (timedOut && fillers < FILLERS.length && performance.now() - lastSpokeRef.current > FILLER_AFTER_MS && !abort.signal.aborted) {
+            const filler = FILLERS[fillers++];
+            logEv({ kind: "say", who: "chalky", role: "filler", text: filler, waitingForBeat: i });
+            await playBeat(line(filler), abort.signal, null).catch(() => {});
+            setStatus("planning");
+          }
+        }
         if (abort.signal.aborted) break;
         // The learner spoke between beats (or while Chalky was planning): answer before going on.
         if (queueRef.current.length) {
@@ -1508,6 +1542,12 @@ export default function Lesson() {
         <section className="stage" data-testid="stage">
           <div className="visual" style={{ position: "relative" }}>
             <canvas ref={canvasRef} aria-label="The whiteboard" />
+            {question && current < 0 && (
+              // Before the first beat draws: the topic in chalk, so the board is never blank while Chalky plans.
+              <div className="chalk-title" data-testid="chalk-title">
+                {title && title !== "Planning…" ? title : question}
+              </div>
+            )}
             <ChalkyCursor boxes={board.boxes} script={cursorScript} clock={cursorClock} />
           </div>
           {showWelcome && (
