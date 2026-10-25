@@ -220,7 +220,9 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 .conversation-dock { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: min(680px, 88%); text-align: center; z-index: 3; }
 .shared-transcript { min-height: 58px; max-height: 120px; overflow-y: auto; margin: 0 0 12px; color: var(--ink); }
 .transcript-speaker { display: block; font: 500 11px "Instrument Sans", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.shared-transcript p { margin: 4px 0 0; font: 400 clamp(17px, 1.6vw, 23px)/1.45 "Instrument Sans", sans-serif; }
+/* The transcript line keeps the caption class (scripts read .caption .word), so the old caption strip's layout is reset here. */
+.shared-transcript p, .shared-transcript p.caption { grid-area: auto; display: block; border: 0; padding: 0; margin: 4px 0 0; text-align: center;
+  font: 400 clamp(17px, 1.6vw, 23px)/1.45 "Instrument Sans", sans-serif; }
 .shared-transcript .word { color: var(--muted); opacity: 0.55; transition: color 60ms linear, opacity 60ms linear; }
 .shared-transcript .word[data-state="spoken"], .shared-transcript .word[data-state="now"] { opacity: 1; }
 .shared-transcript .word[data-state="spoken"] { color: var(--ink); }

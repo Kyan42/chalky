@@ -2634,7 +2634,7 @@ export default function Lesson() {
           <div className="shared-transcript" aria-live="polite">
             {(voice.partial || words.length > 0 || (heardNote && !question)) && <span className="transcript-speaker" data-testid="speaker">{learnerTurn ? "You" : "Chalky"}</span>}
             {voice.partial ? (
-              <p className="heard" data-testid="caption">
+              <p className="caption heard" data-testid="caption">
                 <span data-testid="heard">
                   {voice.partial.split(/\s+/).map((w, i, all) => (
                     <span key={i} className={i === all.length - 1 ? "learner-word" : undefined}>{w} </span>
@@ -2642,9 +2642,9 @@ export default function Lesson() {
                 </span>
               </p>
             ) : heardNote && !question ? (
-              <p className="heard" data-testid="caption"><span data-testid="heard-note">{heardNote}</span></p>
+              <p className="caption heard" data-testid="caption"><span data-testid="heard-note">{heardNote}</span></p>
             ) : (
-              <p data-testid="caption">
+              <p className="caption" data-testid="caption">
                 {words.map((w, i) => (
                   <span key={i} className="word" data-state={i < wordIndexNow ? "spoken" : i === wordIndexNow ? "now" : "pending"}>
                     {w}{" "}
