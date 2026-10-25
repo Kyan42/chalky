@@ -40,6 +40,8 @@ export interface PlannedBeat {
   section?: string;
   /** A quiz beat (a talk beat whose "say" is the quiz question): label the numbered parts, or draw something. */
   quiz?: QuizKind;
+  /** Taught from research material: the citation tags ("[1]") of the papers this beat uses. */
+  cite?: string[];
   /** On a check-in beat: what Chalky says when the learner answers "got it" (no model call), naming what comes next. */
   bridge?: string;
 }

@@ -154,10 +154,24 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   // A quiz beat is a talk beat that asks; at most two in a lesson.
   const quiz = (b.quiz === "label" || b.quiz === "sketch") && (st.quizzes ?? 0) < 2 ? (b.quiz as "label" | "sketch") : undefined;
   if (quiz) st.quizzes = (st.quizzes ?? 0) + 1;
-  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}) };
+  // Citation tags of the papers a beat uses (taught from research material): "[1]", "[2]"...
+  const cite = Array.isArray(b.cite) ? [...new Set(b.cite.filter((c): c is string => typeof c === "string").map((c) => c.trim()).filter((c) => /^\[\d{1,2}\]$/.test(c)))].slice(0, 3) : [];
+  return { id: `b${index + 1}`, say, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : check, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(cite.length ? { cite } : {}) };
 }
 
-export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT): AsyncGenerator<PlanEvent> {
+/**
+ * Teaching from research material (recent papers, each with a citation tag like [1]): the lesson is built from
+ * the material, not from memory, and every beat that uses a paper says which.
+ */
+const MATERIAL_RULES = `Teach this lesson from the research material below (recent papers, each with a citation tag like [1]), not from memory:
+- Each section covers one or two of the papers: what problem they take on, what they did (the method), and what they found (the results, with their numbers where the material gives them).
+- Every beat that uses a paper's content carries "cite": ["[1]"] with that paper's tag (or tags). A beat that uses no paper has no "cite".
+- You may give background from general knowledge, but say so out loud ("as background, ..."), and never present it as something a paper found.
+- Drawings are diagrams of methods and results: boxes and arrows for a pipeline, a simple chart of a result. No pictures of things.
+- The recap names the papers by short title and what each showed.
+- Never invent a paper, an author, a number or a result that is not in the material.`;
+
+export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT, material?: string): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const tracked = trackCall("plan", MODEL);
@@ -168,7 +182,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
       system: plannerSystem(),
       thinking: plannerThinking(MODEL),
       output_config: { effort },
-      messages: [{ role: "user", content: question }],
+      messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
     },
     { signal },
   );

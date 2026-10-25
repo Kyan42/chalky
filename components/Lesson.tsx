@@ -127,6 +127,30 @@ interface BeatState {
   speech?: { events: BeatAudioEvent[]; done: boolean };
 }
 
+/** One paper from /api/research, as the cards and the transcript use it. */
+interface Paper {
+  tag: string;
+  title: string;
+  authors?: string;
+  published?: string;
+  url?: string;
+}
+
+/** /api/research's answer, read leniently (the contract is lib/research/CONTRACT.md on the Apify branch). */
+function readResearch(r: Record<string, unknown> | null): { papers: Paper[]; material: string; cached: boolean } | null {
+  if (!r || typeof r !== "object") return null;
+  const raw = (Array.isArray(r.papers) ? r.papers : Array.isArray(r.results) ? r.results : []) as Record<string, unknown>[];
+  const str = (v: unknown) => (typeof v === "string" ? v : Array.isArray(v) ? v.filter((x) => typeof x === "string").join(", ") : "");
+  const papers = raw.slice(0, 12).flatMap((x, k) => {
+    const title = str(x.title).trim();
+    if (!title) return [];
+    const tag = str(x.tag ?? x.cite ?? x.citation).trim() || `[${k + 1}]`;
+    return [{ tag: tag.startsWith("[") ? tag : `[${tag}]`, title, authors: str(x.authors) || undefined, published: str(x.published ?? x.date) || undefined, url: str(x.url ?? x.link) || undefined }];
+  });
+  const material = str(r.material ?? r.text).trim();
+  return { papers, material, cached: r.cached === true || r.cacheHit === true };
+}
+
 /**
  * A beat's recorded speech from `sec` on: audio before it is cut away (whole samples) and every timestamp
  * moves back by `sec`, so the words before it are already in the past and the board, the cursor and the
@@ -714,6 +738,10 @@ export default function Lesson() {
   const [quizMarks, setQuizMarks] = useState<{ n: number; box: GridBox; cover?: GridBox }[] | null>(null);
   /** A sketch quiz is waiting for the learner's drawing: Done hands it in. */
   const [quizDone, setQuizDone] = useState<(() => void) | null>(null);
+  /** Recent papers the lesson is taught from (research), the "finding papers" state, and the beat's citations. */
+  const [papers, setPapers] = useState<Paper[] | null>(null);
+  const [researching, setResearching] = useState(false);
+  const [currentCite, setCurrentCite] = useState<string[]>([]);
   /** A request handed to the slow executor is pending (the badge says so). */
   const [delegating, setDelegating] = useState(false);
   /** Any pause (stopped or listening), for the buttons. */
@@ -1266,7 +1294,13 @@ export default function Lesson() {
     lessonStarted = true;
     setTitle("Planning…");
     planning = (async () => {
-      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
+      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await (async () => {
+            // Taught from recent papers when the first reply asked for them; from memory if none came back.
+            const found = researchJob ? await researchJob : null;
+            const material = found?.papers.length && found.material ? found.material : null;
+            if (researchJob && !material) researchNote = "I couldn't find recent papers on that, so I'll teach it from what I know.";
+            return post("/api/plan", { question: q, ...(material ? { material } : {}) });
+          })();
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
       for await (const event of ndjson<PlanEvent>(res)) {
         if (event.type === "title") {
@@ -1280,7 +1314,7 @@ export default function Lesson() {
           if (planReplaced) continue;
           const beat = event.beat;
           const state: BeatState = { beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null) };
-          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say });
+          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say, ...(beat.cite?.length ? { cite: beat.cite } : {}), ...(beat.quiz ? { quiz: beat.quiz } : {}) });
           list.push(state);
           if (beat.mode !== "talk") {
             visualBeats.push(state);
@@ -1322,6 +1356,30 @@ export default function Lesson() {
     });
     };
     if (direct) startPlanning();
+    /** Recent papers asked for by the first reply's "research" action: the planner waits for their material. */
+    let researchJob: Promise<{ papers: Paper[]; material: string; cached: boolean } | null> | null = null;
+    /** Said before beat 1 when the research came back empty or failed (the lesson is taught from memory). */
+    let researchNote: string | null = null;
+    const startResearch = (r: NonNullable<ConverseTrailer["research"]>) => {
+      if (researchJob) return;
+      const t0r = performance.now();
+      setResearching(true);
+      logEv({ kind: "research-start", topic: r.topic, window: r.window });
+      researchJob = post("/api/research", { topic: r.topic, window: r.window })
+        .then(async (res) => (res.ok ? readResearch((await res.json()) as Record<string, unknown>) : (logEv({ kind: "research", topic: r.topic, window: r.window, papers: 0, ms: Math.round(performance.now() - t0r), error: `status ${res.status}` }), null)))
+        .then((out) => {
+          if (out) {
+            logEv({ kind: "research", topic: r.topic, window: r.window, papers: out.papers.length, ms: Math.round(performance.now() - t0r), cached: out.cached, tags: out.papers.map((x) => `${x.tag} ${x.title.slice(0, 60)}`) });
+            if (out.papers.length) setPapers(out.papers);
+          }
+          return out;
+        })
+        .catch((e) => {
+          logEv({ kind: "research", topic: r.topic, window: r.window, papers: 0, ms: Math.round(performance.now() - t0r), error: String((e as Error).message ?? e) });
+          return null;
+        })
+        .finally(() => setResearching(false));
+    };
     /** The intake question the conversation model asked next to its start_lesson, already spoken. */
     let pendingIntake: string | null = null;
     /** start_lesson: the planner starts from the model's question; what it learned goes on the learner record. */
@@ -2145,6 +2203,8 @@ export default function Lesson() {
             }
           },
           (t) => {
+            // Recent papers first (the planner waits for their material), then the lesson.
+            if (t.research && !lessonStarted) startResearch(t.research);
             if (t.lesson && !lessonStarted) startLesson(t.lesson);
           },
         );
@@ -2412,8 +2472,16 @@ export default function Lesson() {
           if (planOpen()) continue;
           break;
         }
+        if (researchNote) {
+          const note = researchNote;
+          researchNote = null;
+          logEv({ kind: "say", who: "chalky", role: "research-empty", text: note });
+          setStatus("speaking");
+          await playBeat(line(note), abort.signal, null).catch(() => {});
+        }
         setCurrent(i);
         currentBeatIdRef.current = list[i].beat.id;
+        setCurrentCite(list[i].beat.cite ?? []);
         setStatus("speaking");
         // A quiz beat asks, waits and grades; then the lesson goes on.
         if (list[i].beat.quiz) {
@@ -2488,7 +2556,7 @@ export default function Lesson() {
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
         const playedBeat = list[i];
-        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre };
+        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre, ...(list[i].beat.cite?.length ? { cite: list[i].beat.cite } : {}) };
         if (resumeFrom && resumeFrom.state !== list[i]) resumeFrom = null;
         if (resumeFrom) {
           timing.fromWord = resumeFrom.word;
@@ -2824,6 +2892,11 @@ export default function Lesson() {
         <header className="topic">
           <h1 data-testid="title">{title}</h1>
           <div className="topic-right">
+            {researching && (
+              <span className="voice-badge" data-testid="research-badge" title="Looking up recent papers to teach this from">
+                Finding papers…
+              </span>
+            )}
             {delegating && (
               <span className="voice-badge" data-testid="delegate-badge" title="Chalky handed this to a slower helper that sees the whole board">
                 Looking it up…
@@ -2885,6 +2958,28 @@ export default function Lesson() {
               onStroke={(stroke) => showInk([...inkRef.current, stroke])}
             />
             <ChalkyCursor boxes={onScreenBoxes} script={cursorScript} clock={cursorClock} />
+            {papers && papers.length > 0 && (
+              // The papers the lesson is taught from; the one the current beat cites is lit.
+              <div data-testid="research-cards" style={{ position: "absolute", left: 8, bottom: 8, maxWidth: "38%", display: "grid", gap: 4, pointerEvents: "auto" }}>
+                {papers.map((p) => {
+                  const lit = currentCite.includes(p.tag);
+                  return (
+                    <a
+                      key={p.tag}
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-testid={`paper-${p.tag.replace(/\D/g, "")}`}
+                      data-cited={lit ? "true" : "false"}
+                      style={{ display: "block", padding: "4px 8px", borderRadius: 6, font: "500 12px/1.3 Inter, system-ui, sans-serif", color: "#23262f", textDecoration: "none", background: lit ? "#fff4d6" : "rgba(255,255,255,.85)", boxShadow: lit ? "0 0 0 2px #E4572E" : "0 1px 3px rgba(0,0,0,.12)", opacity: lit || !currentCite.length ? 1 : 0.6, transition: "all .25s" }}
+                    >
+                      <strong>{p.tag}</strong> {p.title}
+                      {p.published ? <span style={{ opacity: 0.6 }}> · {p.published.slice(0, 10)}</span> : null}
+                    </a>
+                  );
+                })}
+              </div>
+            )}
             {quizMarks && (
               // A label quiz: each label covered, a numbered marker where it was.
               <div data-testid="quiz-marks" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
