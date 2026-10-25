@@ -13,7 +13,7 @@
  * PLANNER_EFFORT overrides the effort level (default low).
  */
 import "server-only";
-import { BLOCKS } from "@/lib/blocks";
+import { allBlocks } from "@/lib/blocks";
 import { trackCall } from "./calllog";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
 import { withVoiceRules } from "./preference-prompt";
@@ -34,9 +34,12 @@ function plannerThinking(model: string) {
   return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
 }
 const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
-const plannerSystem = async () => await withVoiceRules(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
+/** The planner's list of ready-made drawings: the catalog and every learned block (lib/blocks/learned.ts). */
+const BLOCK_IDS = "{{BLOCK_IDS}}";
+const withBlocks = (system: string) => system.replace(BLOCK_IDS, allBlocks().map((b) => b.id).join(", "));
+const plannerSystem = async () => await withVoiceRules(withBlocks(process.env.PLANNER_TITLE_FIRST === "1" ? `${SYSTEM}
 
-${TITLE_FIRST}` : SYSTEM);
+${TITLE_FIRST}` : SYSTEM));
 
 const SYSTEM = `You are Chalky, a great teacher who explains things out loud while drawing on a whiteboard. The learner wants to actually understand the answer, not hear a one-liner. Plan a spoken lesson of about three minutes that goes slowly and keeps the learner involved.
 
@@ -67,7 +70,7 @@ The board shows one picture at a time, called a scene. Group beats into scenes: 
 The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than tall). For each beat, also give:
 - "at": one word copied exactly from the beat's text where the drawing (or pointing) should start: the word that names the thing, within the first 10 words, never a number.
 - "region": [x, y, w, h], where this beat's drawing goes (for point: where the things it points at are). Within a scene, draw regions must not overlap each other. The scene's first draw beat is its main picture: give it a big region, about 55 to 65 wide and 60 to 75 tall, usually on the left or in the middle. Later additions take 25 to 40 each side, placed next to the part they relate to so arrows between them are short. Use the whole board over a scene; keep 5 units clear of every edge. [] for talk.
-- "adds": for draw beats, the 1 to 4 things this beat draws, each {"id": short unique name of letters, digits and dashes like "sun" or "leaf", "what": a few words on what it is}. Name the shapes (a box, a circle, a curve, a row of steps), not arrows or labels between them. These ids are how later beats refer to the shapes. When the board has a ready-made drawing for the thing (${BLOCKS.map((b) => b.id).join(", ")}), use that word as the id or say it in "what", so the drawer uses it. Never add something an earlier beat of the scene already drew (a part of its cycle or flow, for instance): point at it or connect to it instead. [] for point and talk.
+- "adds": for draw beats, the 1 to 4 things this beat draws, each {"id": short unique name of letters, digits and dashes like "sun" or "leaf", "what": a few words on what it is}. Name the shapes (a box, a circle, a curve, a row of steps), not arrows or labels between them. These ids are how later beats refer to the shapes. When the board has a ready-made drawing for the thing (${BLOCK_IDS}), use that word as the id or say it in "what", so the drawer uses it. Never add something an earlier beat of the scene already drew (a part of its cycle or flow, for instance): point at it or connect to it instead. [] for point and talk.
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
@@ -428,7 +431,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     {
       model: AMEND_MODEL,
       max_tokens: 8000,
-      system: await withVoiceRules(SYSTEM),
+      system: await withVoiceRules(withBlocks(SYSTEM)),
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       messages: [{ role: "user", content: amendPrompt(r, newScene) }],

@@ -5,25 +5,37 @@
  * the scene's beats into one Clayzo document.
  *
  * Beat 1 is drawn by Haiku (it has to be on the board within seconds); later
- * beats by Sonnet, whose boards read more cleanly, with a hard deadline and a
+ * beats by Sonnet (Opus in slow mode), whose boards read more cleanly, with a hard deadline and a
  * Haiku fallback instead of a repair turn. A beat that still fails just plays
  * with the board as it was.
+ *
+ * Draw modes (lib/lesson/language.ts DrawMode): fast draws every beat from presets and freehand; slow
+ * makes about FREE_SHARE of beats (never the first) free, allowed one new block as well, which is kept
+ * in a local file (lib/blocks/learned.ts) for later lessons; the Moss index stays the catalog alone.
  */
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { asBlock } from "@/lib/blocks/swap";
 import { trackCall } from "./calllog";
-import { DRAW_SYSTEM, drawPrompt, PRESET_SCHEMA } from "./language";
+import { DRAW_SYSTEM, drawPrompt, FREE_SCHEMA, PRESET_SCHEMA, type DrawMode } from "./language";
 import { cleanId } from "./planner";
 import { fitToRegion, PRESET_KINDS, type PresetElement } from "./presets";
 import type { CallLog, PlannedBeat } from "./types";
-import type { Block } from "@/lib/blocks";
+import { blockById, isLearned, registerBlocks, type Block } from "@/lib/blocks";
+import { cleanNewBlock } from "@/lib/blocks/learn";
 import { blocksForBeat } from "@/lib/moss/blocks";
+import { loadLearned, saveLearned } from "@/lib/blocks/learned";
 
 const FAST_MODEL = process.env.DRAW_FAST_MODEL || "claude-haiku-5-5";
 const MODEL = process.env.DRAW_MODEL || "claude-sonnet-5-5";
+/** Slow mode draws its beats (all but the first) with Opus: the free beats author new blocks. */
+const SLOW_MODEL = process.env.DRAW_SLOW_MODEL || "claude-opus-5-5";
 const TIMEOUT_MS = Number(process.env.DRAW_TIMEOUT_MS) || 20000;
+/** Opus is slower, and slow mode's beats are drawn well ahead of when they play. */
+const SLOW_TIMEOUT_MS = Number(process.env.DRAW_SLOW_TIMEOUT_MS) || 40000;
 const FALLBACK_TIMEOUT_MS = 12000;
+/** Slow mode: the share of beats drawn free (the rest from presets, as in fast mode). */
+const FREE_SHARE = Number(process.env.CHALKY_FREE_SHARE) || 0.2;
 const KINDS = new Set<string>(PRESET_KINDS);
 const EDIT_KINDS = new Set(["highlight", "dim"]);
 /** How many ids each referring kind needs. */
@@ -45,13 +57,19 @@ export interface DrawResult {
   calls?: CallLog[];
   /** The blocks the prompt listed (Moss's pick, or the keyword fallback's). */
   blockIds?: string[];
+  /** A slow-mode free beat (freehand kinds and one new block allowed). */
+  free?: boolean;
+  /** Ids of blocks this beat authored and kept. */
+  learned?: string[];
+  /** Learned blocks its elements place (new or from earlier lessons): the browser registers them to render them. */
+  blocks?: Block[];
 }
 
 const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
-/** The model for a beat: the lesson's first drawing can't wait for Sonnet. */
-export function modelFor(beat: PlannedBeat): string {
-  return beat.id === "b1" ? FAST_MODEL : MODEL;
+/** The model for a beat: the lesson's first drawing can't wait for Sonnet (or Opus); slow mode draws the rest with Opus. */
+export function modelFor(beat: PlannedBeat, mode: DrawMode = "fast"): string {
+  return beat.id === "b1" ? FAST_MODEL : mode === "slow" ? SLOW_MODEL : MODEL;
 }
 
 /**
@@ -60,7 +78,7 @@ export function modelFor(beat: PlannedBeat): string {
  * or an element earlier in this answer; the compiler would only report it as
  * dangling otherwise.
  */
-function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]): { elements: PresetElement[]; dropped: number; swapped: number } {
+function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[], free = false): { elements: PresetElement[]; dropped: number; swapped: number } {
   const pointOnly = beat.mode === "point";
   const list = Array.isArray((raw as { elements?: unknown })?.elements) ? (raw as { elements: unknown[] }).elements : [];
   const known = new Set<string>([...earlier.flatMap((b) => b.adds.map((a) => a.id)), ...beat.adds.map((a) => a.id)]);
@@ -103,7 +121,7 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[]):
   return { elements: pointOnly ? out : fitToRegion(out, beat.region), dropped, swapped };
 }
 
-async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks: Block[] = []): Promise<DrawResult> {
+async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks: Block[] = [], free = false): Promise<DrawResult> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -115,11 +133,12 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
       .watch(tracked.client.messages.stream(
         {
           model,
-          max_tokens: 4000,
+          // A new block's line art is long.
+          max_tokens: free ? 10000 : 4000,
           system: DRAW_SYSTEM,
-          messages: [{ role: "user", content: drawPrompt(question, beat, earlier, blocks) }],
+          messages: [{ role: "user", content: drawPrompt(question, beat, earlier, blocks, free) }],
           thinking: { type: "adaptive" },
-          output_config: { effort: "low", format: { type: "json_schema", schema: PRESET_SCHEMA } },
+          output_config: { effort: "low", format: { type: "json_schema", schema: free ? FREE_SCHEMA : PRESET_SCHEMA } },
         } as Anthropic.MessageStreamParams,
         { signal: abort },
       ))
@@ -128,21 +147,39 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
     if (message.stop_reason === "refusal") return fail("refusal", outputTokens);
     if (message.stop_reason === "max_tokens") return fail("cut off at max_tokens", outputTokens);
     const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    const { elements, dropped, swapped } = cleanElements(JSON.parse(text), beat, earlier);
+    const parsed = JSON.parse(text) as { elements?: unknown; newBlocks?: unknown };
+    // A free beat's new block is registered before its elements are fitted (fitToRegion sizes blocks by id).
+    const fresh = free && Array.isArray(parsed.newBlocks) ? parsed.newBlocks.slice(0, 1).map(cleanNewBlock).filter((b): b is Block => !!b) : [];
+    if (free && Array.isArray(parsed.newBlocks) && parsed.newBlocks.length && !fresh.length) console.log(`[draw] ${beat.id}: new block dropped (unusable, or its id is taken) (${model})`);
+    registerBlocks(fresh);
+    const { elements, dropped, swapped } = cleanElements(parsed, beat, earlier, free);
     if (swapped) console.log(`[draw] ${beat.id}: ${swapped} shape(s) labelled with a block's name swapped for the block (${model})`);
-    return { elements, ms: ms(), model, outputTokens, dropped, swapped, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
+    const placed = new Set(elements.flatMap((e) => (e.kind === "block" || e.kind === "travel" ? [blockById(e.text.trim())?.id] : [])).filter(Boolean));
+    // Kept only once a lesson actually draws it.
+    const learned = fresh.filter((b) => placed.has(b.id) && saveLearned(b)).map((b) => b.id);
+    const learnedUsed = [...placed].flatMap((id) => (id && isLearned(id) ? [blockById(id)!] : []));
+    return { elements, ms: ms(), model, outputTokens, dropped, swapped, free, learned, blocks: learnedUsed, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
   } catch (e) {
     return fail(deadline.aborted ? `deadline (${timeoutMs} ms)` : String((e as Error)?.message ?? e).slice(0, 300));
   }
 }
 
-export async function drawBeat(question: string, beat: PlannedBeat, earlier: PlannedBeat[], signal?: AbortSignal, model = modelFor(beat)): Promise<DrawResult> {
-  // Moss (or the keyword fallback) picks the catalog blocks this beat's prompt lists.
+/** Whether a beat is drawn free: slow mode, a drawing beat that isn't the lesson's first, about FREE_SHARE of the time. */
+export function isFreeBeat(beat: PlannedBeat, mode: DrawMode): boolean {
+  return mode === "slow" && beat.mode !== "point" && beat.id !== "b1" && Math.random() < FREE_SHARE;
+}
+
+export async function drawBeat(question: string, beat: PlannedBeat, earlier: PlannedBeat[], signal?: AbortSignal, model?: string, mode: DrawMode = "fast", forceFree = false): Promise<DrawResult> {
+  model ??= modelFor(beat, mode);
+  // Learned blocks join the catalog before Moss (or the keyword fallback) picks what this beat's prompt lists.
+  await loadLearned();
   const { blocks } = await blocksForBeat(beat);
   const blockIds = blocks?.map((b) => b.id);
-  const first = { ...(await attempt(question, beat, earlier, model, TIMEOUT_MS, signal, blocks)), blockIds };
+  const free = (forceFree && beat.mode !== "point") || isFreeBeat(beat, mode);
+  if (free) console.log(`[draw] ${beat.id}: free beat (slow mode)`);
+  const first = { ...(await attempt(question, beat, earlier, model, model === SLOW_MODEL ? SLOW_TIMEOUT_MS : TIMEOUT_MS, signal, blocks, free)), blockIds };
   if (first.elements.length || model === FAST_MODEL || signal?.aborted) return first;
-  // Sonnet missed its deadline or came back unusable: one quick Haiku try before giving up.
+  // Sonnet (or Opus) missed its deadline or came back unusable: one quick Haiku try (from presets) before giving up.
   const second = await attempt(question, beat, earlier, FAST_MODEL, FALLBACK_TIMEOUT_MS, signal, blocks);
   return { ...second, blockIds, ms: first.ms + second.ms, calls: [...(first.calls ?? []), ...(second.calls ?? [])], error: second.error ? `${first.error}; fallback: ${second.error}` : `${first.model} failed (${first.error}), fell back to ${FAST_MODEL}` };
 }

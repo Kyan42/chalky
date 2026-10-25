@@ -41,6 +41,9 @@ import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
+import type { DrawMode } from "@/lib/lesson/language";
+import { readPreferences } from "@/lib/preferences";
+import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
@@ -71,6 +74,18 @@ const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
+/**
+ * Draw mode, the "Drawing" field in Preferences (lib/lesson/language.ts DrawMode): fast, the default, draws
+ * every beat from presets and freehand; slow lets about one beat in five draw freely, and what it invents is
+ * kept for later lessons. Read at each draw, so changing it mid-lesson changes the beats still to draw.
+ */
+function savedDrawMode(): DrawMode {
+  try {
+    return typeof document !== "undefined" && readPreferences(document.cookie).draw === "slow" ? "slow" : "fast";
+  } catch {
+    return "fast";
+  }
+}
 /** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
 const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
@@ -1298,9 +1313,12 @@ export default function Lesson() {
       state.elements = null;
       const index = list.indexOf(state);
       const earlier = earlierOverride ?? list.filter((b, i) => i < index && b.beat.scene === beat.scene && b.beat.mode === "draw").map((b) => b.beat);
-      return post("/api/draw", { question: q, beat, earlier }, signal)
+      return post("/api/draw", { question: q, beat, earlier, mode: savedDrawMode() }, signal)
         .then((r) => r.json())
-        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[] }) => {
+        .then((r: { elements?: PresetElement[]; ms?: number; model?: string; dropped?: number; error?: string | null; calls?: CallLog[]; free?: boolean; learned?: string[]; blocks?: Block[] }) => {
+          // Learned blocks (slow mode's own drawings) render like catalog ones once the browser knows them.
+          if (r.blocks?.length) registerBlocks(r.blocks);
+          if (r.free) logEv({ kind: "free-beat", beatId: beat.id, learned: r.learned ?? [], blocks: (r.blocks ?? []).map((b) => b.id) });
           state.drawCalls = r.calls;
           state.elements = r.elements ?? [];
           state.draw = state.elements.length ? "ready" : "failed";
@@ -2056,9 +2074,10 @@ export default function Lesson() {
         const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
         const t0 = performance.now();
         // The reply's own signal: a new learner turn cancels a drawing still pending.
-        sketchShown = post("/api/draw", { question: q, beat, earlier }, signal)
+        sketchShown = post("/api/draw", { question: q, beat, earlier, mode: savedDrawMode() }, signal)
           .then((r) => r.json())
-          .then(async (res: { elements?: PresetElement[]; error?: string | null }) => {
+          .then(async (res: { elements?: PresetElement[]; error?: string | null; blocks?: Block[] }) => {
+            if (res.blocks?.length) registerBlocks(res.blocks);
             const els = res.elements ?? [];
             console.info(`[sketch] ${els.length} element(s) in ${Math.round(performance.now() - t0)} ms${res.error ? ` (${res.error})` : ""}: ${ask.visual}`);
             if (!els.length || !replyLive || signal.aborted) return;

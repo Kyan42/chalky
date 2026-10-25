@@ -79,6 +79,10 @@ export default function Preferences() {
           <label htmlFor="lesson-pace">Teaching pace</label><p>Separate from how fast the voice speaks.</p>
           <select id="lesson-pace" value={settings.pace} onChange={e => update("pace", e.target.value as Settings["pace"])}><option value="balanced">Adapt as we go</option><option value="stepwise">Step by step, with more check-ins</option><option value="concise">Concise, get to the point</option></select>
         </div>
+        <div className="preference-field">
+          <label htmlFor="lesson-draw">Drawing</label><p>Slow mode is slower, and new drawings are kept for later lessons.</p>
+          <select id="lesson-draw" data-testid="pref-draw" value={settings.draw} onChange={e => update("draw", e.target.value as Settings["draw"])}><option value="fast">Fast (ready-made blocks)</option><option value="slow">Slow (Chalky may invent new drawings and keep them)</option></select>
+        </div>
         </div>
         <p className="preferences-note">Saved automatically on this browser. Changes apply to new speech and lesson content; already prepared content keeps its settings. Lesson language changes Chalky’s responses, not microphone recognition.</p>
       </div>

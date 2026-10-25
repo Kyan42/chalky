@@ -1,6 +1,7 @@
 // npx tsx --env-file=.env.local scripts/moss-build-blocks.ts
 // Creates the Moss block index (one document per catalog block), or brings an existing one up to
-// date: upserts every block and deletes documents for blocks that no longer exist. Then loads it
+// date: upserts every block and deletes every document that isn't a catalog block, so the index holds
+// the catalog and nothing else (slow mode's learned blocks stay local: lib/blocks/learned.ts). Then loads it
 // and runs one query, so a green run means the live app can use it. Free plan: 3 indexes, so the
 // name stays fixed (MOSS_BLOCK_INDEX, default "chalky-blocks").
 import { MossClient } from "@moss-js/moss";
