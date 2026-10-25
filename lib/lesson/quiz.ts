@@ -75,7 +75,7 @@ const LABEL_SCHEMA = {
 export async function gradeLabel(o: { question: string; items: LabelItem[]; answer: string; inkMarks?: string[] }, signal?: AbortSignal): Promise<QuizGrade> {
   const t0 = performance.now();
   const system = await withVoiceRules(
-    `You grade a quick spoken quiz in a lesson. The learner was shown numbered parts of a drawing and asked to name them. Decide for each number whether what they said names it (synonyms, plain-language names and small slips count; a different part does not; a number they skipped is wrong, heard ""). Then write the feedback Chalky, the teacher, says aloud: two or three short sentences, first person, warm, no "good question": say which they got, and name the right answer for each one they missed. Return JSON only.`,
+    `You grade a quick spoken quiz in a lesson. The learner was shown numbered parts of a drawing and asked to name them. Decide for each number whether what they said names it: any name that means the same thing counts (synonyms, plain-language names, symbols said in words: "query matrix" or "the queries' weights" for Wq, "key matrix" for Wk, "value matrix" for Wv), and so do small slips and answers given out of order when it is clear which part they mean; a different part does not; a number they skipped is wrong, heard "". Then write the feedback Chalky, the teacher, says aloud: two or three short sentences, first person, warm, no "good question": say which they got, and name the right answer for each one they missed. Return JSON only.`,
   );
   const user = [
     `The lesson: ${o.question}`,

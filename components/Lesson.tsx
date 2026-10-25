@@ -520,8 +520,13 @@ function boardView(report: LayoutReport, elements: PresetElement[], adds: { id: 
     boxes[shape.id] = b;
     if (dashed.has(shape.id) || b.w * b.h < 0.3) continue; // anchors are points, not things to talk about
     const dot = shape.id.indexOf(".");
-    if (dot > 0) list.push({ id: shape.id, kind: "part", label: `${shape.id.slice(dot + 1).replace(/[-_]/g, " ")} of ${labelOf(shape.id.slice(0, dot))}` });
-    else list.push({ id: shape.id, kind: byId.get(shape.id)?.kind ?? "shape", label: labelOf(shape.id) });
+    if (dot > 0) {
+      const part = shape.id.slice(dot + 1);
+      const whole = labelOf(shape.id.slice(0, dot));
+      // A numbered part of a block labelled with alternatives ("Wq|Wk|Wv", part 0) is that alternative ("Wq").
+      const alt = /^\d+$/.test(part) && whole.includes("|") ? whole.split("|").map((x) => x.trim())[Number(part)] : undefined;
+      list.push({ id: shape.id, kind: "part", label: alt || `${part.replace(/[-_]/g, " ")} of ${whole}` });
+    } else list.push({ id: shape.id, kind: byId.get(shape.id)?.kind ?? "shape", label: labelOf(shape.id) });
   }
   const labels: Record<string, GridBox> = {};
   for (const t of report.texts) {
@@ -1683,6 +1688,38 @@ export default function Lesson() {
     const SKIP_QUIZ = /^\W*(?:(?:ok(?:ay)?|um+|uh+|hmm+|honestly|sorry|so)[,.\s]+)*(?:skip( it| this)?|next|pass|no thanks|not now|later|i (?:really |honestly )?(?:don'?t|do not) know|no idea|i have no idea|not sure|i'?m not sure|dunno|no clue|i give up)(?:[,.\s]+(?:sorry|skip|pass))*\W*$/i;
     const DONE = /\b(done|finished|that'?s it|there you go|ok(ay)? done)\b/i;
     const sayLine = (text: string) => playBeat(line(text), abort.signal, null).catch(() => {});
+    /** A request to hear the question again, not an answer: "repeat that", "what was the question", "what do you mean". */
+    const REPEAT_ASK = /\b(repeat (that|it|the question)|say (that|it) again|what was the question|(missed|didn'?t (hear|catch)) (the|that|your) question|come again|pardon|sorry,? what|what do you mean)\b|^\W*repeat\W*$/i;
+    /**
+     * The learner's answer to a quiz. Asking for the question again (or "what do you mean") is not an answer:
+     * Chalky asks it again and keeps waiting, with no grade and nothing on the record.
+     */
+    const awaitAnswer = async (quiz: string, ask: string, beatId: string | null): Promise<string | null> => {
+      for (;;) {
+        const a = await awaitTurn(abort.signal);
+        if (a === null || abort.signal.aborted || !REPEAT_ASK.test(a)) return a;
+        logEv({ kind: "quiz-repeat", quiz, beatId, said: a });
+        setStatus("speaking");
+        await sayLine(ask);
+        setStatus("waiting");
+      }
+    };
+    /** The quiz route, with the wait logged (quiz-grading, quiz-graded with ms). */
+    const gradeQuiz = async (quiz: string, beatId: string | null, body: Record<string, unknown>) => {
+      const t0g = performance.now();
+      logEv({ kind: "quiz-grading", quiz, beatId });
+      const g = await post("/api/quiz", body)
+        .then((r) => r.json())
+        .catch((e) => ({ error: String(e) }));
+      logEv({ kind: "quiz-graded", quiz, beatId, ms: Math.round(performance.now() - t0g), ...(g.error ? { error: g.error } : {}) });
+      return g;
+    };
+    /** Feedback said aloud, logged as it starts and ends (with how long it took to say). */
+    const sayFeedback = (quiz: string, beatId: string | null, text: string) => {
+      const t0f = performance.now();
+      logEv({ kind: "quiz-feedback", quiz, beatId, text });
+      return sayLine(text).then(() => logEv({ kind: "quiz-feedback-done", quiz, beatId, ms: Math.round(performance.now() - t0f) }));
+    };
     /** The cursor on the wall clock (after a line has started speaking, which resets it). */
     const cursorNow = (steps: CursorStep[]) => {
       if (!steps.length) return;
@@ -1756,7 +1793,7 @@ export default function Lesson() {
       setStatus("speaking");
       await sayLine(ask);
       setStatus("waiting");
-      const answer = await awaitTurn(abort.signal);
+      const answer = await awaitAnswer("predict", ask, beatId);
       if (abort.signal.aborted) return;
       if (answer !== null && STOP_ASKING.test(answer)) {
         socraticOff = true;
@@ -1773,15 +1810,13 @@ export default function Lesson() {
       }
       logEv({ kind: "learner", via: inputViaRef.current, role: "socratic answer", beatId, text: answer });
       setStatus("replying");
-      const g = await post("/api/quiz", { kind: "predict", socratic: true, question: q, ask, answer, after: beatsAfter(i) })
-        .then((r) => r.json())
-        .catch((e) => ({ error: String(e) }));
+      const g = await gradeQuiz("predict", beatId, { kind: "predict", socratic: true, question: q, ask, answer, after: beatsAfter(i) });
       if (g.error || typeof g.feedback !== "string") {
         logEv({ kind: "quiz-error", quiz: "predict", socratic: true, error: g.error ?? "no feedback" });
         return;
       }
       setStatus("speaking");
-      const spoken = sayLine(g.feedback);
+      const spoken = sayFeedback("predict", beatId, g.feedback);
       const section = sectionBeats(i);
       const drop = g.verdict === "right" ? ((g.covered ?? []) as number[]).map((n) => section[n - 1]).filter((b): b is BeatState => !!b && b.beat.mode !== "draw") : [];
       for (const b of drop) list.splice(list.indexOf(b), 1);
@@ -1810,7 +1845,8 @@ export default function Lesson() {
       const beatId = list[i]?.beat.id ?? null;
       const v = boardRef.current;
       const items = v.list
-        .filter((e) => v.boxes[e.id] && v.labels?.[e.id] && e.label && e.label !== e.kind && e.label.length <= 40)
+        // Only names a learner could say: never an id-like "0 of Wq|Wk|Wv".
+        .filter((e) => v.boxes[e.id] && v.labels?.[e.id] && e.label && e.label !== e.kind && e.label.length <= 40 && !/\||^\d+ of /.test(e.label))
         .slice(0, 4)
         // The answer is the label as a word or two, not an id ("sine-wave" -> "sine wave").
         .map((e, k) => ({ n: k + 1, id: e.id, answer: e.label.replace(/[-_]+/g, " ").trim(), box: v.boxes[e.id], cover: v.labels![e.id] }));
@@ -1838,7 +1874,7 @@ export default function Lesson() {
         setStatus("speaking");
         await sayLine(ask);
         setStatus("waiting");
-        const answer = await awaitTurn(abort.signal);
+        const answer = await awaitAnswer(kind, ask, beatId);
         if (abort.signal.aborted) return;
         if (answer === null || SKIP_QUIZ.test(answer)) {
           const line = `No problem: ${items.map((it) => `${["", "one", "two", "three", "four"][it.n] ?? it.n} is ${it.answer}`).join(", ")}.`;
@@ -1851,9 +1887,7 @@ export default function Lesson() {
         }
         logEv({ kind: "learner", via: inputViaRef.current, role: "quiz answer", beatId, text: answer });
         setStatus("replying");
-        const g = await post("/api/quiz", { kind: "label", question: q, items: items.map(({ n, id, answer }) => ({ n, id, answer })), answer, inkMarks: inkMarks() })
-          .then((r) => r.json())
-          .catch((e) => ({ error: String(e) }));
+        const g = await gradeQuiz(kind, beatId, { kind: "label", question: q, items: items.map(({ n, id, answer }) => ({ n, id, answer })), answer, inkMarks: inkMarks() });
         if (g.error || typeof g.feedback !== "string") {
           logEv({ kind: "quiz-error", quiz: kind, error: g.error ?? "no feedback" });
           setQuizMarks(null);
@@ -1861,7 +1895,7 @@ export default function Lesson() {
         }
         // Feedback, the cursor circling each number as it is judged; then the labels come back.
         setStatus("speaking");
-        const spoken = sayLine(g.feedback);
+        const spoken = sayFeedback(kind, beatId, g.feedback);
         await sleep(150);
         cursorNow(items.map((it, k) => ({ t: 0.4 + k * 1.2, target: it.id, gesture: "circle" as const })));
         await spoken;
@@ -1873,7 +1907,7 @@ export default function Lesson() {
         setStatus("speaking");
         await sayLine(ask);
         setStatus("waiting");
-        const answer = await awaitTurn(abort.signal);
+        const answer = await awaitAnswer(kind, ask, beatId);
         if (abort.signal.aborted) return;
         const after = beatsAfter(i);
         if (answer === null || SKIP_QUIZ.test(answer)) {
@@ -1882,15 +1916,13 @@ export default function Lesson() {
         }
         logEv({ kind: "learner", via: inputViaRef.current, role: "quiz answer", beatId, text: answer });
         setStatus("replying");
-        const g = await post("/api/quiz", { kind: "predict", question: q, ask, answer, after })
-          .then((r) => r.json())
-          .catch((e) => ({ error: String(e) }));
+        const g = await gradeQuiz(kind, beatId, { kind: "predict", question: q, ask, answer, after });
         if (g.error || typeof g.feedback !== "string") {
           logEv({ kind: "quiz-error", quiz: kind, error: g.error ?? "no feedback" });
           return;
         }
         setStatus("speaking");
-        await sayLine(g.feedback);
+        await sayFeedback(kind, beatId, g.feedback);
         record({ kind, asked: ask, answered: answer, score: g.score, right: g.right, missing: g.missing, beatId, at: new Date().toISOString(), verdict: g.verdict }, g);
         return;
       }
@@ -1918,6 +1950,11 @@ export default function Lesson() {
             if (over) return;
             if (t === null) return finish("done");
             if (SKIP_QUIZ.test(t)) return finish("skip");
+            if (REPEAT_ASK.test(t)) {
+              logEv({ kind: "quiz-repeat", quiz: kind, beatId, said: t });
+              await sayLine(ask);
+              continue;
+            }
             said = `${said} ${t}`.trim();
             if (DONE.test(t)) return finish("done");
           }
@@ -1936,9 +1973,7 @@ export default function Lesson() {
       const rubric = sectionRubric(i);
       logEv({ kind: "learner", via: strokes.length ? "ink" : inputViaRef.current, role: "quiz drawing", beatId, text: `${strokes.length} stroke(s)${said ? `; said "${said}"` : ""}` });
       setStatus("replying");
-      const grading = post("/api/quiz", { kind: "sketch", question: q, ask, rubric, ...(image ? { image } : {}), inkMarks: inkMarks(), board: v.list.map((e) => e.id), answer: said })
-        .then((r) => r.json())
-        .catch((e) => ({ error: String(e) }));
+      const grading = gradeQuiz(kind, beatId, { kind: "sketch", question: q, ask, rubric, ...(image ? { image } : {}), inkMarks: inkMarks(), board: v.list.map((e) => e.id), answer: said });
       setStatus("speaking");
       await sayLine("Let me look at that.");
       const g = await grading;
@@ -1947,7 +1982,7 @@ export default function Lesson() {
         return;
       }
       setStatus("speaking");
-      const spoken = sayLine(g.feedback);
+      const spoken = sayFeedback(kind, beatId, g.feedback);
       await sleep(150);
       const there = (g.ids ?? []).filter((id: string) => boardRef.current.boxes[id]);
       cursorNow(there.map((id: string, k: number) => ({ t: 0.4 + k * 1.4, target: id, gesture: "circle" as const })));
