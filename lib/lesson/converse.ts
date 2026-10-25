@@ -14,7 +14,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
 import { cleanId } from "./planner";
 import { isHesitant, isQuestion, isResume, isStillLost } from "./resume";
-import { NOTE_RULES, withVoiceRules } from "./voice";
+import { NOTE_RULES } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type CallLog, type LearnerRecord } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
@@ -579,11 +580,11 @@ function describeInk(ink: ConverseInk | undefined): string {
   return lines.join(" ");
 }
 
-function params(model: string, input: ConverseInput): Anthropic.MessageStreamParams {
+async function params(model: string, input: ConverseInput): Promise<Anthropic.MessageStreamParams> {
   const base: Anthropic.MessageStreamParams = {
     model,
     max_tokens: 700,
-    system: [{ type: "text", text: `${withVoiceRules(SYSTEM)}\n\n${NOTE_RULES}`, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: `${await withVoiceRules(SYSTEM)}\n\n${NOTE_RULES}`, cache_control: { type: "ephemeral" } }],
     output_config: { effort: "low" },
     messages: [
       {
@@ -657,7 +658,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
     try {
       const tracked = trackCall("converse", model);
       callsInFlight = tracked;
-      const stream = tracked.watch(tracked.client.messages.stream(params(model, input), { signal }));
+      const stream = tracked.watch(tracked.client.messages.stream(await params(model, input), { signal }));
       for await (const event of stream) {
         if (signal.aborted) break;
         if (event.type === "content_block_delta" && event.delta.type === "text_delta") {

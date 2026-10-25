@@ -5,7 +5,7 @@
  */
 import "server-only";
 import { anthropic } from "./anthropic";
-import { withVoiceRules } from "./voice";
+import { withVoiceRules } from "./preference-prompt";
 
 const MODEL = process.env.OPENER_MODEL || "claude-haiku-5-5";
 const TIMEOUT_MS = 3000;
@@ -20,7 +20,7 @@ export async function opener(question: string): Promise<{ say: string; ms: numbe
       {
         model: MODEL,
         max_tokens: 200,
-        system: withVoiceRules(SYSTEM),
+        system: await withVoiceRules(SYSTEM),
         thinking: { type: "adaptive" },
         output_config: { effort: "low" },
         messages: [{ role: "user", content: question }],
