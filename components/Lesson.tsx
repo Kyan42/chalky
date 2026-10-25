@@ -880,7 +880,8 @@ export default function Lesson() {
 
     const frame = () => {
       raf = requestAnimationFrame(frame);
-      if (!audio) return;
+      // Paused: the caption holds the word it reached (the held clock can report a few ms more).
+      if (!audio || pausedRef.current) return;
       const t = audio.position();
       if (t < 0) return;
       const w = wordAt(t, timestamps);
@@ -1965,6 +1966,7 @@ export default function Lesson() {
         cursorClockRef.current = () => Math.max(0, audio?.position() ?? 0);
         const frame = () => {
           raf = requestAnimationFrame(frame);
+          if (pausedRef.current) return;
           const t = audio?.position() ?? -1;
           if (t >= 0) {
             const w = wordAt(t, all);
@@ -2846,7 +2848,6 @@ export default function Lesson() {
     if (window.matchMedia("(max-width: 600px)").matches) setTyping(false);
   }, []);
   /** The mascot: chalk in hand on the start screen; talking while Chalky's audio plays, thinking otherwise. */
-  const mascotSource = showWelcome ? "/mascot/chalk-in-hand.webm" : speakingAudio ? "/mascot/talking.webm" : "/mascot/thinking.webm";
   const mascotState = showWelcome ? "chalk-in-hand" : speakingAudio ? "talking" : "thinking";
   const enter = { duration: 0.75, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] };
 
@@ -2994,7 +2995,15 @@ export default function Lesson() {
               animate={{ opacity: 1, y: 0, rotateX: 0, scale: 1, filter: "blur(0px)" }}
               transition={enter}
             >
-              <video key={mascotSource} className="tutor-mascot" src={mascotSource} autoPlay muted loop playsInline aria-label={showWelcome ? "Chalky holding chalk" : speakingAudio ? "Chalky talking" : "Chalky thinking"} />
+              {showWelcome ? (
+                <video className="tutor-mascot" src="/mascot/chalk-in-hand.webm" autoPlay muted loop playsInline aria-label="Chalky holding chalk" />
+              ) : (
+                // Both teaching videos stay mounted and playing; only one shows, so the swap at every beat never flashes a blank frame.
+                <>
+                  <video className="tutor-mascot" src="/mascot/talking.webm" autoPlay muted loop playsInline style={{ display: speakingAudio ? "block" : "none" }} aria-label="Chalky talking" />
+                  <video className="tutor-mascot" src="/mascot/thinking.webm" autoPlay muted loop playsInline style={{ display: speakingAudio ? "none" : "block" }} aria-label="Chalky thinking" />
+                </>
+              )}
             </motion.div>
           </div>
         </section>
