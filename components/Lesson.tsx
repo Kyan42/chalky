@@ -456,7 +456,13 @@ export default function Lesson() {
     const show = async (currentElements: PresetElement[]) => {
       if (!compile) return;
       lastTick = -1;
-      await showDocument(compile(currentElements));
+      try {
+        await showDocument(compile(currentElements));
+      } catch (e) {
+        // The player refused the document: keep speaking with the board as it was.
+        console.warn("[board] player", e);
+        logRef.current({ kind: "board-error", beatId: state.beat.id, error: String((e as Error).message ?? e).slice(0, 200), stage: "player" });
+      }
     };
 
     const frame = () => {
@@ -1340,8 +1346,29 @@ export default function Lesson() {
           list[bi].beat.mode === "talk"
             ? null
             : (currentElements) => {
-                const groups = sceneGroups(list, bi, currentElements);
-                const compiled = compileScene(groups);
+                let groups = sceneGroups(list, bi, currentElements);
+                let compiled: ReturnType<typeof compileScene> = null;
+                try {
+                  compiled = compileScene(groups);
+                } catch (e) {
+                  // One bad drawing (a NaN size, say) must not end the lesson: keep the board without it.
+                  logEv({ kind: "board-error", beatId: list[bi].beat.id, error: String((e as Error).message ?? e).slice(0, 200) });
+                  console.warn("[board]", e);
+                  // Find the drawing(s) that break it by compiling each on its own, and leave only those out.
+                  groups = groups.map((g) => {
+                    try {
+                      compileScene([g]);
+                      return g;
+                    } catch {
+                      return [];
+                    }
+                  });
+                  try {
+                    compiled = compileScene(groups);
+                  } catch {
+                    compiled = null;
+                  }
+                }
                 if (!compiled) return null;
                 const scene = list[bi].beat.scene;
                 showBoard(boardView(compiled.report, groups.flat(), list.filter((b) => b.beat.scene === scene).flatMap((b) => b.beat.adds)));
