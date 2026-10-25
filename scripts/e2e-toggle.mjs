@@ -1,5 +1,6 @@
 // Space as a toggle, and a quick second utterance merging into the pending question (saved plan).
 //   BASE_URL=http://localhost:3006 LIVE_RUNS=<that server's experiments/live-runs> node scripts/e2e-toggle.mjs
+//   QUERY=&voice=1 runs it with voice barge-in on.
 import { chromium } from "playwright";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -44,7 +45,7 @@ const type = async (text) => {
   await page.click('[data-testid="ask"]');
 };
 try {
-  await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=6&intake=0`);
+  await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-paced&beats=6&intake=0${process.env.QUERY ?? ""}`);
   await type("Why is the sky blue?");
   await page.click("body", { position: { x: 5, y: 400 } }); // focus off the text box so Space reaches the page
   const b2 = await waitFor((s) => s.beat === "b2" && s.status === "Speaking" && s.word >= 5, 120000);
