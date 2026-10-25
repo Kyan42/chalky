@@ -86,7 +86,7 @@ async function json<T>(system: string, user: string, schema: object, maxTokens: 
  * shape. It is the lesson's first sound, so the budget is tight; plain text (no
  * JSON schema) is the fastest way to get one line back.
  */
-export async function intakeQuestion(question: string, signal?: AbortSignal, budgetMs = Number(process.env.INTAKE_BUDGET_MS) || 1000): Promise<IntakeQuestion> {
+export async function intakeQuestion(question: string, signal?: AbortSignal, budgetMs = Number(process.env.INTAKE_BUDGET_MS) || 1500): Promise<IntakeQuestion> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(budgetMs);

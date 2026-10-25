@@ -962,7 +962,7 @@ export default function Lesson() {
           {
             utterance,
             question: q,
-            beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode })),
+            beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, section: s.beat.section, check: s.beat.check })),
             beatIndex: i,
             wordIndex,
             board: boardRef.current.list,
