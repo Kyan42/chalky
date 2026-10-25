@@ -13,6 +13,7 @@
     "@clayzo/animation": "^0.3.18",
     "@clayzo/webgl-player": "^0.3.18",
     "@moss-js/moss": "^1.21.0",
+    "apify-client": "^2.25.0",
     "convex": "^1.48.0",
     "next": "^15.5.28",
     "perfect-freehand": "^1.2.3",
