@@ -19,8 +19,15 @@ import type { PlannedBeat } from "@/lib/lesson/types";
 export const BLOCK_INDEX = process.env.MOSS_BLOCK_INDEX || "chalky-blocks";
 /** Embedding model the index is built with: moss-minilm (fast) or moss-mediumlm (more accurate). */
 export const BLOCK_MODEL = process.env.MOSS_BLOCK_MODEL || "moss-minilm";
-/** A query that takes longer than this is abandoned for the full catalog. */
-const QUERY_BUDGET_MS = 150;
+/**
+ * How long a beat being drawn waits for its Moss pick before taking the keyword match. A query takes
+ * 5-7 ms alone and 17-90 ms with six at once inside the server, but anything that blocks the event loop
+ * (a dev-server compile, a big JSON parse) delays it and its timer together: 150 ms lost most beats of
+ * a live lesson. Most beats don't wait at all: prefetchBlocks() starts the query when the planner
+ * emits the beat, seconds before it is drawn, with the longer PREFETCH_BUDGET_MS.
+ */
+export const QUERY_BUDGET_MS = Number(process.env.MOSS_BLOCK_BUDGET_MS) || 400;
+const PREFETCH_BUDGET_MS = 3000;
 /**
  * Hybrid weight, 1 = all semantic, 0 = all keyword (Moss default 0.8). Briefs name their things
  * literally ("carbon dioxide", "sugar"), so more keyword weight helps: at 0.8 the ten briefs in
@@ -100,7 +107,7 @@ export function warmBlockIndex(): void {
  * The k blocks whose catalog entries best match `query`, best first, with Moss scores. Never waits
  * on a load unless `waitForLoad` (scripts); a live beat just falls back while the index loads.
  */
-export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?: boolean; force?: boolean } = {}): Promise<Retrieval> {
+export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?: boolean; force?: boolean; budgetMs?: number } = {}): Promise<Retrieval> {
   if (!hasMossKeys()) return { status: "no-key", hits: null, ms: 0 };
   if (!opts.force && retrievalMode() === "all") return { status: "off", hits: null, ms: 0 };
   const state = mossState()!;
@@ -110,10 +117,11 @@ export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?:
   const ms = () => Math.round((performance.now() - t0) * 10) / 10;
   if (state.error) return { status: "error", hits: null, ms: ms(), error: state.error };
   if (!state.loaded) return { status: "loading", hits: null, ms: ms() };
+  const budgetMs = opts.budgetMs ?? QUERY_BUDGET_MS;
   try {
-    const budget = new Promise<null>((resolve) => setTimeout(() => resolve(null), QUERY_BUDGET_MS));
+    const budget = new Promise<null>((resolve) => setTimeout(() => resolve(null), budgetMs));
     const result = await Promise.race([state.client.query(BLOCK_INDEX, query, { topK: k, alpha: QUERY_ALPHA }), budget]);
-    if (!result) return { status: "error", hits: null, ms: ms(), error: `over ${QUERY_BUDGET_MS} ms` };
+    if (!result) return { status: "error", hits: null, ms: ms(), error: `over ${budgetMs} ms` };
     const hits = result.docs.filter((d) => blockById(d.id)).map((d) => ({ id: d.id, score: Math.round(d.score * 1000) / 1000 }));
     return { status: "ok", hits, ms: ms(), mossMs: result.timeTakenInMs };
   } catch (e) {
@@ -136,25 +144,60 @@ export function namedBlocks(beat: Pick<PlannedBeat, "adds">): Block[] {
   });
 }
 
-/**
- * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches
- * and the top keyword matches, or just keyword matches when Moss is off, keyless, loading or
- * failing. A point beat adds nothing, so
- * it gets none. Logs the pick and its latency.
- */
-export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[]; retrieval: Retrieval }> {
+type BeatBlocks = { blocks: Block[]; retrieval: Retrieval; prefetched?: boolean };
+
+/** Picks started when a beat was planned, by mode and query (the same beat comes back to /api/draw). */
+const gp = globalThis as typeof globalThis & { __chalkyBlockPicks?: Map<string, Promise<BeatBlocks>>; __chalkyBlockStats?: Record<string, number> };
+const picks = (gp.__chalkyBlockPicks ??= new Map());
+const stats = (gp.__chalkyBlockStats ??= { beats: 0, moss: 0, prefetched: 0, keyword: 0 });
+const pickKey = (beat: PlannedBeat) => `${beat.mode}|${beatQuery(beat)}`;
+
+async function pick(beat: PlannedBeat, budgetMs: number, waitForLoad: boolean): Promise<BeatBlocks> {
   if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
   const query = beatQuery(beat);
-  const retrieval = await relevantBlocks(query, BEAT_K);
-  if (!retrieval.hits) {
-    const blocks = [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])];
-    if (retrieval.status !== "off" && retrieval.status !== "no-key") console.warn(`[moss] ${beat.id}: ${retrieval.status}${retrieval.error ? ` (${retrieval.error})` : ""}; keyword match`);
-    console.log(`[blocks] ${beat.id}: keywords -> ${blocks.map((b) => b.id).join(", ") || "none"}`);
-    return { blocks, retrieval };
-  }
+  const state = waitForLoad && retrievalMode() === "moss" ? mossState() : null;
+  // Off the critical path, a beat planned while the index loads can wait for it (within the budget).
+  if (state && !state.loaded) await Promise.race([state.ready, new Promise((r) => setTimeout(r, budgetMs))]);
+  const retrieval = await relevantBlocks(query, BEAT_K, { budgetMs });
+  if (!retrieval.hits) return { blocks: [...new Set([...namedBlocks(beat), ...keywordBlocks(query, BEAT_K)])], retrieval };
   // Plus the keyword match's top few: an embedding can rank a literal "water molecules" below the
   // plant it is in (scripts/test-moss-blocks.ts), and a keyword match never does.
-  const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])];
-  console.log(`[moss] ${beat.id}: ${retrieval.ms} ms -> ${blocks.map((b) => b.id).join(", ")} (${retrieval.hits.map((h) => `${h.id} ${h.score}`).join(", ")})`);
-  return { blocks, retrieval };
+  return { blocks: [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])], retrieval };
+}
+
+/** Starts a beat's block pick as soon as it is planned (/api/plan, /api/amend), so its draw finds it done. */
+export function prefetchBlocks(beat: PlannedBeat): void {
+  if (beat.mode === "point" || retrievalMode() !== "moss") return;
+  const key = pickKey(beat);
+  if (picks.has(key)) return;
+  if (picks.size >= 400) picks.delete(picks.keys().next().value!);
+  picks.set(key, pick(beat, PREFETCH_BUDGET_MS, true).then((r) => ({ ...r, prefetched: true })));
+}
+
+/**
+ * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches
+ * and the top keyword matches, or just keyword matches when Moss is off, keyless, loading, failing or
+ * over budget. The pick prefetchBlocks() started when the beat was planned, if any; a point beat adds
+ * nothing, so it gets none. Logs the pick, its latency and the running Moss hit rate.
+ */
+export async function blocksForBeat(beat: PlannedBeat): Promise<BeatBlocks> {
+  if (beat.mode === "point") return { blocks: [], retrieval: { status: "off", hits: null, ms: 0 } };
+  const t0 = performance.now();
+  const early = picks.get(pickKey(beat));
+  const late = new Promise<null>((r) => setTimeout(() => r(null), QUERY_BUDGET_MS));
+  const got = (early && (await Promise.race([early, late]))) || (early ? null : await pick(beat, QUERY_BUDGET_MS, false));
+  const result: BeatBlocks = got ?? { blocks: [...new Set([...namedBlocks(beat), ...keywordBlocks(beatQuery(beat), BEAT_K)])], retrieval: { status: "error", hits: null, ms: QUERY_BUDGET_MS, error: "prefetch still running" } };
+  const waited = Math.round(performance.now() - t0);
+  const r = result.retrieval;
+  stats.beats++;
+  if (r.hits) stats.moss++;
+  else stats.keyword++;
+  if (result.prefetched) stats.prefetched++;
+  const rate = `moss ${stats.moss}/${stats.beats} beats, ${stats.prefetched} prefetched, budget ${QUERY_BUDGET_MS} ms`;
+  if (r.hits) console.log(`[moss] ${beat.id}: ${result.prefetched ? `prefetched (query ${r.ms} ms), waited ${waited} ms` : `${r.ms} ms`} -> ${result.blocks.map((b) => b.id).join(", ")} (${r.hits.map((h) => `${h.id} ${h.score}`).join(", ")}) [${rate}]`);
+  else {
+    if (r.status !== "off" && r.status !== "no-key") console.warn(`[moss] ${beat.id}: ${r.status}${r.error ? ` (${r.error})` : ""}; keyword match [${rate}]`);
+    console.log(`[blocks] ${beat.id}: keywords -> ${result.blocks.map((b) => b.id).join(", ") || "none"}`);
+  }
+  return result;
 }
