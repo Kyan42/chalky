@@ -13,7 +13,7 @@
  */
 import { MossClient, type DocumentInfo } from "@moss-js/moss";
 import { BLOCKS, blockById, type Block } from "@/lib/blocks";
-import { keywordBlocks } from "@/lib/blocks/catalog";
+import { foldNumbered, keywordBlocks } from "@/lib/blocks/catalog";
 import type { PlannedBeat } from "@/lib/lesson/types";
 
 export const BLOCK_INDEX = process.env.MOSS_BLOCK_INDEX || "chalky-blocks";
@@ -29,6 +29,8 @@ const QUERY_BUDGET_MS = 150;
 const QUERY_ALPHA = Number(process.env.MOSS_BLOCK_ALPHA) || 0.5;
 /** How many retrieved blocks a drawn beat sees (plus any named by id in its adds). */
 const BEAT_K = Number(process.env.CHALKY_BLOCK_K) || 5;
+/** How many keyword matches join Moss's pick (lib/blocks/catalog.ts keywordBlocks). */
+const KEYWORD_K = 3;
 
 export type RetrievalMode = "moss" | "all";
 export type BlockHit = { id: string; score: number };
@@ -43,13 +45,19 @@ export function retrievalMode(): RetrievalMode {
   return process.env.CHALKY_BLOCK_RETRIEVAL === "all" || !hasMossKeys() ? "all" : "moss";
 }
 
-/** The text Moss embeds for a block: what it is, what it's about, its parts and anchor names. */
+const STANDARD_ANCHORS = new Set(["center", "top", "bottom", "left", "right"]);
+
+/**
+ * The text Moss embeds for a block: its title and topic words first, then what it is, its parts and
+ * anchor names, with numbered runs folded ("cell 1-1…cell 7-18") so a block with 118 parts is
+ * still about its title.
+ */
 export function blockDoc(b: Block): DocumentInfo {
-  const parts = b.parts.map((p) => p.label).join(", ");
-  const anchors = Object.keys(b.anchors).join(", ");
+  const parts = foldNumbered([...new Set(b.parts.map((p) => p.label))]);
+  const anchors = foldNumbered(Object.keys(b.anchors).filter((a) => !STANDARD_ANCHORS.has(a)));
   return {
     id: b.id,
-    text: `${b.title}: ${b.describe}. About: ${b.tags.join(", ")}. Parts: ${parts}. Anchors: ${anchors}.`,
+    text: `${b.title}. About: ${b.tags.join(", ")}. ${b.describe}. Parts: ${parts}.${anchors ? ` Anchors: ${anchors}.` : ""}`,
     metadata: { blockId: b.id, title: b.title },
   };
 }
@@ -129,8 +137,9 @@ export function namedBlocks(beat: Pick<PlannedBeat, "adds">): Block[] {
 }
 
 /**
- * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches,
- * or keyword matches when Moss is off, keyless, loading or failing. A point beat adds nothing, so
+ * The few blocks one beat's drawer prompt lists: the ones its adds name, then Moss's best matches
+ * and the top keyword matches, or just keyword matches when Moss is off, keyless, loading or
+ * failing. A point beat adds nothing, so
  * it gets none. Logs the pick and its latency.
  */
 export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[]; retrieval: Retrieval }> {
@@ -143,7 +152,9 @@ export async function blocksForBeat(beat: PlannedBeat): Promise<{ blocks: Block[
     console.log(`[blocks] ${beat.id}: keywords -> ${blocks.map((b) => b.id).join(", ") || "none"}`);
     return { blocks, retrieval };
   }
-  const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!)])];
+  // Plus the keyword match's top few: an embedding can rank a literal "water molecules" below the
+  // plant it is in (scripts/test-moss-blocks.ts), and a keyword match never does.
+  const blocks = [...new Set([...namedBlocks(beat), ...retrieval.hits.map((h) => blockById(h.id)!), ...keywordBlocks(query, KEYWORD_K)])];
   console.log(`[moss] ${beat.id}: ${retrieval.ms} ms -> ${blocks.map((b) => b.id).join(", ")} (${retrieval.hits.map((h) => `${h.id} ${h.score}`).join(", ")})`);
   return { blocks, retrieval };
 }
