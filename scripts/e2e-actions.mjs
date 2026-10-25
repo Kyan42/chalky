@@ -22,7 +22,7 @@ const clip = async (name, text) => readFileSync((await speechWav(join(clipDir, `
 const LINES = {
   a: { learn: "I want to learn photosynthesis.", intake: "I know plants need sunlight, but not much else." },
   b: { quick: "Is the sky blue because it reflects the ocean?", more: "Okay, teach me properly." },
-  c: { remark: "Huh, that's cool." },
+  c: { remark: "Huh, that's cool.", why: "Why is the blue one shorter?" },
   d: { back: "Wait, show me where the diagram of the two waves was." },
   e: { learn: "I want to learn why the sky is blue.", intake: "I always get confused about why it isn't violet.", lost: "I still don't get why the sky isn't violet.", next: "Can you teach me how rainbows work?" },
 }[SCRIPT];
@@ -225,6 +225,16 @@ try {
     check("a remark gets a one-liner and nothing else", !!r1 && r1.text.split(/(?<=[.!?])\s+/).length <= 2 && /^say(, resume)?$/.test(names(r1)), names(r1));
     const on = await waitFor((s) => s.beat === "b3" && s.status === "Speaking", 60000);
     check("the lesson goes on", !!on, on ? `now ${on.beat}` : (await st()).status);
+    // A question mid-lesson is answered and waits; it never moves on like a confirm.
+    await page.waitForTimeout(1500);
+    await page.keyboard.down("Space");
+    const sec2 = await say("why");
+    await page.waitForTimeout(sec2 * 1000 + 150);
+    await page.keyboard.up("Space");
+    const rs = await waitReplies(2, 40000);
+    const r2 = rs[1];
+    console.log(`        reply: "${r2?.text}" [${names(r2)}] level ${r2?.level}, resume ${r2?.resume}`);
+    check("a question gets an answer and a wait, not a confirm", !!r2 && r2.level !== "confirm" && r2.resume === "wait" && !/^(good|great) question/i.test(r2.text), `${r2?.level} / ${r2?.resume}`);
   }
 } catch (e) {
   console.log("ERROR", e.message);

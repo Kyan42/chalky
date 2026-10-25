@@ -139,6 +139,8 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
           .slice(0, 4)
       : [];
 
+  // Nothing in this scene to point at: say it, rather than send a drawing with nothing to draw.
+  if (mode === "point" && !points.length) mode = "talk";
   const region = mode === "talk" ? FULL_BOARD : (cleanRegion(b.region) ?? FULL_BOARD);
   st.scene = scene;
   const check = b.check === true;
@@ -275,7 +277,7 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
     ? `REWRITE THE LESSON from beat ${r.index + 1} on, tailored to what the learner just told you (above): beats ${r.index + 1} onward are dropped, and the beats before stay as they are (beat 1 is already being spoken). Write the rest of a whole lesson, 10 to 16 beats, by the same rules as a full lesson (sections with goals, check-ins with bridges, a recap at the end). It continues on the same board: stay in scene ${newScene} for a while, drawing in free space beside what is already there (you may point at those ids), and start new scenes after it as the lesson moves on.`
     : r.op === "insert_after"
       ? `Write a short DETOUR of 2 to 4 beats that will be spoken right after beat ${r.index + 1}, before the lesson goes on. It explains the same idea from a fresh angle (a concrete case, an analogy, real numbers), following the note above, and does not move the lesson forward. ${where} Its last beat ends with a short check-in question and has "check": true.`
-      : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. Start on a clean board: the first beat is a draw beat in scene ${newScene}; later scenes count up from there. Add a check-in after roughly every fourth beat.`;
+      : `REPLACE the rest of the lesson: beats ${r.index + 1} onward are dropped. Write 4 to 8 beats that take the learner from where they are to the end of the lesson by a different route, following the note above, including a short recap at the end. It continues on the board the learner is looking at: stay in scene ${newScene} (point at what is drawn there, draw new things in free space) until a new picture is needed, then start new scenes counting up from ${newScene + 1}. Add a check-in after roughly every fourth beat.`;
   return [
     `The lesson answers: ${r.question}`,
     `The lesson planned so far:\n${lines.join("\n")}`,
@@ -295,9 +297,11 @@ function amendPrompt(r: AmendRequest, newScene: number): string {
 export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  const maxScene = r.beats.reduce((m, b) => Math.max(m, b.scene || 0), 0);
-  // The intake rewrite continues on beat 1's board; every other change starts on a clean one.
-  const newScene = r.intake ? Math.max(1, maxScene) : maxScene + 1;
+  // A new ending (and the intake's rewrite) continues on the board of the last beat it keeps: the beats it
+  // drops are never drawn, so their scenes don't count. A detour goes after everything planned.
+  const kept = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : r.beats;
+  const maxScene = Math.max(1, kept.reduce((m, b) => Math.max(m, b.scene || 0), 0));
+  const newScene = r.op === "replace_from" ? maxScene : maxScene + 1;
   const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
   const stream = tracked.client.messages.stream(
     {
@@ -323,7 +327,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   });
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
   const st: PlanState = { scene: maxScene, known: new Map() };
-  if (r.intake) st.known.set(newScene, new Set(r.beats.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
+  if (r.op === "replace_from") st.known.set(newScene, new Set(kept.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
   const here = detourScene(r, maxScene);
   if (here.stay) st.known.set(here.scene, new Set(here.drawn.flatMap((b) => b.adds.map((a) => a.id))));
   /** The scene the detour's drawing beats use: decided by its first one (the same board, if allowed, or a clean one). */
@@ -346,7 +350,9 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
       obj.scene = detourAt;
     } else if (n === 0 && obj.mode !== "talk" && !r.intake) obj.scene = Math.max(newScene, Number(obj.scene) || 0);
     // The first beat of a change must not point: on a new board there is nothing to point at yet.
-    if (n === 0 && obj.mode === "point" && !(r.op === "insert_after" && obj.scene === here.scene && here.stay)) {
+    // (Staying on a board that has things on it, a first point beat is fine: checkBeat keeps only real ids.)
+    const onKnownBoard = (r.op === "insert_after" && obj.scene === here.scene && here.stay) || (r.op === "replace_from" && (Number(obj.scene) || newScene) === newScene && (st.known.get(newScene)?.size ?? 0) > 0);
+    if (n === 0 && obj.mode === "point" && !onKnownBoard) {
       const note = `${r.prefix}-1 was a point beat with nothing on its board; spoken as talk`;
       console.info(`[amend] ${note}`);
       notes.push(note);

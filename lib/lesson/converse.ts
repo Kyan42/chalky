@@ -13,7 +13,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
 import { cleanId } from "./planner";
-import { isResume, isStillLost } from "./resume";
+import { isHesitant, isQuestion, isResume, isStillLost } from "./resume";
 import { NOTE_RULES, withVoiceRules } from "./voice";
 import { describeLearner, type BeatMode, type CallLog, type LearnerRecord } from "./types";
 
@@ -201,6 +201,9 @@ Choosing:
 - At a check-in, they restate their understanding and it is right or close enough: "say" one short line ("Right, that's it.") and the lesson goes on.
 - Still lost on what you just explained: "amend" insert_after; still lost after a detour: "amend" replace_from.
 - A remark or a reaction mid-lesson: "say" one short sentence, and the lesson goes on.
+- A question is never just a "say" that moves on: answer it (point, or sketch what is missing) and end with a short check question ("ask"), then wait. Only when they also said to go on does the lesson continue.
+- A hesitant yes at a check-in ("yeah, I think so", "kind of"): ONE short sentence and the lesson goes on; do not re-explain, and do not add "carry on" or announce what is next.
+Never open with "good question", "great question" or similar, and never repeat their question back.
 - Off the lesson's path: answer briefly by the same rules and steer back.
 At most two spoken sentences, except a quick "say" answer may use three. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
@@ -262,7 +265,7 @@ function context(o: ConverseInput): string {
       "No lesson is running yet: the board is empty. This may be the learner's first words to you.",
       `Earlier exchanges in this conversation:\n${history}`,
       describeLearner(o.learner),
-      o.memory?.length ? `What this learner has said in earlier lessons (most relevant first; if it bears on this, say so in your reply or your intake question):\n${o.memory.map((m) => `- ${m}`).join("\n")}` : "",
+      o.memory?.length ? `What this learner has said in earlier lessons (most relevant first). If what they got stuck on before bears on this at all, name it in your reply or your intake question ("last time violet light tripped you up, so..."), briefly:\n${o.memory.map((m) => `- ${m}`).join("\n")}` : "",
       `The learner just said: "${o.utterance}"`,
     ]
       .filter(Boolean)
@@ -477,6 +480,11 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   let resume: ConverseResume = how ?? (check || goTo ? "wait" : "continue");
   // Going on at once would glide the camera straight back: after a go_to, always wait.
   if (goTo) resume = "wait";
+  // A question gets an answer and a wait, unless they also said to go on ("why? ok, keep going").
+  if (input.beats.length && isQuestion(input.utterance) && !isResume(input.utterance) && !/\b(go on|keep going|carry on|continue|move on)\b/i.test(input.utterance)) {
+    if (level === "confirm") level = "answer";
+    if (resume === "continue") resume = "wait";
+  }
   if (check && resume !== "wait") resume = "wait";
   if (escalated && resume === "wait") resume = "replay_beat";
   // The cleaned list, in the model's order, with what the executor will really do.
@@ -578,6 +586,14 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         capped = true;
         return null;
       }
+      // Never "Good question." first: say the answer.
+      if (!sentences) {
+        const trimmed = text.replace(/^(good|great|nice|excellent|interesting|fair|fun)\s+(question|one|point)\s*[-:,.!—]*\s*/i, "");
+        if (trimmed !== text) {
+          if (!trimmed) return null;
+          text = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+        }
+      }
       if (isMetaTalk(text)) {
         console.warn(`[converse] dropped a sentence that narrates the plan: "${text.slice(0, 160)}"`);
         return null;
@@ -617,7 +633,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
               if (ev) yield ev;
               capped = true;
             } else if (m) {
-              budget = sentenceBudget(names);
+              budget = isHesitant(input.utterance) ? 1 : sentenceBudget(names);
               yield { type: "actions", names, tMs: ms() };
               yield { type: "level", level: levelOf(names), tMs: ms() };
             }

@@ -38,7 +38,7 @@ import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSi
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
-import { isResume, isStillLost } from "@/lib/lesson/resume";
+import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
 import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
@@ -81,7 +81,7 @@ const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "
 const FILLER_AFTER_MS = 8000;
 const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching this out, just a moment."];
 /** A confirm that already looks ahead makes the bridge redundant. */
-const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up)\b/i;
+const LOOKS_AHEAD = /\b(now|next|let'?s|move on|moving on|back to|on to|onto|coming up|carry on|keep going|go on|onward|continue|on we go)\b/i;
 /** Answers to the intake question that mean "just start". */
 const SKIP_INTAKE = /^[^a-z0-9]*(just (explain|teach|tell|show)( me)?( it| this)?|nothing( really)?|no|nope|not (much|really)|none|go ahead|skip( it)?|start|let'?s go|whatever|no idea)[^a-z0-9]*$/i;
 
@@ -1856,6 +1856,13 @@ export default function Lesson() {
         history.push({ who: "learner", text: heardText });
         // A quick second utterance may be merged into this while the reply runs (see mergeRef).
         lastLearnerRef.current = { text: heardText, at: performance.now() };
+        // A hesitant yes is noted on the learner record (later replies and plans see it), not re-explained.
+        if (isHesitant(heardText)) {
+          const about = list[i]?.beat.check ? list[i].beat.say.split(/(?<=[.!?])\s+/).filter((x) => x.trim().endsWith("?")).pop() : list[i]?.beat.section;
+          learner.confusions = [...learner.confusions, `hesitant ("${heardText}") at: ${about ?? list[i]?.beat.say.slice(0, 80) ?? "the check-in"}`].slice(-5);
+          noteLearner();
+          logEv({ kind: "hesitation", text: heardText, beatId: list[i]?.beat.id ?? null });
+        }
         // A new question starts fresh: only "still lost" builds on the last answer (and its drafted detour).
         if (!isStillLost(heardText)) {
           escalation = 0;
@@ -2129,8 +2136,21 @@ export default function Lesson() {
         currentBeatIdRef.current = list[i].beat.id;
         setStatus("speaking");
         const bi = i;
+        // A point beat whose elements are on another scene's place: the camera goes there and the cursor
+        // circles them, instead of a drawing that has nothing to point at.
+        let elsewhere: string | null = null;
+        if (list[bi].beat.mode === "point" && list[bi].beat.points.length) {
+          const ids = list[bi].beat.points.map((p) => p.id);
+          const here = sceneBoards.get(list[bi].beat.scene);
+          if (!ids.some((id) => here?.boxes[id])) elsewhere = ids.find((id) => [...sceneBoards.values()].some((v) => v.boxes[id])) ?? null;
+          if (elsewhere) {
+            logEv({ kind: "point-elsewhere", beatId: list[bi].beat.id, element: elsewhere });
+            await goTo({ element: elsewhere }, bi - 1);
+            highlight([{ element: elsewhere }]);
+          }
+        }
         const compile: Compile | null =
-          list[bi].beat.mode === "talk"
+          list[bi].beat.mode === "talk" || elsewhere
             ? null
             : (currentElements) => {
                 let groups = sceneGroups(list, bi, currentElements);
