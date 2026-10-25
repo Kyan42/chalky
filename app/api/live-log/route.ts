@@ -12,7 +12,7 @@
  * GET /api/live-log → recent transcripts' summaries; ?id=<id> → one transcript.
  * Reads the files back for /log when there is no Convex deployment.
  */
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { convexConfigured, LEARNER_COOKIE, learnerIdFrom, mirrorLesson } from "@/lib/convexMirror";
 
@@ -57,7 +57,11 @@ export async function POST(request: Request) {
   }
   if (toFile) {
     await mkdir(DIR(), { recursive: true });
-    await writeFile(join(DIR(), `${id}.json`), JSON.stringify(JSON.parse(saved), null, 2));
+    // Two saves can overlap (the periodic one and the closing beacon): write aside, then swap in whole.
+    const path = join(DIR(), `${id}.json`);
+    const tmp = `${path}.${process.pid}-${Math.random().toString(36).slice(2, 8)}.tmp`;
+    await writeFile(tmp, JSON.stringify(JSON.parse(saved), null, 2));
+    await rename(tmp, path);
   }
   await mirrorLesson(saved, learnerId);
   const res = Response.json({ ok: true, path: toFile ? `experiments/live-runs/${id}.json` : null, learnerId, ...(endMarker ? { endMarker } : {}) });
