@@ -22,7 +22,7 @@ const SOCRATIC = process.env.SOCRATIC === "1";
 let openers = 0;
 /** Socratic: per section's question, the answers to give, one per try. */
 const SOCRATIC_PLAN = REAL
-  ? [["I think it's because the sky reflects the blue of the ocean.", "@next"], ["Just explain it, stop asking me."]]
+  ? [["I think it would make less of whatever it makes, because light is what powers it."]]
   : [["~Could you clarify the question?", "It's just plain white light, one single color.", "I still think white light is one color."], ["Just tell me."], ["About six times more, because of the fourth power."]];
 const FIXTURE = process.env.FIXTURE ?? "why-is-the-sky-blue-quizzes";
 const OUT = join(process.cwd(), "experiments/quiz", `cadence-${REAL ? "real" : MODE}`);
@@ -248,19 +248,40 @@ if (SOCRATIC) {
   console.log(`        reframes: ${JSON.stringify(reframes.map((e) => e.line))}; gap: ${JSON.stringify(gap?.line ?? null)}`);
   console.log(`        record: ${JSON.stringify(rec.map((z) => ({ verdict: z.verdict, skipped: z.skipped, tries: z.tries })))}`);
   console.log(`        confusions: ${JSON.stringify((t?.learner?.confusions ?? []).filter((c) => /quiz \(predict\)/.test(c)))}`);
-  check("sections open with a setup and a question", asked.length >= 2 && asked.every((e) => /\?/.test(e.ask)), asked.map((e) => e.ask).join(" | "));
-  check("a miss gets a reframe that ends with a question", reframes.length >= 1 && reframes.every((e) => /\?$/.test(e.line ?? "")), reframes.map((e) => e.line).join(" | "));
+  if (!REAL) {
+    check("sections open with a setup and a question", asked.length >= 2 && asked.every((e) => /\?/.test(e.ask)), asked.map((e) => e.ask).join(" | "));
+    check("a miss gets a reframe that ends with a question", reframes.length >= 1 && reframes.every((e) => /\?$/.test(e.line ?? "")), reframes.map((e) => e.line).join(" | "));
+  }
   check("no reaction or reframe names a verdict", [...reactions, ...reframes.map((e) => e.line ?? "")].every((x) => !/\b(you'?re right|that'?s right|right answer|wrong|correct|incorrect|exactly right)\b/i.test(x)));
   if (REAL) {
-    check("a right answer on the second try shortens the section", adjust[0]?.verdict === "right" && adjust[0].try === 2 && adjust[0].cut.length > 0, JSON.stringify(adjust[0]));
-    check("\"just explain\" stops the questions", !!off && !asked.some((e) => e.t > off.t), off ? `off at ${off.t}; later openers skipped: ${ev("socratic-skipped").filter((e) => e.t > off.t).length}` : "no socratic-off");
+    // The lighter default: the lesson as planned, one question in it, specific check-ins, two quizzes at most.
+    const reply = ev("reply")[0];
+    const replySentences = (reply?.text ?? "").split(/(?<=[.!?])\s+/).filter((x) => x.trim());
+    const firstSection = sections[1] ?? null;
+    const sec1 = planned.filter((e) => !e.by || e.by === "intake").slice(0, Math.max(1, planned.findIndex((e) => e.beatId === firstSection)));
+    const checkins = planned.filter((e) => e.check).map((e) => e.say.split(/(?<=[.!?])\s+/).filter((x) => x.trim().endsWith("?")).pop() ?? "");
+    const quizzes = ev("quiz-start").filter((e) => !e.socratic).map((e) => e.quiz);
+    const played = ev("beat");
+    const drawn = played.filter((e) => e.mode === "draw").map((e) => e.beatId);
+    const end = ev("end")[0];
+    console.log(`        first reply (${replySentences.length} sentences): ${JSON.stringify(reply?.text)}`);
+    console.log(`        question asked at: ${asked.map((e) => e.beatId).join(", ") || "none"}; section 1 beats: ${sec1.map((e) => e.beatId).join(", ")}`);
+    console.log(`        check-ins (${checkins.length}): ${JSON.stringify(checkins)}`);
+    console.log(`        quizzes: ${quizzes.join(", ") || "none"}; beats played ${played.length}, drawn ${drawn.length}: ${drawn.join(", ")}`);
+    console.log(`        length: ${Math.round((end?.t ?? played.at(-1)?.endMs ?? 0) / 1000)} s; end: ${end?.end ?? "(running)"}`);
+    check("the first reply is two sentences at most, then the intake", replySentences.length <= 2 && /\?$/.test((reply?.text ?? "").trim()), reply?.text ?? "");
+    check("exactly one Socratic question, not in section 1", asked.length === 1 && !sec1.some((e) => e.beatId === asked[0].beatId), asked.map((e) => `${e.beatId}: ${e.ask}`).join(" | "));
+    check("one try: a one-line reaction, no reframe", reframes.length === 0 && !gap && reactions.length === 1, JSON.stringify(reactions));
+    check("check-ins are specific questions", checkins.length > 0 && checkins.every((x) => !/make sense|got it|clear so far|follow\??$/i.test(x)), JSON.stringify(checkins));
+    check("at most two quizzes", quizzes.length <= 2, quizzes.join(", "));
+    check("beats keep drawing through the lesson", drawn.length >= 3 && played.slice(-6).some((e) => e.mode === "draw" || e.mode === "point"), drawn.join(", "));
   } else {
     check("a clarify request is asked again, not graded", ev("quiz-repeat").some((e) => e.beatId === asked[0]?.beatId) && !ev("learner").some((e) => e.role === "socratic answer" && /clarify/i.test(e.text ?? "")));
     check("two misses: one reframe, then the gap named and the section taught", reframes.filter((e) => e.beatId === asked[0]?.beatId).length === 1 && !!gap?.line && adjust[0]?.try === 2 && adjust[0]?.how?.startsWith("the section teaches"), JSON.stringify({ gap: gap?.line, adjust: adjust[0] }));
     check("\"just tell me\" goes straight to teaching", ev("quiz-skipped").some((e) => e.socratic && e.beatId === asked[1]?.beatId) && !off && asked.length === 3);
     check("a right answer shortens the section", adjust.at(-1)?.verdict === "right" && adjust.at(-1).cut.length > 0, JSON.stringify(adjust.at(-1)));
   }
-  check("the record has every try", rec.some((z) => (z.tries?.length ?? 0) >= 2) && rec.every((z) => (z.tries ?? []).every((x) => x.ask && x.answer && x.verdict)), JSON.stringify(rec.map((z) => z.tries?.length)));
+  check("the record has every try", rec.some((z) => (z.tries?.length ?? 0) >= (REAL ? 1 : 2)) && rec.every((z) => (z.tries ?? []).every((x) => x.ask && x.answer && x.verdict)), JSON.stringify(rec.map((z) => z.tries?.length)));
 } else {
   check("label, predict and sketch each came up once", ["label", "predict", "sketch"].every((k) => kinds.filter((x) => x === k).length === 1), kinds.join(", "));
   check("never the same kind twice in a row", kinds.every((k, i) => i === 0 || k !== kinds[i - 1]));

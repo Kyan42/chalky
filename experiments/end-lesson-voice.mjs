@@ -37,13 +37,31 @@ const waitFor = async (pred, ms) => {
   }
   return null;
 };
-await page.goto(`${BASE}/lesson?fixture=why-is-the-sky-blue-quizzes&intake=0&debug=1`);
+// FLOW=full: the paced sky lesson end to end: the intake answered, beats drawing, the check-in at b4 answered,
+// then "I'm done" in the next section. Otherwise "I'm done" at b2 of the quizzes fixture (no intake).
+const FULL = process.env.FLOW === "full";
+const say = async (b) => {
+  const sec = await page.evaluate((x) => window.__say(x), b);
+  await page.waitForTimeout(sec * 1000 + 300);
+};
+await page.goto(`${BASE}/lesson?fixture=${FULL ? "why-is-the-sky-blue-paced" : "why-is-the-sky-blue-quizzes&intake=0"}&debug=1`);
 await page.click('[data-testid="start-talking"]');
 await waitFor((s) => s.mic === "open", 30_000);
 // The speech recognizer is still connecting the moment the mic opens.
 await page.waitForTimeout(1500);
-await page.evaluate((x) => window.__say(x), ask);
-const playing = await waitFor((s) => s.beat === "b2" && s.status === "speaking", 90_000);
+await say(ask);
+let playing;
+if (FULL) {
+  const intake = await waitFor((s) => s.status === "waiting", 60_000);
+  console.log("intake asked:", !!intake);
+  await say(await clip("end-lesson-intake", "I know a little about light, but not why the sky is blue."));
+  const drew = await waitFor((s) => s.beat === "b3" && s.status === "speaking", 120_000);
+  console.log("drawing beats:", !!drew);
+  const checkin = await waitFor((s) => s.beat === "b4" && s.status === "waiting", 120_000);
+  console.log("check-in asked:", !!checkin);
+  await say(await clip("end-lesson-checkin", "The short blue waves get bounced around the most."));
+  playing = await waitFor((s) => s.beat === "b6" && s.status === "speaking", 120_000);
+} else playing = await waitFor((s) => s.beat === "b2" && s.status === "speaking", 90_000);
 console.log("playing:", JSON.stringify(playing));
 await page.evaluate((x) => window.__say(x), done);
 const seen = [];
