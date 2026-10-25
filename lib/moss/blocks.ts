@@ -19,6 +19,12 @@ export const BLOCK_INDEX = process.env.MOSS_BLOCK_INDEX || "chalky-blocks";
 export const BLOCK_MODEL = process.env.MOSS_BLOCK_MODEL || "moss-minilm";
 /** A query that takes longer than this is abandoned for the full catalog. */
 const QUERY_BUDGET_MS = 150;
+/**
+ * Hybrid weight, 1 = all semantic, 0 = all keyword (Moss default 0.8). Briefs name their things
+ * literally ("carbon dioxide", "sugar"), so more keyword weight helps: at 0.8 the ten briefs in
+ * scripts/test-moss-blocks.ts put h2o 5th; at 0.5 every expected block is in the top 3.
+ */
+const QUERY_ALPHA = Number(process.env.MOSS_BLOCK_ALPHA) || 0.5;
 /** How many retrieved blocks a drawn beat sees (plus any named by id in its adds). */
 const BEAT_K = Number(process.env.CHALKY_BLOCK_K) || 5;
 
@@ -68,8 +74,8 @@ export function mossState(): MossState | null {
     .catch((e) => {
       state.error = String((e as Error)?.message ?? e).slice(0, 300);
       console.warn(`[moss] could not load index "${BLOCK_INDEX}": ${state.error}`);
-      // Try again on a later request rather than staying broken for the life of the process.
-      g.__chalkyMoss = undefined;
+      // Try again a minute later rather than staying broken for the life of the process.
+      setTimeout(() => g.__chalkyMoss === state && (g.__chalkyMoss = undefined), 60_000).unref?.();
     });
   g.__chalkyMoss = state;
   return state;
@@ -85,17 +91,18 @@ export function warmBlockIndex(): void {
  * on a load unless `waitForLoad` (scripts); a live beat just falls back while the index loads.
  */
 export async function relevantBlocks(query: string, k = 4, opts: { waitForLoad?: boolean; force?: boolean } = {}): Promise<Retrieval> {
-  const t0 = performance.now();
-  const ms = () => Math.round((performance.now() - t0) * 10) / 10;
   if (!hasMossKeys()) return { status: "no-key", hits: null, ms: 0 };
   if (!opts.force && retrievalMode() === "all") return { status: "off", hits: null, ms: 0 };
   const state = mossState()!;
   if (opts.waitForLoad) await state.ready;
+  // Timed from here: the query, not the one-off index load.
+  const t0 = performance.now();
+  const ms = () => Math.round((performance.now() - t0) * 10) / 10;
   if (state.error) return { status: "error", hits: null, ms: ms(), error: state.error };
   if (!state.loaded) return { status: "loading", hits: null, ms: ms() };
   try {
     const budget = new Promise<null>((resolve) => setTimeout(() => resolve(null), QUERY_BUDGET_MS));
-    const result = await Promise.race([state.client.query(BLOCK_INDEX, query, { topK: k }), budget]);
+    const result = await Promise.race([state.client.query(BLOCK_INDEX, query, { topK: k, alpha: QUERY_ALPHA }), budget]);
     if (!result) return { status: "error", hits: null, ms: ms(), error: `over ${QUERY_BUDGET_MS} ms` };
     const hits = result.docs.filter((d) => blockById(d.id)).map((d) => ({ id: d.id, score: Math.round(d.score * 1000) / 1000 }));
     return { status: "ok", hits, ms: ms(), mossMs: result.timeTakenInMs };

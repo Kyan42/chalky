@@ -26,20 +26,27 @@ if (!hasMossKeys()) {
   process.exit(2);
 }
 
-let failed = 0;
-const times: number[] = [];
-for (const c of cases) {
-  const r = await relevantBlocks(beatQuery({ visual: c.visual, adds: c.adds ?? [] }), 3, { waitForLoad: true, force: true });
-  if (!r.hits) {
-    console.error(`ERROR ${r.status}${r.error ? `: ${r.error}` : ""}`);
-    process.exit(1);
+async function main() {
+  let failed = 0;
+  const times: number[] = [];
+  for (const c of cases) {
+    const r = await relevantBlocks(beatQuery({ visual: c.visual, adds: c.adds ?? [] }), 3, { waitForLoad: true, force: true });
+    if (!r.hits) {
+      console.error(`ERROR ${r.status}${r.error ? `: ${r.error}` : ""}`);
+      process.exit(1);
+    }
+    times.push(r.ms);
+    const ok = r.hits.some((h) => h.id === c.want);
+    if (!ok) failed++;
+    console.log(`${ok ? "PASS" : "FAIL"}  want ${c.want.padEnd(13)} got ${r.hits.map((h) => `${h.id} ${h.score.toFixed(3)}`).join(", ").padEnd(52)} ${r.ms} ms (moss ${r.mossMs ?? "?"} ms)  "${c.visual.slice(0, 60)}..."`);
   }
-  times.push(r.ms);
-  const ok = r.hits.some((h) => h.id === c.want);
-  if (!ok) failed++;
-  console.log(`${ok ? "PASS" : "FAIL"}  want ${c.want.padEnd(13)} got ${r.hits.map((h) => `${h.id} ${h.score.toFixed(3)}`).join(", ").padEnd(52)} ${r.ms} ms (moss ${r.mossMs ?? "?"} ms)  "${c.visual.slice(0, 60)}..."`);
+  times.sort((a, b) => a - b);
+  console.log(`query latency: median ${times[Math.floor(times.length / 2)]} ms, max ${times[times.length - 1]} ms (each query, index already loaded)`);
+  console.log(failed ? `${failed} of ${cases.length} failed` : `all ${cases.length} passed`);
+  process.exit(failed ? 1 : 0);
 }
-times.sort((a, b) => a - b);
-console.log(`query latency: median ${times[Math.floor(times.length / 2)]} ms, max ${times[times.length - 1]} ms (first query included)`);
-console.log(failed ? `${failed} of ${cases.length} failed` : `all ${cases.length} passed`);
-process.exit(failed ? 1 : 0);
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
