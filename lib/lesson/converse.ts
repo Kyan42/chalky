@@ -12,7 +12,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./anthropic";
-import { isResume } from "./resume";
+import { cleanId } from "./planner";
+import { isResume, isStillLost } from "./resume";
 import { describeLearner, type BeatMode, type LearnerRecord } from "./types";
 
 export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
@@ -44,6 +45,12 @@ export interface ConverseTrailer {
   check: string | null;
   /** One or two sentences for the planner: what did not land and what angle to try. */
   planner_note: string;
+  /**
+   * For an answer: a small drawing added to the board while it is spoken, so
+   * the picture follows the question. What to draw, and the new elements it
+   * introduces (ids later turns can point at). Null: the board stays as it is.
+   */
+  sketch: { visual: string; adds: { id: string; what: string }[] } | null;
 }
 
 export interface ConverseBeat {
@@ -111,6 +118,8 @@ How to reply:
 
 End the spoken reply with a short check question when you explained something ("Does that part make sense?", "Want me to go on?"); set resume to "wait" in that case. Set resume to "replay_beat" if you were cut off mid-beat and your answer was a quick aside, so the beat is said again from its start. Set resume to "continue" when the learner confirmed and the lesson can simply go on.
 
+When the learner asks a question, the board should change with your answer, the way a teacher adds to the board while answering. So for level "answer", always add a sketch: one sentence saying what to draw, plus the new elements it introduces with short ids (one to three simple things that build on what is there: the part they asked about, a comparison, what happens next). It is drawn in a free area of the same board while you speak, so talk about it as it appears ("here's the prism..."). Use null only when they did not ask anything (they just reacted or agreed), or asked you to repeat something that is already drawn exactly; then point at that instead. A detour draws its own pictures: no sketch for "detour" or "replan".
+
 While you speak, a cursor (a teacher's hand) can point at, circle, or sweep between elements already on the board. Add a cursor cue for each element you mention, anchored to the exact word of your reply where you mention it (write the word as it appears; add #2 if it's the second occurrence of that word, e.g. "orbit#2"). Only use element ids from the board list. "sweep" needs "to": another element id. No cues if nothing on the board fits.
 
 The learner can draw on the board with a pen (blue, green, orange or dark strokes; your own marks are red). When they did, you are told what their ink marks and may see a picture of the board with their ink. Their "this", "that" or "here" means their newest mark, even when older ink is still on the board: answer about it by name, and point at it or circle it with the cursor. If their ink marks nothing on the board, look at what they drew in the picture.
@@ -118,7 +127,7 @@ The learner can draw on the board with a pen (blue, green, orange or dark stroke
 Everything before the trailer line is spoken aloud to the learner, word for word. Start speaking to them at once: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there; that all goes in the JSON.
 
 Output format, exactly: the spoken reply as plain text, then a line containing only ${SENTINEL}, then one JSON object on one line:
-{"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next"}
+{"level": "answer" | "detour" | "replan", "resume": "replay_beat" | "continue" | "wait", "cursor": [{"at": "word" | "word#2", "target": "element-id", "gesture": "point" | "circle" | "sweep", "to": "element-id"}], "check": "the check question you ended with" | null, "planner_note": "one or two sentences: what didn't land and which angle to try next", "sketch": {"visual": "what to draw", "adds": [{"id": "short-id", "what": "what it is"}]} | null}
 Nothing else: no code fences, no commentary.`;
 
 const LEVELS = new Set<ConverseLevel>(["answer", "detour", "replan"]);
@@ -244,7 +253,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   let level: ConverseLevel = LEVELS.has(t.level as ConverseLevel) ? (t.level as ConverseLevel) : input.escalation >= 1 ? "detour" : "answer";
   // Replanning only after a detour has been tried; a request for a drawing is at least a detour.
   if (level === "replan" && input.escalation < 2) level = "detour";
-  if (level === "answer" && (input.escalation >= 1 || WANTS_DRAWING.test(input.utterance))) level = "detour";
+  if (level === "answer" && ((input.escalation >= 1 && isStillLost(input.utterance)) || WANTS_DRAWING.test(input.utterance))) level = "detour";
   const check = typeof t.check === "string" && t.check.trim() ? t.check.trim() : null;
   let resume: ConverseResume = RESUMES.has(t.resume as ConverseResume) ? (t.resume as ConverseResume) : check ? "wait" : "replay_beat";
   if (check && resume !== "wait") resume = "wait";
@@ -260,7 +269,18 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
       cursor.push({ ...at, target, gesture, ...(to ? { to } : {}) });
     }
   }
-  return { level, resume, cursor: groundCues(cursor, spoken, input.board), check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "" };
+  // A sketch is for a brief answer only; a detour or a new plan draws its own beats.
+  let sketch: ConverseTrailer["sketch"] = null;
+  const sk = (t.sketch && typeof t.sketch === "object" ? t.sketch : null) as Record<string, unknown> | null;
+  const visual = typeof sk?.visual === "string" ? sk.visual.trim().slice(0, 300) : "";
+  if (level === "answer" && visual) {
+    const adds = (Array.isArray(sk?.adds) ? (sk.adds as unknown[]) : [])
+      .slice(0, 4)
+      .map((a) => ({ id: cleanId((a as Record<string, unknown>)?.id), what: String((a as Record<string, unknown>)?.what ?? "").trim().slice(0, 80) }))
+      .filter((a) => a.id && !ids.has(a.id));
+    sketch = { visual, adds };
+  }
+  return { level, resume, cursor: groundCues(cursor, spoken, input.board), check, planner_note: typeof t.planner_note === "string" ? t.planner_note.trim() : "", sketch };
 }
 
 /** The trailer used when the model gave none (or unparsable JSON). */
@@ -314,7 +334,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
 
   if (isResume(utterance)) {
     yield { type: "start", model: "local", local: true, tMs: ms() };
-    yield { type: "trailer", trailer: { level: "answer", resume: "continue", cursor: [], check: null, planner_note: "" }, tMs: ms() };
+    yield { type: "trailer", trailer: { level: "answer", resume: "continue", cursor: [], check: null, planner_note: "", sketch: null }, tMs: ms() };
     yield { type: "done", tMs: ms(), model: "local", inputTokens: 0, outputTokens: 0, fellBack: false };
     return;
   }

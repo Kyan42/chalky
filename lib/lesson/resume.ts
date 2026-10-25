@@ -28,3 +28,14 @@ export function isGreetingOnly(text: string): boolean {
   const t = text.trim();
   return t.length > 0 && GREETING.test(t);
 }
+
+/**
+ * The learner is still lost on what was just explained ("I still don't get
+ * it", "huh?", "what do you mean"), as opposed to asking something new. Only
+ * this escalates an answer to a detour; a new question starts fresh.
+ */
+const STILL_LOST = /\b(still|again|don'?t (get|understand|follow)|do not (get|understand|follow)|not (getting|following|sure)|confus|lost me|i'?m lost|what do you mean|makes? no sense|doesn'?t make sense|huh|wait what|say that again)\b|^\W*(what|huh|sorry)\W*$/i;
+
+export function isStillLost(text: string): boolean {
+  return STILL_LOST.test(text.trim());
+}

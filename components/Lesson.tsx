@@ -36,9 +36,9 @@ import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
 import type { ConverseEvent, ConverseTrailer, Exchange } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
-import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
+import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
-import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
+import { isGreetingOnly, isResume, isStillLost } from "@/lib/lesson/resume";
 import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
@@ -82,6 +82,10 @@ interface BeatState {
   ready: Promise<PresetElement[] | null>;
   /** Added while teaching (a detour or a new ending): the layout pass leaves it alone. */
   extra?: boolean;
+  /** Sketches Chalky drew while answering a question at this beat; they stay on the board for the rest of the scene. */
+  sketches?: PresetElement[];
+  /** The elements those sketches introduced, for the board's names. */
+  sketchAdds?: { id: string; what: string }[];
 }
 
 type Compile = (current: PresetElement[]) => AnimationDocument | null;
@@ -141,17 +145,52 @@ function pointElements(beat: PlannedBeat, timing: (word: string) => number | nul
   });
 }
 
-/** The element groups of beat `i`'s scene: earlier beats as drawn, then `current` for beat `i` itself. */
+/**
+ * The element groups of beat `i`'s scene: earlier beats as drawn, the sketches
+ * answers added along the way (beat `i`'s own too, already drawn), then
+ * `current` for beat `i` itself, which is the group that animates.
+ */
 function sceneGroups(list: BeatState[], i: number, current: PresetElement[]): PresetElement[][] {
   const scene = list[i].beat.scene;
   const groups: PresetElement[][] = [];
   for (let j = 0; j < i; j++) {
     const b = list[j];
-    if (b.beat.scene !== scene || b.beat.mode === "talk") continue;
-    groups.push(b.elements ?? []);
+    if (b.beat.scene !== scene) continue;
+    if (b.beat.mode !== "talk") groups.push(b.elements ?? []);
+    if (b.sketches?.length) groups.push(b.sketches);
   }
+  if (list[i].sketches?.length) groups.push(list[i].sketches!);
   groups.push(current);
   return groups;
+}
+
+/** The names of everything a scene's beats and sketches introduced. */
+const sceneAdds = (list: BeatState[], scene: number) =>
+  list.filter((b) => b.beat.scene === scene).flatMap((b) => [...b.beat.adds, ...(b.sketchAdds ?? [])]);
+
+/**
+ * A free area of the board (100x100 grid) for an answer's sketch: the biggest
+ * of a few sizes that touches nothing drawn, nearest to what is there so it
+ * reads as part of the same picture. Null when nothing fits.
+ */
+function freeRegion(boxes: Record<string, GridBox>): Region | null {
+  const taken = Object.values(boxes).filter((b) => b.w * b.h >= 0.3);
+  const cx = taken.length ? taken.reduce((a, b) => a + b.x + b.w / 2, 0) / taken.length : 50;
+  const cy = taken.length ? taken.reduce((a, b) => a + b.y + b.h / 2, 0) / taken.length : 50;
+  const clear = (x: number, y: number, w: number, h: number) =>
+    taken.every((b) => x + w + 3 <= b.x || b.x + b.w + 3 <= x || y + h + 3 <= b.y || b.y + b.h + 3 <= y);
+  for (const [w, h] of [[42, 42], [36, 40], [40, 32], [32, 32], [28, 30], [24, 24]]) {
+    let best: { r: Region; d: number } | null = null;
+    for (let x = 4; x + w <= 96; x += 4) {
+      for (let y = 8; y + h <= 96; y += 4) {
+        if (!clear(x, y, w, h)) continue;
+        const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy);
+        if (!best || d < best.d) best = { r: { x, y, w, h }, d };
+      }
+    }
+    if (best) return best.r;
+  }
+  return null;
 }
 
 function compileScene(groups: PresetElement[][]): { doc: AnimationDocument; report: LayoutReport } | null {
@@ -822,6 +861,8 @@ export default function Lesson() {
     // ---------- The conversation layer ----------
     /** Escalation reached for the current confusion: 0 none, 1 a brief answer, 2 a detour. Kept across the detour's beats. */
     let escalation: 0 | 1 | 2 = 0;
+    /** Answers that drew a sketch so far, for unique beat ids. */
+    let sketchCount = 0;
     const history: Exchange[] = [];
     let amendCount = 0;
     /** A detour planned (and drawn) in the background after a brief answer, in case the learner is still lost. */
@@ -916,6 +957,51 @@ export default function Lesson() {
       let audio: StreamPlayer | null = null;
       let all: WordTimestamps = { words: [], start: [], end: [] };
       let trailer: ConverseTrailer | null = null;
+      /**
+       * The answer's sketch: drawn into a free area of the board while the
+       * answer plays, on the reply's own clock, and kept with beat i's scene so
+       * it stays for the beats after. `sketchStart` is the reply audio time its
+       * drawing began (-1 until it is on the board).
+       */
+      let sketchStart = -1;
+      let sketchSeeking = false;
+      let sketchShown: Promise<void> = Promise.resolve();
+      let replyLive = true;
+      const startSketch = (t: ConverseTrailer) => {
+        const owner = list[i];
+        const ask = t.sketch;
+        if (!ask || !owner) return;
+        const region = freeRegion(boardRef.current.boxes);
+        if (!region) {
+          console.info("[sketch] no free space on the board; skipped");
+          return;
+        }
+        const scene = owner.beat.scene;
+        const say = sentences.map((x) => x.text).join(" ");
+        const beat: PlannedBeat = { id: `answer-${++sketchCount}`, say, at: say.split(/\s+/)[0] ?? "", visual: ask.visual, mode: "draw", check: false, scene, region, adds: ask.adds, points: [] };
+        const earlier = list.slice(0, i + 1).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
+        const t0 = performance.now();
+        sketchShown = post("/api/draw", { question: q, beat, earlier }, abort.signal)
+          .then((r) => r.json())
+          .then(async (res: { elements?: PresetElement[]; error?: string | null }) => {
+            const els = res.elements ?? [];
+            console.info(`[sketch] ${els.length} element(s) in ${Math.round(performance.now() - t0)} ms${res.error ? ` (${res.error})` : ""}: ${ask.visual}`);
+            if (!els.length) return;
+            // What the board shows now (the scene so far, this beat finished), with the sketch drawing on top.
+            const base = sceneGroups(list, i, owner.beat.mode === "draw" ? (owner.elements ?? []) : []);
+            owner.sketches = [...(owner.sketches ?? []), ...els];
+            owner.sketchAdds = [...(owner.sketchAdds ?? []), ...ask.adds];
+            if (!replyLive || signal.aborted) return; // cut off: it shows with the scene's next drawing
+            const compiled = compileScene([...base, els]);
+            if (!compiled) return;
+            showBoard(boardView(compiled.report, [...base, els].flat(), sceneAdds(list, scene)));
+            await showDocument(compiled.doc);
+            const a = audio as StreamPlayer | null;
+            if (a && !a.drained) sketchStart = a.position();
+            else await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+          })
+          .catch((e) => console.warn("[sketch]", e));
+      };
       const sentences: { text: string; tts?: Promise<Response> }[] = [];
       // Speech for the sentence playing and one ahead only: Sonic slows down when many streams run at once.
       let playingIndex = 0;
@@ -964,6 +1050,7 @@ export default function Lesson() {
               wake();
             } else if (ev.type === "trailer") {
               trailer = ev.trailer;
+              startSketch(ev.trailer);
               cue();
             } else if (ev.type === "error") throw new Error(ev.message);
           }
@@ -980,6 +1067,13 @@ export default function Lesson() {
           raf = requestAnimationFrame(frame);
           const t = audio?.position() ?? -1;
           if (t >= 0) setWordIndexNow(wordAt(t, all));
+          // The sketch draws on the reply's clock, so Stop freezes it too.
+          const player = playerRef.current;
+          if (sketchStart >= 0 && t >= 0 && player && !sketchSeeking) {
+            sketchSeeking = true;
+            const tick = Math.max(0, Math.min(DOC_END - FRAME_TICKS, Math.round(((t - sketchStart) * TPS) / FRAME_TICKS) * FRAME_TICKS));
+            player.seek(tick).finally(() => (sketchSeeking = false));
+          }
         };
         raf = requestAnimationFrame(frame);
         let heard = false;
@@ -1016,6 +1110,12 @@ export default function Lesson() {
         }
         await reading;
         while (!signal.aborted && audio && !(audio as StreamPlayer).drained) await sleep(30);
+        // A sketch still being drawn gets a few more seconds to land before the lesson moves on.
+        await Promise.race([sketchShown, sleep(5000)]);
+        if (sketchStart >= 0) {
+          sketchStart = -1;
+          await playerRef.current?.seek(DOC_END - FRAME_TICKS);
+        }
         if (signal.aborted || !trailer) return null;
         setWordIndexNow(all.words.length);
         return { trailer, said: sentences.map((x) => x.text).join(" ") };
@@ -1027,6 +1127,7 @@ export default function Lesson() {
         return null;
       } finally {
         cancelAnimationFrame(raf);
+        replyLive = false;
         abort.signal.removeEventListener("abort", onStop);
         if (replyAbortRef.current === replyAbort) replyAbortRef.current = null;
         if (signal.aborted) audio?.stop();
@@ -1070,6 +1171,11 @@ export default function Lesson() {
           return resumeAt;
         }
         history.push({ who: "learner", text: heardText });
+        // A new question starts fresh: only "still lost" builds on the last answer (and its drafted detour).
+        if (!isStillLost(heardText)) {
+          escalation = 0;
+          dropDraft();
+        }
         const reply = await speakReply(heardText, i, wordIndex);
         if (abort.signal.aborted) return -1;
         if (!reply) {
@@ -1212,7 +1318,7 @@ export default function Lesson() {
                 const compiled = compileScene(groups);
                 if (!compiled) return null;
                 const scene = list[bi].beat.scene;
-                showBoard(boardView(compiled.report, groups.flat(), list.filter((b) => b.beat.scene === scene).flatMap((b) => b.beat.adds)));
+                showBoard(boardView(compiled.report, groups.flat(), sceneAdds(list, scene)));
                 return compiled.doc;
               };
         const beatAbort = new AbortController();
