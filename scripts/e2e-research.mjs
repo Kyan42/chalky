@@ -45,7 +45,9 @@ const polls = [];
 page.on("request", (r) => /\/api\/research/.test(r.url()) && polls.push(`${r.method()} ${new URL(r.url()).pathname}`));
 const st = () =>
   page.evaluate(() => ({
-    status: document.querySelector('[data-testid="status"]')?.textContent?.trim() ?? "",
+    // No status line on the page any more: the board's data-status, named as the old status line was.
+    status: ({ idle: "Listening", listening: "Listening", speaking: "Speaking", waiting: "Your turn", replying: "Thinking…", planning: "Planning…", done: "Done", paused: "Paused" })[document.querySelector(".tutor-board")?.dataset.status ?? ""] ?? "",
+    mic: document.querySelector(".tutor-board")?.dataset.mic ?? "",
     beat: document.querySelector('[data-testid="beats"] li[data-state="now"]')?.dataset.beatId ?? null,
     badge: !!document.querySelector('[data-testid="research-badge"]'),
     cards: document.querySelectorAll('[data-testid="research-card"]').length,
@@ -71,7 +73,8 @@ const litByBeat = {};
 try {
   await page.goto(`${BASE}/lesson?debug=1`);
   await page.click('[data-testid="start-talking"]');
-  await waitFor((s) => s.status === "Listening", 20000);
+  // The greeting plays first; the mic opens after it.
+  await waitFor((s) => s.mic === "open", 30000);
   await page.click("body", { position: { x: 5, y: 400 } });
   await page.evaluate((b) => window.__say(b), clips.ask);
   // The research badge while papers are found; then the intake waits for the learner.

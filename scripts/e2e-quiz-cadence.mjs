@@ -54,7 +54,9 @@ const page = await context.newPage();
 page.on("pageerror", (e) => console.log("[pageerror]", e.message));
 const st = () =>
   page.evaluate(() => ({
-    status: document.querySelector('[data-testid="status"]')?.textContent?.trim() ?? "",
+    // No status line on the page any more: the board's data-status, named as the old status line was.
+    status: ({ idle: "Listening", listening: "Listening", speaking: "Speaking", waiting: "Your turn", replying: "Thinking…", planning: "Planning…", done: "Done", paused: "Paused" })[document.querySelector(".tutor-board")?.dataset.status ?? ""] ?? "",
+    mic: document.querySelector(".tutor-board")?.dataset.mic ?? "",
     beat: document.querySelector('[data-testid="beats"] li[data-state="now"]')?.dataset.beatId ?? null,
     marks: document.querySelectorAll('[data-testid^="quiz-mark-"]').length,
     done: !!document.querySelector('[data-testid="quiz-done"]'),
@@ -98,10 +100,11 @@ try {
   const q = REAL || "Why is the sky blue?";
   await page.goto(REAL ? `${BASE}/lesson?intake=0&debug=1` : `${BASE}/lesson?fixture=${FIXTURE}&intake=0&debug=1`);
   await page.click('[data-testid="start-talking"]');
-  await waitFor((s) => s.status === "Listening", 20000);
-  await page.fill('[data-testid="question"]', q);
-  await page.click('[data-testid="ask"]');
-  await page.click("body", { position: { x: 5, y: 400 } });
+  // The greeting plays first; the mic opens after it.
+  await waitFor((s) => s.mic === "open", 30000);
+  // No typing box any more: the question by voice.
+  await page.waitForTimeout(1500);
+  await sayText(`cadence-ask-${REAL ? "real" : "fixture"}`, q);
   let after = 0;
   const until = Date.now() + (REAL ? 900_000 : 600_000);
   while (Date.now() < until) {
