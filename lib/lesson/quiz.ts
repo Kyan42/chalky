@@ -223,7 +223,9 @@ export async function socraticLine(o: { mode: "reframe" | "gap"; question: strin
     `The lesson: ${o.question}`,
     `The question asked: ${o.ask}`,
     `What the lesson is about to explain (the answer, never to be given away):\n${o.rubric.map((r) => `- ${r}`).join("\n")}`,
-    `Their answers so far: ${o.answers.map((a) => `"${a}"`).join("; ")}`,
+    // React to what they just said, not to an earlier try.
+    `Their latest answer (react to this one): "${o.answers[o.answers.length - 1] ?? ""}"`,
+    o.answers.length > 1 ? `Their earlier answers: ${o.answers.slice(0, -1).map((a) => `"${a}"`).join("; ")}` : "",
     o.asked && o.asked.length > 1 ? `Already asked (don't repeat these or their examples): ${o.asked.slice(1).map((a) => `"${a}"`).join("; ")}` : "",
     o.missing.length ? `What their answers are missing: ${o.missing.join("; ")}` : "",
   ]
