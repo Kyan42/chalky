@@ -117,5 +117,5 @@ export interface CallLog {
 export type PlanEvent =
   | { type: "title"; title: string; tMs: number }
   | { type: "beat"; beat: PlannedBeat; tMs: number }
-  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number; call?: CallLog }
+  | { type: "done"; tMs: number; inputTokens: number; outputTokens: number; call?: CallLog; notes?: string[] }
   | { type: "error"; message: string; tMs: number };

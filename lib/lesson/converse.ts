@@ -124,15 +124,15 @@ const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard, mid-lesso
 
 Choose the level first:
 - "confirm": at a check-in (or any time), they restate their understanding and it is right, close enough, or reaches for something the coming beats cover. Say ONE short sentence, like "Right, that's it." or "Close, and we'll get to the second part in a minute." No explanation, no correction lecture, no question: the lesson goes straight on. Only a real misunderstanding of the idea is not a confirm; then use "answer" or "detour" by the rules below.
-- "answer": a question you can answer ENTIRELY by pointing at things ALREADY on the board (the element list below). At most two spoken sentences, and they must name at least one of those elements, with a cursor cue on each one you name. If the answer needs anything that is not drawn there (a new object, a comparison, a size or a number to picture, a process that isn't shown), it is a "detour", not an answer. Allowed only on a first question in this spot (escalation 0).
-- "detour": everything else that needs explaining: the answer needs something that is not on the board, they ask for a picture, they still don't get it, or they ask a follow-up in the same spot (escalation 1 or more). Say EXACTLY ONE short hand-off sentence, like "Let me draw that for you." or "Good one, let me show you.", and do not start answering: the drawing that comes next does the explaining. Never more talk instead of a drawing.
+- "answer": any question, including a new question in the middle of a detour. At most two spoken sentences. When what they ask about is already on the board (the element list below), name it and point at it or circle it with the cursor; for a simple check or question that is all you do. Only when the answer needs one small thing that is not on the board (one object, one comparison, one arrow), add a sketch of it (below).
+- "detour": only when they are still lost on what you just explained ("I still don't get it", "huh?", "what do you mean"), or they ask you to draw something. Say EXACTLY ONE short hand-off sentence, like "Let me draw that for you." or "Good one, let me show you.", and do not start answering: the drawing that comes next does the explaining.
 - "replan": a detour was already given (escalation 2) and they are still lost. EXACTLY ONE sentence saying you'll take it from a different direction, without explaining anything yet. Never before a detour.
-- If they ask something off the lesson's path, use "answer" or "detour" by the same rules and steer back.
+- If they ask something off the lesson's path, use "answer" by the same rules and steer back.
 Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
 An "answer" may end with a short check question as its second sentence; set resume to "wait" then. Set resume to "replay_beat" if you were cut off mid-beat and the answer was a quick aside. "confirm" always has resume "continue".
 
-When the learner asks a question, the board should change with your answer, the way a teacher adds to the board while answering. So for level "answer", always add a sketch: one sentence saying what to draw, plus the new elements it introduces with short ids (one to three simple things that build on what is there: the part they asked about, a comparison, what happens next). Say where it goes with "near" (an element already on the board) and "side" (above, below, left, right, or on). Put it where it would really be, read from the positions above: the sun, clouds and rain above the ground and the plants, roots and soil below the ground line, the sea below the sky, a part inside or on the thing it belongs to. Things that are not touching in real life must not overlap: use "on" only to mark or annotate that element itself (arrows into a leaf, a label on a part). The board is extended (it zooms out) if there is no room on that side, so never move a thing somewhere wrong to make it fit. It is drawn while you speak, so talk about it as it appears ("here's the prism..."). Use null only when they did not ask anything (they just reacted or agreed), or asked you to repeat something that is already drawn exactly; then point at that instead. A detour draws its own pictures: no sketch for "detour" or "replan".
+A sketch is for when the answer needs one small thing that is not on the board yet, the way a teacher adds a quick drawing while answering: one sentence saying what to draw, plus the new elements it introduces with short ids (one to three simple things that build on what is there: the part they asked about, a comparison, what happens next). When the answer is already on the board, point at it instead and set sketch to null. Say where it goes with "near" (an element already on the board) and "side" (above, below, left, right, or on). Put it where it would really be, read from the positions above: the sun, clouds and rain above the ground and the plants, roots and soil below the ground line, the sea below the sky, a part inside or on the thing it belongs to. Things that are not touching in real life must not overlap: use "on" only to mark or annotate that element itself (arrows into a leaf, a label on a part). The board is extended (it zooms out) if there is no room on that side, so never move a thing somewhere wrong to make it fit. It is drawn while you speak, so talk about it as it appears ("here's the prism..."). A detour draws its own pictures: no sketch for "detour" or "replan".
 
 While you speak, a cursor (a teacher's hand) moves over the board. Add a cue for each element you name, anchored to the exact word of your reply where you name it (as it appears; add #2 for its second occurrence, e.g. "orbit#2"), using only element ids from the board list. Gestures: "circle" to single out a shape (prefer it), "underline" for a label, a word or an equation, "tap" for a quick "this one", "point" to rest beside it, "sweep" to travel from it to another element ("to": that id).
 
@@ -210,7 +210,23 @@ function parseAt(at: unknown): { word: string; occurrence: number } | null {
 }
 
 /** The learner asked for a picture: that needs a detour, whatever the model said. */
-const WANTS_DRAWING = /\b(draw|drawing|sketch|diagram|picture|show me|on the board)\b/i;
+const WANTS_DRAWING = /\b(draw|drawing|sketch|diagram|picture)\b/i;
+
+const RANK: Record<ConverseLevel, number> = { confirm: 0, answer: 1, detour: 2, replan: 3 };
+/** Hand-off lines for a reply the server escalated: the drawing that follows does the explaining. */
+const HANDOFF: Partial<Record<ConverseLevel, string>> = { detour: "Let me draw that for you.", replan: "Let me come at this from a different direction." };
+
+/**
+ * The level the learner's words call for, whatever the model chose: still lost after an answer (a detour)
+ * or after a detour (a new plan), or asking for a drawing. A new question is never escalated, even inside
+ * a detour: only "still lost" builds on what came before (isStillLost).
+ */
+export function forcedLevel(input: Pick<ConverseInput, "escalation" | "utterance">): ConverseLevel | null {
+  const lost = isStillLost(input.utterance);
+  if (lost && input.escalation >= 2) return "replan";
+  if ((lost && input.escalation >= 1) || WANTS_DRAWING.test(input.utterance)) return "detour";
+  return null;
+}
 
 const MAX_CUES = 4;
 
@@ -285,10 +301,13 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   const ids = new Set(input.board.map((e) => e.id));
   const spokenWords = spoken.split(/\s+/).map(normWord);
   let level: ConverseLevel = LEVELS.has(t.level as ConverseLevel) ? (t.level as ConverseLevel) : input.escalation >= 1 ? "detour" : "answer";
-  // Replanning only after a detour has been tried; a request for a drawing is at least a detour.
+  // Replanning only after a detour has been tried; still lost or asking for a drawing escalates.
   if (level === "replan" && input.escalation < 2) level = "detour";
-  if (level === "answer" && ((input.escalation >= 1 && isStillLost(input.utterance)) || WANTS_DRAWING.test(input.utterance))) level = "detour";
-  let check = typeof t.check === "string" && t.check.trim() ? t.check.trim() : null;
+  const forced = forcedLevel(input);
+  const escalated = !!forced && RANK[level] < RANK[forced];
+  if (escalated) level = forced;
+  // An escalated reply was cut to its hand-off: a check it asked is not what Chalky does next.
+  let check = !escalated && typeof t.check === "string" && t.check.trim() ? t.check.trim() : null;
   let resume: ConverseResume = RESUMES.has(t.resume as ConverseResume) ? (t.resume as ConverseResume) : check ? "wait" : "replay_beat";
   if (check && resume !== "wait") resume = "wait";
   if (level === "confirm") {
@@ -322,10 +341,9 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
     const side = SIDES.has(sk?.side as SketchSide) ? (sk!.side as SketchSide) : "right";
     sketch = { visual, adds, near, side };
   }
-  // An answer has to be made on the board: one that points at nothing and draws nothing becomes a drawing detour.
-  if (level === "answer" && !cues.length && !sketch) {
-    level = "detour";
-    note = note || `The learner asked "${input.utterance}"; nothing on the board shows the answer, so draw it.`;
+  if (escalated) {
+    if (resume === "wait") resume = "replay_beat";
+    note = note || `The learner said "${input.utterance}" and is still lost; show it a different way.`;
   }
   return { level, resume, cursor: cues, check, planner_note: note, sketch };
 }
@@ -334,7 +352,7 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
 function fallbackTrailer(input: ConverseInput, spoken: string): ConverseTrailer {
   const endsWithQuestion = /\?\s*$/.test(spoken);
   const last = spoken.split(/(?<=[.!?])\s+/).pop() ?? null;
-  return cleanTrailer({ level: input.escalation >= 1 ? "detour" : "answer", resume: endsWithQuestion ? "wait" : "replay_beat", cursor: [], check: endsWithQuestion ? last : null, planner_note: "" }, input, spoken);
+  return cleanTrailer({ level: forcedLevel(input) ?? "answer", resume: endsWithQuestion ? "wait" : "replay_beat", cursor: [], check: endsWithQuestion ? last : null, planner_note: "" }, input, spoken);
 }
 
 function describeInk(ink: ConverseInk | undefined): string {
@@ -432,12 +450,19 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
             const nl = header.indexOf("\n");
             if (nl < 0 && header.length < 40) continue;
             const m = /^\s*level\s*:\s*(confirm|answer|detour|replan)\b/i.exec(header);
-            if (m) {
-              early = m[1].toLowerCase() as ConverseLevel;
-              yield { type: "level", level: early, tMs: ms() };
-            }
+            if (m) early = m[1].toLowerCase() as ConverseLevel;
             pending += m ? header.slice(nl >= 0 ? nl + 1 : header.length) : header;
             header = null;
+            // Still lost, or asking for a drawing: escalate now, and say only the hand-off, not the model's answer.
+            const forced = forcedLevel(input);
+            if (forced && RANK[early ?? "answer"] < RANK[forced]) {
+              console.info(`[converse] escalated ${early ?? "?"} -> ${forced} ("${input.utterance.slice(0, 80)}")`);
+              early = forced;
+              yield { type: "level", level: early, tMs: ms() };
+              const ev = say(HANDOFF[forced]!);
+              if (ev) yield ev;
+              capped = true;
+            } else if (m) yield { type: "level", level: early!, tMs: ms() };
           } else pending += event.delta.text;
           if (capped && !pending.includes(SENTINEL)) continue;
           const cut = pending.indexOf(SENTINEL);
