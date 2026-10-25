@@ -22,10 +22,13 @@ let context: AudioContext | null = null;
 let outputGain: GainNode | null = null;
 let outputAnalyser: AnalyserNode | null = null;
 
+/** Set by `holdAudio`: the learner stopped Chalky, so nothing may start the clock again until they press Start. */
+let held = false;
+
 /** Call from a click handler. Safe to call again. */
 export async function unlockAudio() {
   context ??= new AudioContext();
-  if (context.state !== "running") await context.resume();
+  if (context.state !== "running" && !held) await context.resume();
   if (!outputGain) {
     outputGain = context.createGain();
     outputAnalyser = context.createAnalyser();
@@ -36,6 +39,18 @@ export async function unlockAudio() {
 }
 
 export const audioUnlocked = () => context?.state === "running";
+
+/**
+ * Freezes (or restarts) all audio at once: playback, the clock every player's
+ * position() reads, and microphone capture, since they share this context.
+ * Whatever is playing stops on the spot and carries on from there.
+ */
+export async function holdAudio(on: boolean) {
+  held = on;
+  if (!context) return;
+  if (on && context.state === "running") await context.suspend();
+  else if (!on && context.state !== "running") await context.resume();
+}
 
 export function audioContext() {
   if (!context) throw new Error("Audio is not unlocked yet");

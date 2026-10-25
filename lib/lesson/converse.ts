@@ -76,6 +76,16 @@ export interface ConverseInput {
   /** Escalation already reached for this confusion: 0 none, 1 answer given, 2 detour given. */
   escalation: 0 | 1 | 2;
   learner?: LearnerRecord;
+  /** What the learner drew on the board before speaking, if anything. */
+  ink?: ConverseInk;
+}
+
+/** The learner's ink: the board elements it marks, strokes that mark nothing, and a picture of the board with it. */
+export interface ConverseInk {
+  marks: { id: string; label: string; how: "circled" | "pointed at" | "drew over"; latest?: boolean }[];
+  loose: number;
+  /** JPEG, base64, of the board with the learner's ink on top. */
+  image?: string;
 }
 
 /** NDJSON events from POST /api/converse. */
@@ -102,6 +112,8 @@ How to reply:
 End the spoken reply with a short check question when you explained something ("Does that part make sense?", "Want me to go on?"); set resume to "wait" in that case. Set resume to "replay_beat" if you were cut off mid-beat and your answer was a quick aside, so the beat is said again from its start. Set resume to "continue" when the learner confirmed and the lesson can simply go on.
 
 While you speak, a cursor (a teacher's hand) can point at, circle, or sweep between elements already on the board. Add a cursor cue for each element you mention, anchored to the exact word of your reply where you mention it (write the word as it appears; add #2 if it's the second occurrence of that word, e.g. "orbit#2"). Only use element ids from the board list. "sweep" needs "to": another element id. No cues if nothing on the board fits.
+
+The learner can draw on the board with a pen (blue, green, orange or dark strokes; your own marks are red). When they did, you are told what their ink marks and may see a picture of the board with their ink. Their "this", "that" or "here" means their newest mark, even when older ink is still on the board: answer about it by name, and point at it or circle it with the cursor. If their ink marks nothing on the board, look at what they drew in the picture.
 
 Everything before the trailer line is spoken aloud to the learner, word for word. Start speaking to them at once: never describe what you are going to do, never talk about "the learner", levels, escalation, resume or cues there; that all goes in the JSON.
 
@@ -133,6 +145,7 @@ function context(o: ConverseInput): string {
     `Earlier exchanges in this conversation:\n${history}`,
     describeLearner(o.learner),
     `Escalation already reached for this confusion: ${o.escalation} (0 none, 1 a brief answer was given, 2 a detour was given).`,
+    describeInk(o.ink),
     `The learner just said: "${o.utterance}"`,
   ]
     .filter(Boolean)
@@ -257,13 +270,36 @@ function fallbackTrailer(input: ConverseInput, spoken: string): ConverseTrailer 
   return cleanTrailer({ level: input.escalation >= 1 ? "detour" : "answer", resume: endsWithQuestion ? "wait" : "replay_beat", cursor: [], check: endsWithQuestion ? last : null, planner_note: "" }, input, spoken);
 }
 
+function describeInk(ink: ConverseInk | undefined): string {
+  if (!ink || (!ink.marks.length && !ink.loose)) return "The learner has not drawn on the board.";
+  const say = (m: ConverseInk["marks"][number]) => `${m.how} ${m.id} ("${m.label}")`;
+  const latest = ink.marks.filter((m) => m.latest);
+  const earlier = ink.marks.filter((m) => !m.latest);
+  const lines = ["The learner drew on the board before speaking."];
+  // Their newest mark is what "this" points at; older ink is still on the board but is not the question.
+  if (latest.length) lines.push(`Their newest mark, the one "this" or "that" means: ${latest.map(say).join("; ")}.`);
+  if (earlier.length) lines.push(`Earlier ink still on the board: ${earlier.map(say).join("; ")}.`);
+  if (ink.loose) lines.push(`${ink.loose} stroke${ink.loose === 1 ? "" : "s"} mark nothing on the board${ink.image ? " (see the picture)" : ""}.`);
+  return lines.join(" ");
+}
+
 function params(model: string, input: ConverseInput): Anthropic.MessageStreamParams {
   const base: Anthropic.MessageStreamParams = {
     model,
     max_tokens: 700,
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     output_config: { effort: "low" },
-    messages: [{ role: "user", content: context(input) }],
+    messages: [
+      {
+        role: "user",
+        content: input.ink?.image
+          ? [
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: input.ink.image } },
+              { type: "text", text: `The board as the learner sees it, with their ink on top.\n\n${context(input)}` },
+            ]
+          : context(input),
+      },
+    ],
   };
   // Haiku 5.5 accepts thinking off at low effort; Sonnet 5.5 turns it off with between_tools.
   if (model.startsWith("claude-haiku")) base.thinking = { type: "disabled" };

@@ -24,11 +24,13 @@ import { InkSession } from "./stt";
 import { cartesiaToken } from "./token";
 import { TurnMerger } from "./turn-merger";
 
-export type MicMode = "off" | "open" | "muted" | "held" | "tail";
+export type MicMode = "off" | "paused" | "open" | "muted" | "held" | "tail";
 
 export interface HybridMicOptions {
   /** True while Chalky's voice is playing (plus a short echo tail). */
   speaking: boolean;
+  /** The learner stopped Chalky: hear nothing at all, and ignore the barge-in key, until this goes false. */
+  paused?: boolean;
   /** KeyboardEvent.code of the barge-in key. */
   key?: string;
   /** Turns ending within this window merge into one utterance. */
@@ -65,12 +67,15 @@ export function useHybridMic(options: HybridMicOptions) {
   // Everything the audio callback and key handlers read, kept in refs so they never go stale.
   const speakingRef = useRef(options.speaking);
   speakingRef.current = options.speaking;
+  const pausedRef = useRef(!!options.paused);
+  pausedRef.current = !!options.paused;
   const held = useRef<{ since: number; words: boolean } | null>(null);
   const tail = useRef<{ timer: ReturnType<typeof setTimeout>; holdMs: number } | null>(null);
   const lastPartial = useRef("");
 
   const modeNow = useCallback((): MicMode => {
     if (!ink.current) return "off";
+    if (pausedRef.current) return "paused";
     if (held.current) return "held";
     if (tail.current) return "tail";
     return speakingRef.current ? "muted" : "open";
@@ -79,6 +84,7 @@ export function useHybridMic(options: HybridMicOptions) {
 
   /** Whether mic audio goes to Ink right now. */
   const gateOpen = useCallback(() => {
+    if (pausedRef.current) return false;
     if (held.current || tail.current) return true;
     return !speakingRef.current;
   }, []);
@@ -149,6 +155,18 @@ export function useHybridMic(options: HybridMicOptions) {
     refreshMode();
   }, [options.speaking, refreshMode]);
 
+  // Paused: drop whatever was half heard, including a held key's turn, so nothing arrives later.
+  useEffect(() => {
+    if (!options.paused) return refreshMode();
+    endTail();
+    held.current = null;
+    merger.current?.discard();
+    merger.current?.setHold(false);
+    setPartial("");
+    lastPartial.current = "";
+    refreshMode();
+  }, [options.paused, endTail, refreshMode]);
+
   // The barge-in key: down opens the mic and interrupts Chalky; up ends the turn.
   useEffect(() => {
     // Typing into a text field must not barge in; a focused checkbox or button must not swallow the key either.
@@ -160,7 +178,7 @@ export function useHybridMic(options: HybridMicOptions) {
       return el.tagName === "INPUT" && TEXT_INPUTS.has((el as HTMLInputElement).type);
     };
     const onDown = (e: KeyboardEvent) => {
-      if (e.code !== key || e.repeat || isTyping(e) || !ink.current) return;
+      if (e.code !== key || e.repeat || isTyping(e) || !ink.current || pausedRef.current) return;
       if (!speakingRef.current || held.current) return;
       e.preventDefault();
       endTail();

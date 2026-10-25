@@ -26,6 +26,8 @@
  */
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import type { AnimationDocument } from "@clayzo/animation/authoring";
+import { INK_COLORS, InkLayer, snapshotBoard } from "@/components/InkLayer";
+import { readInk, type InkStroke } from "@/lib/lesson/ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
@@ -37,7 +39,7 @@ import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib
 import { NEW_LEARNER, type LearnerRecord, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
 import { isGreetingOnly, isResume } from "@/lib/lesson/resume";
-import { unlockAudio } from "@/lib/voice/audio";
+import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { useHybridMic } from "@/lib/voice/useHybridMic";
 
 const TPS = 240;
@@ -280,6 +282,14 @@ export default function Lesson() {
     boardRef.current = view;
     setBoard(view);
   }, []);
+  /** The learner's pen strokes on the board; cleared when the lesson moves on from their turn. */
+  const [ink, setInk] = useState<InkStroke[]>([]);
+  const inkRef = useRef<InkStroke[]>([]);
+  const showInk = useCallback((strokes: InkStroke[]) => {
+    inkRef.current = strokes;
+    setInk(strokes);
+  }, []);
+  const [inkColor, setInkColor] = useState(INK_COLORS[0]);
   const [cursorScript, setCursorScript] = useState<CursorStep[]>([]);
   /** The cursor's clock: whatever audio is playing now; frozen when the learner pauses Chalky. */
   const cursorClockRef = useRef<() => number>(() => 0);
@@ -330,13 +340,42 @@ export default function Lesson() {
   /** A lesson is running and Chalky has the floor (planning, speaking or replying). */
   const lessonBusyRef = useRef<() => boolean>(() => false);
   const [heardNote, setHeardNote] = useState<string | null>(null);
+  /**
+   * The learner pressed Stop: Chalky freezes mid-word (voice, board and cursor
+   * all run on the audio clock, which is suspended), the mic is off, and
+   * nothing they say, type or draw is taken until they press Start, which
+   * carries on from that exact word.
+   */
+  const [halted, setHalted] = useState(false);
+  const haltedRef = useRef(false);
+  const haltWaitersRef = useRef<(() => void)[]>([]);
+  /** Resolves at once, or when Start is pressed (or the lesson ends) if Chalky is stopped. */
+  const haltGate = useCallback(
+    (signal: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        if (!haltedRef.current || signal.aborted) return resolve();
+        haltWaitersRef.current.push(resolve);
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      }),
+    [],
+  );
+  const setHaltedNow = useCallback((on: boolean) => {
+    haltedRef.current = on;
+    setHalted(on);
+    if (!on) {
+      const waiters = haltWaitersRef.current;
+      haltWaitersRef.current = [];
+      for (const wake of waiters) wake();
+    }
+  }, []);
   const voice = useHybridMic({
     speaking: MUTED.has(status) || speakingAudio,
+    paused: halted,
     // Space down while Chalky talks: stop now, keep the resume point, then listen.
     onBargeIn: () => pauseRef.current(),
     onUtterance: (text) => {
       const said = text.trim();
-      if (!said) return;
+      if (!said || haltedRef.current) return;
       if (turnRef.current) turnRef.current(said);
       else if (lessonBusyRef.current()) {
         queueRef.current.push(said);
@@ -359,6 +398,8 @@ export default function Lesson() {
   draftRef.current = draft;
 
   const stop = useCallback(() => {
+    setHaltedNow(false);
+    void holdAudio(false);
     queueRef.current = [];
     replyAbortRef.current?.abort();
     abortRef.current?.abort();
@@ -366,7 +407,7 @@ export default function Lesson() {
     audioRef.current?.stop();
     playerRef.current?.pause();
     turnRef.current?.(null);
-  }, []);
+  }, [setHaltedNow]);
 
   useEffect(() => () => {
     stop();
@@ -857,7 +898,19 @@ export default function Lesson() {
       const signal = replyAbort.signal;
       setStatus("replying");
       // A beat cut off mid-drawing froze half drawn; show its drawing finished so the reply can point at it.
-      void playerRef.current?.seek(DOC_END - FRAME_TICKS);
+      const finished = playerRef.current?.seek(DOC_END - FRAME_TICKS);
+      // What the learner drew: the elements it marks, and a picture of the board with it on top.
+      let inkPayload: { marks: ReturnType<typeof readInk>["marks"]; loose: number; image?: string } | undefined;
+      const strokes = inkRef.current;
+      if (strokes.length) {
+        const view = boardRef.current;
+        const labels = Object.fromEntries(view.list.map((e) => [e.id, e.label]));
+        const read = readInk(strokes, view.boxes, labels, { w: W, h: H });
+        await finished?.catch(() => {});
+        const image = snapshotBoard(canvasRef.current, strokes, W, H);
+        inkPayload = { ...read, ...(image ? { image } : {}) };
+        console.info(`[ink] ${strokes.length} stroke(s): ${read.marks.map((m) => `${m.how} ${m.id}`).join(", ") || "nothing marked"}${read.loose ? `, ${read.loose} loose` : ""}`);
+      }
       const t1 = performance.now();
       const ctx = await unlockAudio();
       let audio: StreamPlayer | null = null;
@@ -898,6 +951,7 @@ export default function Lesson() {
             history: history.slice(-6),
             escalation,
             learner,
+            ...(inkPayload ? { ink: inkPayload } : {}),
           },
           signal,
         );
@@ -992,7 +1046,9 @@ export default function Lesson() {
      * Returns the list position to play next (`resumeAt` replays the beat cut
      * off), or -1 when the lesson was stopped.
      */
-    const converseAt = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
+    const converseAt = (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> =>
+      converseTurns(i, wordIndex, resumeAt, bridge).finally(() => showInk([]));
+    const converseTurns = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
       setStatus("waiting");
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
@@ -1077,7 +1133,7 @@ export default function Lesson() {
           let deadline = performance.now() + INTAKE_SILENCE_MS;
           const timer = setInterval(() => {
             // Hearing words or typing keeps the question open; silence lets the lesson go on.
-            if (partialRef.current.trim() || draftRef.current.trim()) deadline = performance.now() + INTAKE_SILENCE_MS;
+            if (haltedRef.current || partialRef.current.trim() || draftRef.current.trim()) deadline = performance.now() + INTAKE_SILENCE_MS;
             else if (performance.now() > deadline) turnRef.current?.(null);
           }, 200);
           try {
@@ -1138,6 +1194,8 @@ export default function Lesson() {
           continue;
         }
         if (i >= 1) await intakeGate;
+        await haltGate(abort.signal);
+        if (abort.signal.aborted) break;
         if (i >= list.length) {
           if (planOpen()) continue;
           break;
@@ -1211,7 +1269,7 @@ export default function Lesson() {
         setStatus("error");
       }
     }
-  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking]);
+  }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, haltGate]);
 
   useEffect(() => {
     askRef.current = (q) => void ask(q);
@@ -1244,6 +1302,21 @@ export default function Lesson() {
     setSpeaking(false);
     setStatus("waiting");
   }, [setSpeaking]);
+  /** Stop: Chalky freezes where it is and takes no input until Start. */
+  const halt = useCallback(() => {
+    if (!abortRef.current || abortRef.current.signal.aborted || haltedRef.current) return;
+    setHaltedNow(true);
+    queueRef.current = [];
+    setDraft("");
+    void holdAudio(true);
+  }, [setHaltedNow]);
+  /** Start: carry on from the word where Stop froze it (a turn that was waiting goes on waiting). */
+  const resume = useCallback(() => {
+    if (!haltedRef.current) return;
+    setHaltedNow(false);
+    void holdAudio(false);
+  }, [setHaltedNow]);
+
   useEffect(() => {
     pauseRef.current = interrupt;
     lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && MUTED.has(statusRef.current) && !turnRef.current;
@@ -1267,7 +1340,7 @@ export default function Lesson() {
 
   const submit = () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || haltedRef.current) return;
     if (turnRef.current) {
       setDraft("");
       turnRef.current(text);
@@ -1280,9 +1353,12 @@ export default function Lesson() {
   };
 
   const waitingForLearner = status === "waiting" || status === "listening";
+  /** The pen works once something is on the board and a lesson is running; drawing while Chalky talks pauses it. */
+  const penReady = !halted && board.list.length > 0 && ["speaking", "waiting", "listening", "replying"].includes(status);
   const busy = ["planning", "speaking", "waiting", "listening", "replying"].includes(status) && !!question;
   const orbState: OrbState =
-    status === "speaking" ? "speaking"
+    halted ? "idle"
+    : status === "speaking" ? "speaking"
     : status === "planning" || status === "replying" ? "thinking"
     : voice.started ? "listening"
     : "idle";
@@ -1318,28 +1394,55 @@ export default function Lesson() {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={waitingForLearner ? "Answer or ask Chalky…" : "Type a question, or just say it"}
+              placeholder={halted ? "Chalky is stopped. Press Start to carry on." : waitingForLearner ? "Answer or ask Chalky…" : "Type a question, or just say it"}
+              disabled={halted}
               aria-label="Question"
               data-testid="question"
             />
-            <button type="submit" disabled={!draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
-            {status === "speaking" && busy && (
+            <button type="submit" disabled={halted || !draft.trim()} data-testid="ask">{waitingForLearner || busy ? "Send" : "Ask"}</button>
+            {status === "speaking" && busy && !halted && (
               <button type="button" onClick={interrupt} data-testid="interrupt" title="Space">Cut in</button>
             )}
-            {waitingForLearner && (
+            {waitingForLearner && !halted && (
               <button type="button" className="continue" onClick={() => turnRef.current?.(null)} data-testid="continue">Continue</button>
             )}
-            {busy && <button type="button" onClick={stop} data-testid="stop">Stop</button>}
+            {busy &&
+              (halted ? (
+                <button type="button" className="start" onClick={resume} data-testid="start">Start</button>
+              ) : (
+                <button type="button" onClick={halt} data-testid="stop">Stop</button>
+              ))}
           </form>
           <div className="mic" data-testid="status">
-            {statusLabel[status]}
+            {halted ? "Stopped" : statusLabel[status]}
             <Orb state={orbState} level={orbLevel} size={34} />
           </div>
         </header>
         <section className="stage" data-testid="stage">
           <div className="visual" style={{ position: "relative" }}>
             <canvas ref={canvasRef} aria-label="The whiteboard" />
+            <InkLayer
+              width={W}
+              height={H}
+              enabled={penReady}
+              strokes={ink}
+              color={inkColor}
+              onPenDown={() => {
+                // Drawing while Chalky talks is cutting in, like Space.
+                if (lessonBusyRef.current()) pauseRef.current();
+              }}
+              onStroke={(stroke) => showInk([...inkRef.current, stroke])}
+            />
             <ChalkyCursor boxes={board.boxes} script={cursorScript} clock={cursorClock} />
+            {penReady && (
+              <div className="pen" data-testid="pen">
+                {INK_COLORS.map((c) => (
+                  <button key={c} type="button" className="swatch" style={{ background: c }} aria-label={`Pen colour ${c}`} aria-pressed={c === inkColor} onClick={() => setInkColor(c)} />
+                ))}
+                <button type="button" onClick={() => showInk(inkRef.current.slice(0, -1))} disabled={!ink.length} data-testid="ink-undo">Undo</button>
+                <button type="button" onClick={() => showInk([])} disabled={!ink.length} data-testid="ink-clear">Clear</button>
+              </div>
+            )}
           </div>
           {showWelcome && (
             <div className="welcome" data-testid="welcome">

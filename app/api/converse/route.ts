@@ -1,5 +1,5 @@
 /**
- * POST /api/converse  { utterance, question, beats, beatIndex, wordIndex, board, history, escalation }
+ * POST /api/converse  { utterance, question, beats, beatIndex, wordIndex, board, history, escalation, ink? }
  *   →  NDJSON stream of ConverseEvent: start, sentence…, trailer, done.
  *
  * The fast reply to whatever the learner says mid-lesson. When the browser
@@ -40,6 +40,19 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
       })
     : [];
   const esc = int(body.escalation, 0);
+  const inkBody = (body.ink ?? null) as Record<string, unknown> | null;
+  const HOWS = new Set(["circled", "pointed at", "drew over"]);
+  const marks = Array.isArray(inkBody?.marks)
+    ? inkBody.marks.slice(0, 5).flatMap((m) => {
+        const o = (m ?? {}) as Record<string, unknown>;
+        const id = str(o.id, 60).trim();
+        const how = str(o.how, 20);
+        return id && HOWS.has(how) ? [{ id, label: str(o.label, 120), how: how as "circled" | "pointed at" | "drew over", ...(o.latest === true ? { latest: true } : {}) }] : [];
+      })
+    : [];
+  // A JPEG of the board, base64: under about 1 MB, or it is dropped.
+  const image = typeof inkBody?.image === "string" && inkBody.image.length < 1_400_000 && /^[A-Za-z0-9+/=]+$/.test(inkBody.image) ? inkBody.image : undefined;
+  const loose = int(inkBody?.loose, 0);
   return {
     utterance,
     question: str(body.question, 500),
@@ -50,6 +63,7 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     history,
     escalation: esc >= 2 ? 2 : esc === 1 ? 1 : 0,
     learner: cleanLearner(body.learner),
+    ...(marks.length || loose > 0 ? { ink: { marks, loose: Math.min(20, Math.max(0, loose)), ...(image ? { image } : {}) } } : {}),
   };
 }
 
