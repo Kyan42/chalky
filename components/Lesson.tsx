@@ -1960,12 +1960,10 @@ export default function Lesson() {
         ask = "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
       }
       if (kind === "label" && items.length < 2) {
-        // Nothing labelled to number here: a prediction (if a section follows and the last quiz wasn't one), or a drawing.
-        // (Socratic: sections already open with a prediction, so never one after a section.)
-        const to: QuizKind = hasNext && lastKind !== "predict" && socraticOff ? "predict" : "sketch";
-        logEv({ kind: "quiz-fallback", from: "label", to, why: `${items.length} labelled part(s) in view` });
-        kind = to;
-        ask = to === "predict" ? "Before I go on, a quick prediction: what do you think comes next, and why?" : "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
+        // Nothing labelled to number here: a drawing instead (a prediction is the Socratic question's alone).
+        logEv({ kind: "quiz-fallback", from: "label", to: "sketch", why: `${items.length} labelled part(s) in view` });
+        kind = "sketch";
+        ask = "Quick quiz: draw what we just covered, as you'd explain it, then say done.";
       }
       // A label quiz's question is always ours: a question written elsewhere may name the hidden answers.
       if (kind === "label") ask = `Quick quiz: name the parts I've numbered, one to ${["", "one", "two", "three", "four"][items.length] ?? items.length}.`;
