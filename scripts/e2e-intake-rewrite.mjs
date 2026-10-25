@@ -16,10 +16,11 @@ mkdirSync(OUT, { recursive: true });
 const clipDir = join(process.cwd(), "experiments/conversation-e2e/clips");
 const clip = async (name, text) => readFileSync((await speechWav(join(clipDir, `${name}.wav`), [{ silence: 0.2 }, { say: text }, { silence: 0.4 }])).path).toString("base64");
 const LINES = {
-  learn: "Hey Chalky, what about photosynthesis?",
-  intake: "I already know the inputs and outputs. I want the light reactions and the Calvin cycle in detail, with ATP.",
+  learn: process.env.LEARN ?? "Hey Chalky, what about photosynthesis?",
+  intake: process.env.INTAKE ?? "I already know the inputs and outputs. I want the light reactions and the Calvin cycle in detail, with ATP.",
 };
-const clips = { learn: await clip("rw-learn", LINES.learn), intake: await clip("rw-intake", LINES.intake) };
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+const clips = { learn: await clip(`rw-${slug(LINES.learn)}`, LINES.learn), intake: await clip(`rw-${slug(LINES.intake)}`, LINES.intake) };
 const t0 = Date.now();
 const results = [];
 const check = (name, ok, detail = "") => {
