@@ -59,6 +59,8 @@ const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
 /** Seconds of silence after the intake question before the lesson just goes on. */
 const INTAKE_SILENCE_MS = 4000;
+/** After a reply ends, this long during which a two-word fragment is not taken as a new turn. */
+const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
 const CURSOR_LEAD_S = 0.5;
 const SEED_TERMS = buildKeyterms();
@@ -664,6 +666,8 @@ export default function Lesson() {
   const cutInRef = useRef<() => void>(() => {});
   /** The learner's latest words to the conversation layer, and when (for merging a quick second utterance). */
   const lastLearnerRef = useRef<{ text: string; at: number } | null>(null);
+  /** When Chalky last finished a reply: a two-word fragment just after it is the tail of their own turn, not a new one. */
+  const replyEndRef = useRef(0);
   /** Applies the merge rule; returns true when it handled the utterance. */
   const mergeRef = useRef<(said: string) => boolean>(() => false);
   /** How the learner's latest words arrived, for the transcript. */
@@ -715,6 +719,13 @@ export default function Lesson() {
     onUtterance: (text) => {
       const said = text.trim();
       if (!said || haltedRef.current) return;
+      // A fragment of two words or fewer right after a reply ("That was.") is the end of what they were saying,
+      // not a new cut-in; a resume phrase ("ok", "go on") still counts, and so does any answer while Chalky waits for one.
+      const waitingForAnswer = statusRef.current === "waiting" || statusRef.current === "listening";
+      if (!waitingForAnswer && performance.now() - replyEndRef.current < FRAGMENT_GRACE_MS && said.split(/\s+/).length <= 2 && !isResume(said)) {
+        logRef.current({ kind: "fragment-ignored", text: said, msAfterReply: Math.round(performance.now() - replyEndRef.current) });
+        return;
+      }
       inputViaRef.current = "voice";
       if (mergeRef.current(said)) return;
       if (turnRef.current) turnRef.current(said);
@@ -1516,7 +1527,6 @@ export default function Lesson() {
       const beats = (async () => {
         const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
-        const out: BeatState[] = [];
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
           if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null, ...(ev.notes?.length ? { notes: ev.notes } : {}) });
@@ -1860,6 +1870,7 @@ export default function Lesson() {
           cameraRef.current = cameraFor(zoomTo);
         }
         abort.signal.removeEventListener("abort", onStop);
+        replyEndRef.current = performance.now();
         if (replyAbortRef.current === replyAbort) replyAbortRef.current = null;
         lastSpokeRef.current = performance.now();
         if (signal.aborted) audio?.stop();
@@ -2296,6 +2307,7 @@ export default function Lesson() {
         prefetches.delete(list[i]);
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
+        const playedBeat = list[i];
         const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre };
         if (resumeFrom && resumeFrom.state !== list[i]) resumeFrom = null;
         if (resumeFrom) {
@@ -2335,6 +2347,15 @@ export default function Lesson() {
           if (!interruptedRef.current) throw e;
         }
         resumeFrom = null;
+        // The timeline may have changed while it played (a detour inserted before or after it): carry on from
+        // where this beat sits now, so whatever was put right after it plays next.
+        {
+          const k = list.indexOf(playedBeat);
+          if (k >= 0 && k !== i) {
+            logEv({ kind: "timeline-moved", beatId: playedBeat.beat.id, from: i, to: k });
+            i = k;
+          }
+        }
         Object.assign(timing, {
           endMs: since(),
           playedMs: Math.round(performance.now() - tBeat),
