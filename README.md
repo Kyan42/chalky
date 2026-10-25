@@ -3,6 +3,12 @@
 Hold a key, ask a question out loud, and Chalky teaches it back by voice while visuals build on a
 whiteboard. Cal Hacks 13.
 
+## How we use Convex
+
+Convex is Chalky's memory. Every lesson's transcript is mirrored into Convex as it plays (lessons, events, beats),
+and a learner record is merged across lessons, so the next lesson starts from what you got stuck on last time.
+`/log` shows lessons live through `useQuery`, no refresh. Evidence, files and a dated commit log: [hackathon.md](hackathon.md).
+
 This branch is the **first spike**: one hard-coded lesson beat, played end to end with real
 Cartesia Sonic voice and a real Clayzo WebGL animation, inside a bare whiteboard layout. Findings
 are in [`SPIKE_NOTES.md`](SPIKE_NOTES.md).
