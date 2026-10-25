@@ -1,0 +1,48 @@
+{
+  "question": "what changed in Python 3.14",
+  "query": "what changed in Python 3.14",
+  "recent": true,
+  "status": "ready",
+  "items": [
+    {
+      "n": 1,
+      "title": "What’s new in Python 3.14 — Python 3.15.1 documentation",
+      "url": "https://docs.python.org/3/whatsnew/3.14.html",
+      "site": "docs.python.org",
+      "published": "2025-10-07",
+      "key": [
+        "This article explains the new features in Python 3.14, compared to 3.13.",
+        "Python 3.14 was released on 7 October 2025.",
+        "Python 3.14 is a stable release of the Python programming language, with a mix of changes to the language, the implementation, and the standard library."
+      ]
+    },
+    {
+      "n": 2,
+      "title": "Python 3.14: Cool New Features for You to Try – Real Python",
+      "url": "https://realpython.com/python314-new-features/",
+      "site": "realpython.com",
+      "published": "2026-07-03",
+      "key": [
+        "Learn what's new in Python 3.14, including an upgraded REPL, template strings, lazy annotations, and subinterpreters, with examples to try in your code.",
+        "Python 3.14 was released on October 7, 2025.",
+        "If you want to try out the examples, make sure you run Python 3.14 or a compatible preview release."
+      ]
+    },
+    {
+      "n": 3,
+      "title": "Python 3.14 Is Here. How Fast Is It? - miguelgrinberg.com",
+      "url": "https://blog.miguelgrinberg.com/post/python-3-14-is-here-how-fast-is-it",
+      "site": "blog.miguelgrinberg.com",
+      "published": null,
+      "key": [
+        "In November of 2024 I wrote a blog post titled \"Is Python Really That Slow?\", in which I tested several versions of Python and noted the steady progress the language has been making in terms of performance.",
+        "Today is the 8th of October 2025, just a day after the official release of Python 3.14.",
+        "These results also show that version 3.11 is the point at which Python versions moved from being \"very slow\" to \"not so slow\"."
+      ]
+    }
+  ],
+  "material": "Recent web pages for \"what changed in Python 3.14\" (searched 2026-10-25). Cite them as [1] to [3].\n\n[1] What’s new in Python 3.14 — Python 3.15.1 documentation (docs.python.org, 2025-10-07)\nThis article explains the new features in Python 3.14, compared to 3.13. Python 3.14 was released on 7 October 2025. Python 3.14 is a stable release of the Python programming language, with a mix of changes to the language, the implementation, and the standard library.\n\n[2] Python 3.14: Cool New Features for You to Try – Real Python (realpython.com, 2026-07-03)\nLearn what's new in Python 3.14, including an upgraded REPL, template strings, lazy annotations, and subinterpreters, with examples to try in your code. Python 3.14 was released on October 7, 2025. If you want to try out the examples, make sure you run Python 3.14 or a compatible preview release.\n\n[3] Python 3.14 Is Here. How Fast Is It? - miguelgrinberg.com (blog.miguelgrinberg.com, undated)\nIn November of 2024 I wrote a blog post titled \"Is Python Really That Slow?\", in which I tested several versions of Python and noted the steady progress the language has been making in terms of performance. Today is the 8th of October 2025, just a day after the official release of Python 3.14. These results also show that version 3.11 is the point at which Python versions moved from being \"very slow\" to \"not so slow\".",
+  "startedAt": "2026-10-25T07:50:46.135Z",
+  "fetchedAt": "2026-10-25T07:51:08.768Z",
+  "ms": 22633
+}

@@ -32,6 +32,8 @@ import { readInk, type InkStroke } from "@/lib/lesson/ink";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChalkyCursor, { type CursorStep, type GridBox } from "@/components/ChalkyCursor";
 import { Orb, type OrbState } from "@/components/Orb";
+import { ResearchCards } from "@/components/ResearchCards";
+import type { ResearchEvent, ResearchRecord } from "@/lib/research/types";
 import { END, finishDocument, H, PAPER, W } from "@/experiments/visual-flex/doc";
 import { StreamPlayer } from "@/lib/audio/stream-player";
 import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps } from "@/lib/beat";
@@ -128,6 +130,37 @@ interface BeatState {
   sketchBeats?: PlannedBeat[];
   /** The beat's speech as it played (events in order), so it can go on from a word after a cut-in. */
   speech?: { events: BeatAudioEvent[]; done: boolean };
+}
+
+/** A fresh fetch: poll this often, and give up (teach from memory) after this long. */
+const RESEARCH_POLL_MS = 1500;
+/**
+ * Research (lib/research/CONTRACT.md v2): one POST with wait settles within 8 s ("none" past it, while the fetch
+ * keeps going and caches its answer). A lesson's opening lookup is asked again (joining the same fetch) until
+ * RESEARCH_START_MS; one that lands by RESEARCH_LATE_MS still comes in, as a short detour. Never two fetches
+ * within RESEARCH_SPACING_MS.
+ */
+const RESEARCH_BUDGET_MS = 12_000;
+const RESEARCH_START_MS = 15_000;
+const RESEARCH_LATE_MS = 30_000;
+const RESEARCH_SPACING_MS = 30_000;
+
+/**
+ * A research record, read the same way whether it lists `items` (web pages: title, url, site, date, key
+ * sentences) or `papers` (the earlier arXiv shape): what the page needs from it. "none" means nothing was found.
+ */
+interface Found {
+  status: "ready" | "none" | "failed";
+  count: number;
+  material: string;
+  record: Record<string, unknown> | null;
+  titles: string[];
+}
+function readFound(rec: Record<string, unknown>): Found {
+  const list = (Array.isArray(rec.items) ? rec.items : Array.isArray(rec.papers) ? rec.papers : []) as Record<string, unknown>[];
+  const material = typeof rec.material === "string" ? rec.material : "";
+  const status = rec.status === "failed" ? "failed" : rec.status === "ready" && list.length && material ? "ready" : "none";
+  return { status, count: list.length, material, record: rec, titles: list.map((x, k) => `[${x.n ?? k + 1}] ${String(x.site ? `${x.site}: ` : "")}${String(x.title ?? "").slice(0, 80)}`) };
 }
 
 /**
@@ -727,6 +760,10 @@ export default function Lesson() {
   const [quizMarks, setQuizMarks] = useState<{ n: number; box: GridBox; cover?: GridBox }[] | null>(null);
   /** A sketch quiz is waiting for the learner's drawing: Done hands it in. */
   const [quizDone, setQuizDone] = useState<(() => void) | null>(null);
+  /** Recent papers the lesson is taught from (research), the "finding papers" state, and the beat's citations. */
+  const [researchRecord, setResearchRecord] = useState<ResearchRecord | null>(null);
+  const [researching, setResearching] = useState(false);
+  const [currentCite, setCurrentCite] = useState<number | null>(null);
   /** A request handed to the slow executor is pending (the badge says so). */
   const [delegating, setDelegating] = useState(false);
   /** Any pause (stopped or listening), for the buttons. */
@@ -1091,6 +1128,8 @@ export default function Lesson() {
     setLayoutMs(null);
     setLastReplyMs(null);
     setLastLevel(null);
+    setResearchRecord(null);
+    setCurrentCite(null);
     setPausedAt(null);
     showBoard(EMPTY_BOARD);
     setCursorScript([]);
@@ -1333,7 +1372,14 @@ export default function Lesson() {
     lessonStarted = true;
     setTitle("Planning…");
     planning = (async () => {
-      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await post("/api/plan", { question: q });
+      const res = fixture ? await fetch(`/api/fixture?name=${encodeURIComponent(fixture)}&beats=${params.get("beats") ?? ""}&delay=${params.get("delay") ?? ""}`, { signal: abort.signal }) : await (async () => {
+            // Taught from what the lookup found when the first reply asked for one; from knowledge if nothing came back.
+            const found = researchJob ? await researchJob : null;
+            const material = found?.status === "ready" ? found.material : null;
+            lessonMaterial = material;
+            if (researchJob && !material) researchNote = "I couldn't find anything recent on that, so here's what I know.";
+            return post("/api/plan", { question: q, ...(material ? { material } : {}) });
+          })();
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
       for await (const event of ndjson<PlanEvent>(res)) {
         if (event.type === "title") {
@@ -1347,7 +1393,7 @@ export default function Lesson() {
           if (planReplaced) continue;
           const beat = event.beat;
           const state: BeatState = { beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null) };
-          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say });
+          logEv({ kind: "planned", beatId: beat.id, mode: beat.mode, scene: beat.scene, check: beat.check, section: beat.section, bridge: beat.bridge, say: beat.say, ...(beat.cite ? { cite: beat.cite } : {}), ...(beat.quiz ? { quiz: beat.quiz } : {}) });
           list.push(state);
           if (beat.mode !== "talk") {
             visualBeats.push(state);
@@ -1389,6 +1435,89 @@ export default function Lesson() {
     });
     };
     if (direct) startPlanning();
+    /** Recent papers asked for by the first reply's "research" action: the planner waits for their material. */
+    let researchJob = null as Promise<Found> | null;
+    /** The research material the plan was made from: every change to the plan keeps teaching from it. */
+    let lessonMaterial: string | null = null;
+    /** Said before beat 1 when the research came back empty or failed (the lesson is taught from memory). */
+    let researchNote: string | null = null;
+    /**
+     * One lookup (POST /api/research, polled while it runs), within RESEARCH_BUDGET_MS. Logged as one research
+     * event (query, status, ms, item count), which the transcript and Convex keep and /log shows.
+     */
+    /** The last lookup: its question and when it started (no second fetch within RESEARCH_SPACING_MS). */
+    let lastResearch: { question: string; at: number } | null = null;
+    /**
+     * One lookup of the learner's question as asked (POST /api/research {question, wait}: settled within 8 s;
+     * asked again, it joins the fetch still out). Logged as research-ready or research-none (question, ms,
+     * items), which the transcript and Convex keep and /log shows.
+     */
+    const runResearch = async (question: string, role: "start" | "question" | "late", untilMs = 0): Promise<Found> => {
+      // A cut-in starts with "wait," or "sorry,": the lookup is the question itself (and matches the cache).
+      question = question.replace(/^((wait|hold on|hang on|sorry|um+|uh+|oh|ok(ay)?|so|actually)[,.!]?\s+)+/i, "").trim() || question;
+      const t0r = performance.now();
+      if (role !== "late" && lastResearch && lastResearch.question !== question && performance.now() - lastResearch.at < RESEARCH_SPACING_MS) {
+        logEv({ kind: "research-none", role, question, error: "another lookup started under 30 s ago" });
+        return { status: "none", count: 0, material: "", record: null, titles: [] };
+      }
+      if (role !== "late") lastResearch = { question, at: performance.now() };
+      const log = (f: Found, extra: Record<string, unknown> = {}) => {
+        logEv({ kind: f.status === "ready" ? "research-ready" : "research-none", role, question, status: f.status, items: f.count, ms: Math.round(performance.now() - t0r), titles: f.titles, ...extra });
+        return f;
+      };
+      const fail = (why: string): Found => log({ status: "none", count: 0, material: "", record: null, titles: [] }, { error: why });
+      try {
+        for (;;) {
+          const res = await post("/api/research", { question, wait: true });
+          if (!res.ok) return fail(`status ${res.status}`);
+          let rec = (await res.json()) as Record<string, unknown>;
+          while (rec.status === "running" && performance.now() - t0r < RESEARCH_BUDGET_MS && !abort.signal.aborted) {
+            await sleep(RESEARCH_POLL_MS);
+            const g = await fetch(`/api/research/${encodeURIComponent(String(rec.id))}`, { signal: abort.signal });
+            if (!g.ok) return fail(`poll status ${g.status}`);
+            rec = (await g.json()) as Record<string, unknown>;
+          }
+          const f = readFound(rec);
+          // Over the 8 s budget at the start of a lesson: ask again (joining the fetch still out) while there is time.
+          if (f.status !== "ready" && performance.now() - t0r < untilMs && !abort.signal.aborted && /budget|running/i.test(String(rec.error ?? rec.status ?? ""))) continue;
+          return log(f, { id: rec.id ?? null, cached: rec.cached ?? null, query: rec.query ?? null, fetchMs: rec.ms ?? null, ...(rec.error ? { error: rec.error } : {}) });
+        }
+      } catch (e) {
+        return fail(String((e as Error).message ?? e));
+      }
+    };
+    const startResearch = (question: string) => {
+      if (researchJob) return;
+      setResearching(true);
+      logEv({ kind: "research-started", role: "start", question });
+      researchJob = runResearch(question, "start", RESEARCH_START_MS)
+        .then((f) => {
+          if (f.status === "ready" && f.record) setResearchRecord(f.record as unknown as ResearchRecord);
+          // Not in time for the plan: one more look later; if it has landed by then, it comes in as one short detour.
+          else if (!abort.signal.aborted) void lateResearch(question);
+          return f;
+        })
+        .finally(() => setResearching(false));
+    };
+    /** The opening lookup landed after the lesson began: one short detour ("one thing that just came in") after the beat playing. */
+    const lateResearch = async (question: string) => {
+      const t0 = performance.now();
+      await sleep(Math.max(0, RESEARCH_LATE_MS - 10_000 - (performance.now() - (lastResearch?.at ?? t0))));
+      if (abort.signal.aborted) return;
+      const f = await runResearch(question, "late");
+      if (f.status !== "ready" || abort.signal.aborted || !lessonStarted) return;
+      if (f.record) setResearchRecord(f.record as unknown as ResearchRecord);
+      const at = Math.max(1, list.findIndex((b) => b.beat.id === currentBeatIdRef.current) + 1);
+      const d = planDetour(at, `One thing that just came in about "${question}": teach what the sources below add, in two beats, citing them; open with "one thing that just came in", then come back to the lesson.`, question, undefined, f.material);
+      const beats = await d.beats.catch(() => [] as BeatState[]);
+      if (!beats.length || abort.signal.aborted) return;
+      // After the beat playing now (the lesson's next beat is found from it, so this plays next).
+      const k = list.findIndex((b) => b.beat.id === currentBeatIdRef.current);
+      list.splice(k >= 0 ? k + 1 : list.length, 0, ...beats);
+      setBeats([...list]);
+      logEv({ kind: "research-late-detour", question, beats: beats.map((b) => b.beat.id) });
+      notify();
+    };
     /** The intake question the conversation model asked next to its start_lesson, already spoken. */
     let pendingIntake: string | null = null;
     /** start_lesson: the planner starts from the model's question; what it learned goes on the learner record. */
@@ -1746,7 +1875,7 @@ export default function Lesson() {
     };
 
     /** Plans a 2-4 beat detour to play at list position `at`, and starts drawing it; nothing is inserted yet. */
-    const planDetour = (at: number, note: string, heardText: string, said?: string): Detour => {
+    const planDetour = (at: number, note: string, heardText: string, said?: string, material?: string): Detour => {
       const ctl = new AbortController();
       abort.signal.addEventListener("abort", () => ctl.abort(), { once: true });
       const prefix = `d${++amendCount}`;
@@ -1758,7 +1887,7 @@ export default function Lesson() {
       const scene = list[at - 1]?.beat.scene;
       const onBoard = list.slice(0, at).filter((b) => b.beat.scene === scene && b.beat.mode === "draw").map((b) => b.beat);
       const beats = (async () => {
-        const res = await post("/api/amend", { question: q, beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
+        const res = await post("/api/amend", { question: q, ...(material ?? lessonMaterial ? { material: material ?? lessonMaterial } : {}), beats: list.map((s) => s.beat), sketches: list.flatMap((s) => s.sketchBeats ?? []), op: "insert_after", index: at - 1, note, heard: heardText, said, prefix, learner }, ctl.signal);
         if (!res.ok || !res.body) throw new Error(`detour failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
@@ -1790,14 +1919,14 @@ export default function Lesson() {
       amending++;
       const prefix = `r${++amendCount}`;
       void (async () => {
-        const res = await post("/api/amend", { question: q, beats: before, sketches: list.slice(0, from).flatMap((s) => s.sketchBeats ?? []), op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
+        const res = await post("/api/amend", { question: q, ...(lessonMaterial ? { material: lessonMaterial } : {}), beats: before, sketches: list.slice(0, from).flatMap((s) => s.sketchBeats ?? []), op: "replace_from", index: from, note, heard: heardText, said, prefix, intake, learner });
         if (!res.ok || !res.body) throw new Error(`replan failed (${res.status})`);
         for await (const ev of ndjson<PlanEvent>(res)) {
           if (ev.type === "error") throw new Error(ev.message);
           if (ev.type === "done") logEv({ kind: "amend-done", prefix, call: ev.call ?? null });
           if (ev.type !== "beat") continue;
           const state: BeatState = { beat: ev.beat, plannedAtMs: since(), draw: "none", elements: [], ready: Promise.resolve(null), extra: true };
-          logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say });
+          logEv({ kind: "planned", by: intake ? "intake" : "replan", beatId: ev.beat.id, mode: ev.beat.mode, scene: ev.beat.scene, check: ev.beat.check, section: ev.beat.section, bridge: ev.beat.bridge, say: ev.beat.say, ...(ev.beat.cite ? { cite: ev.beat.cite } : {}), ...(ev.beat.quiz ? { quiz: ev.beat.quiz } : {}) });
           list.push(state);
           if (ev.beat.mode !== "talk") state.ready = startDraw(state);
           setBeats([...list]);
@@ -2224,6 +2353,9 @@ export default function Lesson() {
             }
           },
           (t) => {
+            // Recent papers first (the planner waits for their material), then the lesson.
+            // The learner's question as asked (the route adds any recency hint).
+            if (t.research && !lessonStarted) startResearch(heardText);
             if (t.lesson && !lessonStarted) startLesson(t.lesson);
           },
         );
@@ -2299,6 +2431,29 @@ export default function Lesson() {
           if (abort.signal.aborted) return -1;
           return await goOn();
         }
+        // A question past what Chalky knows: the reply said one covering line; look it up (8 s on the server), then
+        // answer it as a short detour taught from what was found, citing it. Nothing found: one honest line.
+        let detourMaterial: string | undefined;
+        // (Mid-lesson only: the first reply's lookup runs during the intake, in startResearch.)
+        if (trailer.research && lessonStarted && i >= 0) {
+          setResearching(true);
+          setStatus("replying");
+          const f = await runResearch(heardText, "question");
+          setResearching(false);
+          if (abort.signal.aborted) return -1;
+          if (f.status !== "ready") {
+            const honest = "I couldn't find anything recent on that, so I'll stick with what I know.";
+            logEv({ kind: "say", who: "chalky", role: "research-empty", text: honest });
+            setStatus("speaking");
+            await playBeat(line(honest), abort.signal, null).catch(() => {});
+            history.push({ who: "chalky", text: honest });
+            setStatus("waiting");
+            continue;
+          }
+          if (f.record) setResearchRecord(f.record as unknown as ResearchRecord);
+          detourMaterial = f.material;
+          trailer = { ...trailer, level: "detour", planner_note: `The learner asked: "${heardText}". Answer it from the sources in the material, in two or three beats, citing them; then come back to the lesson.` };
+        }
         // Before a lesson: a short answer or a greeting back waits for more; a started lesson goes on to
         // its beats, with the reply's question (if any) as the intake.
         if (i < 0) {
@@ -2333,7 +2488,7 @@ export default function Lesson() {
         }
         if (trailer.level === "detour") {
           escalation = 2;
-          const d = draft && draft.at === resumeAt ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText, reply.said));
+          const d = draft && draft.at === resumeAt && !detourMaterial ? draft : (dropDraft(), planDetour(resumeAt, trailer.planner_note, heardText, reply.said, detourMaterial));
           draft = null;
           setStatus("planning");
           // Start on the first beat as soon as it streams in; the rest join behind it as they arrive.
@@ -2342,7 +2497,7 @@ export default function Lesson() {
           if (firstBeat) {
             const detour = d.out.slice();
             const done = d.beats.then(
-              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say })) }),
+              (all) => logEv({ kind: "detour", at: resumeAt, beats: all.map((x) => ({ beatId: x.beat.id, mode: x.beat.mode, say: x.beat.say, ...(x.beat.cite ? { cite: x.beat.cite } : {}) })) }),
               () => {},
             );
             const g = { last: detour[detour.length - 1], done };
@@ -2503,8 +2658,17 @@ export default function Lesson() {
           if (planOpen()) continue;
           break;
         }
+        if (researchNote) {
+          const note = researchNote;
+          researchNote = null;
+          logEv({ kind: "say", who: "chalky", role: "research-empty", text: note });
+          setStatus("speaking");
+          await playBeat(line(note), abort.signal, null).catch(() => {});
+        }
         setCurrent(i);
         currentBeatIdRef.current = list[i].beat.id;
+        // A beat with no citation leaves the last paper open (the cards' rule).
+        if (list[i].beat.cite) setCurrentCite(list[i].beat.cite!);
         setStatus("speaking");
         // A quiz beat asks, waits and grades; then the lesson goes on.
         if (list[i].beat.quiz) {
@@ -2579,7 +2743,7 @@ export default function Lesson() {
         if (prefetches.size) dropPrefetches("out of order");
         const bi2 = i;
         const playedBeat = list[i];
-        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre };
+        const timing: Record<string, unknown> = { beatId: list[i].beat.id, mode: list[i].beat.mode, scene: list[i].beat.scene, say: list[i].beat.say, startMs: since(), prefetched: !!pre, ...(list[i].beat.cite ? { cite: list[i].beat.cite } : {}) };
         if (resumeFrom && resumeFrom.state !== list[i]) resumeFrom = null;
         if (resumeFrom) {
           timing.fromWord = resumeFrom.word;
@@ -2922,6 +3086,11 @@ export default function Lesson() {
         <h1 hidden data-testid="title">{title}</h1>
         {/* Top right, over the stage: the voice switch, the badges and the status with its orb, small and muted. */}
         <div className="tutor-controls">
+          {researching && (
+            <span className="voice-badge" data-testid="research-badge" title="Looking up recent sources to teach this from">
+              Looking up the latest…
+            </span>
+          )}
           {delegating && (
             <span className="voice-badge" data-testid="delegate-badge" title="Chalky handed this to a slower helper that sees the whole board">
               Looking it up…
@@ -3057,6 +3226,10 @@ export default function Lesson() {
               )}
             </motion.div>
           </div>
+          {/* The sources a research lesson is taught from (lib/research): the cited one opens as its beat is spoken. */}
+          {researchRecord && (
+            <ResearchCards record={researchRecord} currentCite={currentCite ?? undefined} currentLine={beats[current]?.beat.say} onEvent={(e: ResearchEvent) => logRef.current(e)} />
+          )}
         </section>
         <aside className="evidence lesson-beats" data-testid="telemetry" aria-hidden={!debug}>
           {beats.length > 0 && (

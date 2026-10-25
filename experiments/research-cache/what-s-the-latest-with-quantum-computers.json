@@ -1,0 +1,48 @@
+{
+  "question": "what's the latest with quantum computers",
+  "query": "what's the latest with quantum computers",
+  "recent": true,
+  "status": "ready",
+  "items": [
+    {
+      "n": 1,
+      "title": "Quantum Computers News -- ScienceDaily",
+      "url": "https://www.sciencedaily.com/news/computers_math/quantum_computers/",
+      "site": "sciencedaily.com",
+      "published": "2026-10-24",
+      "key": [
+        "Read the latest news in developing quantum computers.",
+        "Using a hybrid quantum computer, they demonstrated how introducing a simulated magnetic flux could ...",
+        "13, 2026 — Scientists are combining an electron microscope with a quantum computer to squeeze far more information from each electron."
+      ]
+    },
+    {
+      "n": 2,
+      "title": "News – Quantum Computing Report",
+      "url": "https://quantumcomputingreport.com/news/",
+      "site": "quantumcomputingreport.com",
+      "published": "2026-10-24",
+      "key": [
+        "Quantum Computers and NVIDIA have successfully automated the calibration of a 20-qubit quantum processor using NVIDIA Ising Vision-Language Models (VLMs). ...",
+        "IQM Quantum Computers hired Dr. Voica Radescu as Director of Commercial Partnerships, and Sparrow Quantum promoted Professor Peter Lodahl to CEO.",
+        "Telefónica and IQM Quantum Computers are deploying the first quantum computer in the Community of Madrid, an IQM Spark system at Universidad Politécnica de Madrid (UPM) by late 2026."
+      ]
+    },
+    {
+      "n": 3,
+      "title": "The Quantum Insider: Quantum News & Market Intelligence",
+      "url": "https://thequantuminsider.com/",
+      "site": "thequantuminsider.com",
+      "published": "2026-08-13",
+      "key": [
+        "Follow the entire quantum economy in one place: quantum computing news, company and funding data, and expert advisory trusted by 200+ clients.",
+        "The Quantum Insider is the newsroom and intelligence platform for quantum technology.",
+        "The Quantum Insider is a quantum technology market intelligence and news company serving more than 200 enterprise and government clients."
+      ]
+    }
+  ],
+  "material": "Recent web pages for \"what's the latest with quantum computers\" (searched 2026-10-25). Cite them as [1] to [3].\n\n[1] Quantum Computers News -- ScienceDaily (sciencedaily.com, 2026-10-24)\nRead the latest news in developing quantum computers. Using a hybrid quantum computer, they demonstrated how introducing a simulated magnetic flux could ... 13, 2026 — Scientists are combining an electron microscope with a quantum computer to squeeze far more information from each electron.\n\n[2] News – Quantum Computing Report (quantumcomputingreport.com, 2026-10-24)\nQuantum Computers and NVIDIA have successfully automated the calibration of a 20-qubit quantum processor using NVIDIA Ising Vision-Language Models (VLMs). ... IQM Quantum Computers hired Dr. Voica Radescu as Director of Commercial Partnerships, and Sparrow Quantum promoted Professor Peter Lodahl to CEO. Telefónica and IQM Quantum Computers are deploying the first quantum computer in the Community of Madrid, an IQM Spark system at Universidad Politécnica de Madrid (UPM) by late 2026.\n\n[3] The Quantum Insider: Quantum News & Market Intelligence (thequantuminsider.com, 2026-08-13)\nFollow the entire quantum economy in one place: quantum computing news, company and funding data, and expert advisory trusted by 200+ clients. The Quantum Insider is the newsroom and intelligence platform for quantum technology. The Quantum Insider is a quantum technology market intelligence and news company serving more than 200 enterprise and government clients.",
+  "startedAt": "2026-10-25T07:52:03.353Z",
+  "fetchedAt": "2026-10-25T07:52:05.779Z",
+  "ms": 2425
+}

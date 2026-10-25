@@ -32,6 +32,7 @@ export async function POST(request: Request) {
       said: typeof body.said === "string" ? body.said.slice(0, 600) : undefined,
       prefix,
       intake: body.intake === true,
+      material: typeof body.material === "string" && body.material.trim() ? body.material.slice(0, 40_000) : undefined,
       sketches: (Array.isArray(body.sketches) ? (body.sketches as PlannedBeat[]) : [])
         .filter((b) => b && b.region && Array.isArray(b.adds))
         .slice(0, 30)
