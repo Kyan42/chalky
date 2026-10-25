@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PREFERENCES, LANGUAGES, parsePreferences, type Preferences as Settings } from "@/lib/preferences";
 import { DEFAULT_VOICE_ID, SPEEDS, VOICES } from "@/lib/voices";
+import LearningHistory from "./LearningHistory";
+import type { LearningSession } from "@/lib/learning-history";
 
-export default function Preferences() {
+/** Settings: the preferences, and the learning history (this browser's past lessons, which `onContinue` picks up). */
+export default function Preferences({ onContinue }: { onContinue?: (session: LearningSession) => void }) {
+  const [tab, setTab] = useState<"preferences" | "history">("preferences");
   const dialog = useRef<HTMLDialogElement>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_PREFERENCES);
   const [sampleError, setSampleError] = useState("");
@@ -42,6 +46,17 @@ export default function Preferences() {
     <dialog ref={dialog} className="preferences-panel" aria-labelledby="preferences-title" onClick={(event) => { if (event.target === dialog.current) dialog.current?.close(); }}>
       <div className="preferences-content">
         <header><h2 id="preferences-title">Make yourself comfortable.</h2><button aria-label="Close preferences" onClick={() => dialog.current?.close()}>×</button></header>
+        <div className="settings-tabs" role="tablist" aria-label="Settings" onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const next = event.key === "Home" ? "preferences" : event.key === "End" ? "history" : tab === "preferences" ? "history" : "preferences";
+          setTab(next);
+          document.getElementById(`${next}-tab`)?.focus();
+        }}>
+          <button id="preferences-tab" role="tab" tabIndex={tab === "preferences" ? 0 : -1} aria-selected={tab === "preferences"} aria-controls="preferences-content" onClick={() => setTab("preferences")}>Preferences</button>
+          <button id="history-tab" data-testid="history-tab" role="tab" tabIndex={tab === "history" ? 0 : -1} aria-selected={tab === "history"} aria-controls="history-content" onClick={() => setTab("history")}>Learning history</button>
+        </div>
+        {tab === "history" ? <section id="history-content" role="tabpanel" aria-labelledby="history-tab"><LearningHistory onContinue={onContinue ? (session) => { dialog.current?.close(); onContinue(session); } : undefined} /></section> : <section id="preferences-content" role="tabpanel" aria-labelledby="preferences-tab">
         <div className="preferences-grid">
         <div className="preference-field">
           <label htmlFor="lesson-voice">Voice</label>
@@ -85,6 +100,7 @@ export default function Preferences() {
         </div>
         </div>
         <p className="preferences-note">Saved automatically on this browser. Changes apply to new speech and lesson content; already prepared content keeps its settings. Lesson language changes Chalky’s responses, not microphone recognition.</p>
+        </section>}
       </div>
     </dialog>
   </>;

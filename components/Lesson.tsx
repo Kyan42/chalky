@@ -25,6 +25,8 @@
  * The mic is half-duplex: it isn't sent while Chalky is speaking.
  */
 import Preferences from "@/components/Preferences";
+import LessonEnding from "@/components/LessonEnding";
+import { continuationPrompt, historyFromTranscript, saveLearningSession, type HistoryTranscript, type LearningSession } from "@/lib/learning-history";
 import { motion, useReducedMotion } from "framer-motion";
 import { createPlayer, type PlayerHandle } from "@clayzo/webgl-player";
 import { base, constant, easeAt, keyed, type AnimationDocument, type CubicBezier, type SceneNode } from "@clayzo/animation/authoring";
@@ -671,6 +673,13 @@ export default function Lesson() {
     setTurns((n) => n + 1);
   }, []);
   const [learnerView, setLearnerView] = useState<LearnerRecord | null>(null);
+  /** Learning history (browser-local, lib/learning-history.ts): the recap shown when a lesson ends. */
+  const [ending, setEnding] = useState<LearningSession | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [historySaved, setHistorySaved] = useState(false);
+  const historyTranscriptRef = useRef<HistoryTranscript | null>(null);
+  /** Adds a line to the last lesson's learner record and sends it again (a reflection saved on the recap). */
+  const noteRecordRef = useRef<(line: string) => void>(() => {});
   const [intakeView, setIntakeView] = useState<string | null>(null);
   const [prefetchStats, setPrefetchStats] = useState<PrefetchStats>(NO_PREFETCH);
   /** Drops every prefetched beat's speech (an interrupt or a plan change); set by the running lesson. */
@@ -1085,7 +1094,8 @@ export default function Lesson() {
     });
   }, []);
 
-  const ask = useCallback(async (q: string) => {
+  /** `displayTopic`: what the lesson is called on screen and in the history (a continuation's prompt is long). */
+  const ask = useCallback(async (q: string, displayTopic?: string) => {
     q = q.trim();
     if (!q) return;
     stop();
@@ -1117,7 +1127,9 @@ export default function Lesson() {
     /** After a cut-in: this beat goes on from `sec` (the word they cut in at) rather than from its start. */
     let resumeFrom = null as { state: BeatState; sec: number; word: number } | null;
 
-    setQuestion(q);
+    setEnding(null);
+    setHistorySaved(false);
+    setQuestion(displayTopic ?? q);
     setDraft("");
     setError(null);
     setBeats([]);
@@ -1196,10 +1208,10 @@ export default function Lesson() {
     noteLearner();
     setIntakeView(null);
     // ---------- The lesson's transcript, for reviewing live runs: experiments/live-runs/<id>.json ----------
-    const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "lesson";
+    const slug = (displayTopic ?? q).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "lesson";
     const transcript = {
       id: `${new Date().toISOString().slice(0, 19).replace(/[^0-9]/g, "")}-${slug}`,
-      question: q,
+      question: displayTopic ?? q,
       askedVia: inputViaRef.current,
       startedAt: new Date().toISOString(),
       fixture,
@@ -1213,6 +1225,31 @@ export default function Lesson() {
       endedAt: null as string | null,
       end: null as string | null,
     };
+    // ---------- Learning history: this lesson as a session on this browser, saved with every transcript save ----------
+    historyTranscriptRef.current = transcript;
+    /** `final`: the lesson is over; the board as it stands goes with it (a picture to revisit). */
+    const saveHistory = (final = false) => {
+      const session = historyFromTranscript(transcript);
+      // Only the active lesson owns the canvas: an older run can finish after a new one starts.
+      if (final && historyTranscriptRef.current === transcript && (boardRef.current.list.length || inkRef.current.length)) {
+        try {
+          const image = snapshotBoard(canvasRef.current, inkRef.current, W, H, cameraRef.current);
+          if (image) session.boardImage = `data:image/jpeg;base64,${image}`;
+        } catch {
+          // The recap still saves when a GPU frame is unavailable.
+        }
+      }
+      void saveLearningSession(session)
+        .then(() => {
+          if (historyTranscriptRef.current !== transcript) return;
+          setHistoryError("");
+          if (final) setHistorySaved(true);
+        })
+        .catch(() => {
+          if (historyTranscriptRef.current === transcript) setHistoryError("Learning history couldn’t save on this browser. Try saving your reflection again.");
+        });
+      return session;
+    };
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     /** How many events the last full save carried: an end marker sends only the ones after. */
     let sentEvents = 0;
@@ -1222,6 +1259,7 @@ export default function Lesson() {
       flushTimer = null;
       // The learner record rides on every save, so Convex has it before the tab closes.
       transcript.learner = learner;
+      if (historyTranscriptRef.current === transcript) saveHistory();
       const body = JSON.stringify(transcript);
       if (closing) {
         // The tab is going away: a beacon outlives the page, but browsers cap it at about 64 KB. A longer
@@ -3046,7 +3084,24 @@ export default function Lesson() {
       transcript.prefetch = { ...stats };
       logEv({ kind: "end", end: transcript.end });
       flushLog();
+      // The recap: when they ended it ("I'm done", end_lesson) or it played to the end. The board is
+      // pictured before going home clears it (the held frame refreshed first, so the pixels are there).
+      const recap = historyTranscriptRef.current === transcript && (endedByLearner || (transcript.end === "done" && transcript.beats.length > 0));
+      if (recap && playerRef.current) await playerRef.current.seek(playerRef.current.tick).catch(() => {});
+      const session = recap ? saveHistory(true) : null;
+      if (recap) {
+        // A reflection or confidence saved on the recap goes on this lesson's learner record (Convex, the next lesson's memory).
+        noteRecordRef.current = (line: string) => {
+          learner.confusions = [...learner.confusions, line].slice(-6);
+          logEv({ kind: "reflection", text: line });
+          flushLog();
+        };
+      }
       if (endedByLearner) goHome();
+      if (session) {
+        setMicMuted(true);
+        setEnding(session);
+      }
     }
   }, [stop, showDocument, showBoard, playBeat, awaitTurn, voice, setSpeaking, setStatus, waitWhilePaused]);
 
@@ -3235,6 +3290,24 @@ export default function Lesson() {
     } else void ask(text);
   };
 
+  /** "Continue learning" (the recap, or a session in History): a new lesson that starts from where that one left off. */
+  const continueLearning = async (session: LearningSession) => {
+    try {
+      await saveLearningSession(session);
+    } catch {
+      setHistoryError("Your latest reflection couldn’t save, but it will be used in this conversation.");
+    }
+    setEnding(null);
+    setMicMuted(false);
+    void ask(continuationPrompt(session), session.topic);
+  };
+  /** A saved reflection or confidence, as one line on the learner record. */
+  const noteReflection = (session: LearningSession) => {
+    const felt = { clear: "it clicked", practice: "needs more practice", unsure: "unsure" } as const;
+    if (session.reflection) noteRecordRef.current(`reflection: ${session.reflection.slice(0, 200)}`);
+    if (session.confidence) noteRecordRef.current(`felt: ${felt[session.confidence]}`);
+  };
+
   const waitingForLearner = status === "waiting" || status === "listening" || status === "paused";
   const onScreenBoxes = useMemo(() => screenBoxes(board.boxes, board.view), [board]);
   /** The pen works once something is on the board and a lesson is running; drawing while Chalky talks pauses it. */
@@ -3280,7 +3353,24 @@ export default function Lesson() {
           <img src="/brand/chalk-hand.png" alt="" />
           <span>Chalky</span>
         </a>
-        <Preferences />
+        <Preferences onContinue={(session) => void continueLearning(session)} />
+        {ending && (
+          <LessonEnding
+            key={ending.id}
+            session={ending}
+            saved={historySaved}
+            error={historyError}
+            onClose={() => setEnding(null)}
+            onContinue={(session) => void continueLearning(session)}
+            onSaved={(session) => {
+              setEnding(session);
+              setHistorySaved(true);
+              setHistoryError("");
+            }}
+            onReflect={noteReflection}
+          />
+        )}
+        {historyError && <p className="history-save-error" role="alert">{historyError}</p>}
             {penReady && (
               <div className="pen" data-testid="pen">
                 {INK_COLORS.map((c) => (

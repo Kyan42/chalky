@@ -1,0 +1,26 @@
+.settings-tabs { display:flex; gap:24px; border-bottom:1px solid #302c2526; margin:-8px 0 26px; }
+.settings-tabs button { background:none; border:0; border-bottom:2px solid transparent; color:#797367; padding:12px 0; font:inherit; cursor:pointer; }
+.settings-tabs button[aria-selected="true"] { color:#302c25; border-bottom-color:#302c25; }
+.history-list { list-style:none; padding:0; margin:20px 0; }
+.history-list li { border-top:1px solid #302c251c; }
+.history-list button { width:100%; padding:20px 0; text-align:left; display:grid; grid-template-columns:1fr auto; gap:6px 16px; color:inherit; background:transparent; border:0; cursor:pointer; }
+.history-list button span:nth-child(2) { grid-column:1; color:#797367; font-size:13px; }
+.history-list button span:last-child { grid-column:2; grid-row:1 / 3; align-self:center; }
+.history-list-title, .history-topic { font:400 29px/1.2 "Instrument Serif",Georgia,serif; overflow-wrap:anywhere; }
+.history-empty { padding:36px 12px; text-align:center; }
+.history-empty h3, .session-recap h3 { font:400 27px/1.2 "Instrument Serif",Georgia,serif; margin:24px 0 12px; }
+.history-back { background:none; border:0; color:#797367; cursor:pointer; padding:0; font:inherit; }
+.history-board { width:100%; max-height:260px; object-fit:contain; border:1px solid #302c251c; border-radius:10px; background:#faf9f6; }
+.session-recap ul { padding-left:20px; font-size:14px; line-height:1.6; }
+.session-recap li { margin-bottom:8px; }
+.session-recap textarea { box-sizing:border-box; width:100%; resize:vertical; border:1px solid #d6cfc1; border-radius:8px; background:#fffdf7; color:#302c25; font:inherit; padding:12px; }
+.session-recap fieldset { border:0; margin:20px 0; padding:0; }
+.session-recap legend { margin-bottom:10px; font-size:14px; }
+.confidence-options, .history-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.confidence-options button, .history-actions button { border:1px solid #d6cfc1; border-radius:8px; padding:10px 14px; background:transparent; color:#302c25; font:inherit; font-size:14px; cursor:pointer; }
+.confidence-options button[aria-pressed="true"] { background:#e9dfc5; border-color:#ae873c; }
+.history-actions .history-primary { background:#ad6547; border-color:#ad6547; color:#fff; }
+.history-actions button:disabled { opacity:.55; cursor:wait; }
+.lesson-end-button { border:0; background:transparent; color:#797367; font:inherit; font-size:14px; cursor:pointer; padding:12px; }
+.history-save-error { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); color:#9b3020; font-size:12px; z-index:10; }
+.lesson-ending-panel { width:min(620px,calc(100vw - 32px)); }
