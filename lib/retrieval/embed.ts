@@ -8,13 +8,15 @@
  * One model per server process (kept on globalThis so dev hot reloads don't load it again). Callers
  * that can't wait use `embedderNow()`, which is null until the model is ready.
  */
+import os from "node:os";
 import path from "node:path";
 
 export const EMBED_MODEL = process.env.RETRIEVAL_MODEL || "Xenova/all-MiniLM-L6-v2";
 export const EMBED_DTYPE = "q8";
 /** Stamped into lib/blocks/vectors.json: vectors from another model or dtype don't mix. */
 export const EMBED_STAMP = `${EMBED_MODEL}:${EMBED_DTYPE}`;
-export const CACHE_DIR = process.env.RETRIEVAL_CACHE_DIR || path.join(process.cwd(), ".cache", "transformers");
+// On Vercel the project folder is read-only: the temp folder (refilled on each cold start).
+export const CACHE_DIR = process.env.RETRIEVAL_CACHE_DIR || (process.env.VERCEL ? path.join(os.tmpdir(), "transformers") : path.join(process.cwd(), ".cache", "transformers"));
 
 export type Embedder = (texts: string[]) => Promise<Float32Array[]>;
 type ModelState = { ready: Promise<Embedder>; embed: Embedder | null; loadMs: number | null; error: string | null };

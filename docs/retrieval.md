@@ -133,6 +133,8 @@ These runs wrote four test lessons to the Convex deployment in `.env.local`.
 ## Known limits
 
 - **Paraphrases with no shared word** lean on the 384-dim model. On a three-element board, "why does the plant need the yellow thing in the sky" found `glucose` (it shares "plant"), not `sun`. Unrelated utterances ("how do I bake bread", "can you say that again", "wait what") correctly return nothing.
-- **The `h2o` brief** ("water molecules travel up" a plant) ranks the plant first on both engines. The beat still gets `h2o`, because the keyword match's top 3 join every pick.
+- **A word every doc shares** gets the full lexical half for all of them, because BM25 is divided by the best match. "Scene" was such a word: it is in every board doc's template text, so "can we go back to the scene" matched the whole board. It is now a stop word, and both "scene" utterances return nothing. Another template word like it would need the same treatment.
+- **The `h2o` brief** ("water molecules travel up" a plant) ranks the plant first on both engines. The beat still gets `h2o`, because the keyword match's top 3 (`water-molecule, roots, h2o`) join every pick.
+- **Deploy target unverified.** No deploy config is in the repo. On Vercel, where the project folder is read-only, the model cache defaults to the temp folder, and each cold function downloads the 23 MB again unless the files are shipped. Whether `lib/blocks/vectors.json` (read with `fs`) is traced into a serverless bundle is untested; it works under `next start`.
 - **`lib/blocks/vectors.json`** is 630 KB, one line per block, so a changed block is a one-line diff.
 - **Moss stays installed** (`@moss-js/moss`, `lib/moss/`, `scripts/moss-build-blocks.ts`, the `--engine=moss` test) until Keyon removes it. Removing it means deleting `lib/moss/`, the moss branches in `lib/retrieval/blocks.ts` and `session.ts`, the dev route's Moss fields and the package.

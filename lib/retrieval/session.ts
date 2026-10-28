@@ -65,7 +65,7 @@ export async function upsertDocs(name: string, docs: { id: string; text: string;
   return { added: changed.length, ms: Math.round(performance.now() - t0), status: embed ? "local" : "pending" };
 }
 
-const WORD_STOP = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "at", "it", "is", "was", "where", "what", "show", "me", "that", "this", "for", "with", "again", "you", "your", "drew", "draw"]);
+const WORD_STOP = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "at", "it", "is", "was", "where", "what", "show", "me", "that", "this", "for", "with", "again", "you", "your", "drew", "draw", "scene"]);
 const words = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !WORD_STOP.has(w));
 
 /** The k best documents for `query`: the engine when it is ready, else word overlap. */

@@ -15,11 +15,12 @@ export type HybridDoc = { id: string; text: string; title?: string; tags?: strin
 export type HybridHit = { id: string; score: number; dense: number; lexical: number };
 
 // Common English words carry no topic: left in, "each", "other" and "how much" made a brief about
-// attention match the chemistry blocks that happen to say them.
+// attention match the chemistry blocks that happen to say them. "scene" is in every board doc's text
+// (app/api/board-index "Scene N"), so "go back to the scene" would match the whole board.
 const STOP = new Set(
   ("a about above after again against all also am an and any are as at back be because been before being below between both but by can could did do does doing down during each few for from " +
     "further had has have having he her here hers him his how i if in into is it its itself just like look looks me more most much my no nor not now of off on once one only or other our out over own " +
-    "same she should so some such than that the their them then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your")
+    "same scene she should so some such than that the their them then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your")
     .split(" "),
 );
 
