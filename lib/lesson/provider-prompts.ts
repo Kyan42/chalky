@@ -20,7 +20,9 @@ const LINES: Partial<Record<Provider, Record<string, string[]>>> = {
     plan: [
       `Output only JSON lines, one object per line, as specified: no markdown fences, no commentary, no blank lines between them.`,
       // gpt-6.1-sol left "section" off the lesson's first beat, so the first section had no title.
-      `The lesson's first beat opens the first section: it carries that section's "section" title too.`,
+      `The lesson's first beat opens the first section: the first beat line after the title line always has a "section" field.`,
+      // gpt-6.1-sol read "speak in the first person" as narrating its actions: "I point to the air here", "I draw…", "I call that…".
+      `"First person" only means you never call yourself Chalky. Don't narrate what you do at the board ("I draw…", "I point to…", "I call this…"): talk about the thing itself ("Here's the air…", "This is called scattering…"), as the drawing appears.`,
     ],
   },
 };
