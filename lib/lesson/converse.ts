@@ -201,6 +201,26 @@ export { isResume };
 
 const SENTINEL = "<<<trailer>>>";
 
+/** The first complete JSON object in `text` (braces matched outside strings), or null if none is complete yet. */
+export function firstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let k = start; k < text.length; k++) {
+    const c = text[k];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(start, k + 1);
+  }
+  return null;
+}
+
 const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard. The learner just said something, before a lesson or during one. Reply out loud, briefly, and choose what happens next as a list of actions. The board does the explaining: you point at it or draw on it, you don't lecture.
 
 The actions (several per turn, applied in order):
@@ -718,6 +738,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
         if (signal.aborted) break;
         if (inTrailer) {
           trailerText += delta;
+          // The trailer is one JSON object: once it is whole, nothing after it is read (some models run on).
+          if (firstJsonObject(trailerText)) break;
           continue;
         }
         if (header !== null) {
@@ -771,6 +793,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       }
       if (signal.aborted) return;
       const final = await stream.result();
+      // CONVERSE_LOG_RAW=1: the model's whole reply as written (format tuning, docs/openai.md).
+      if (process.env.CONVERSE_LOG_RAW === "1") console.info(`[converse raw] ${model}: ${JSON.stringify(final.text)}`);
       usage.input = final.usage.input;
       usage.output = final.usage.output;
       if (final.stop === "refusal") throw new Error("Chalky couldn't answer that");
@@ -786,7 +810,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       let trailer: ConverseTrailer;
       let modelCues: unknown[] = [];
       try {
-        const json = trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
+        // The first whole JSON object: text after it (a model running on past the trailer) is not part of it.
+        const json = firstJsonObject(trailerText) ?? trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
         const raw = JSON.parse(json);
         if (Array.isArray(raw?.cursor)) modelCues = raw.cursor;
         trailer = cleanTrailer(raw, input, spoken);

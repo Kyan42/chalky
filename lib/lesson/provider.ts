@@ -136,23 +136,35 @@ function anthropicStream(req: ModelRequest, tracked: TrackedCall): ModelStream {
   });
   const usage = { input: 0, output: 0 };
   let text = "";
+  /** The caller stopped reading before the end (it had what it needed): the request is cancelled, not failed. */
+  let early = false;
   return {
     log: tracked.log,
     fail: (e) => tracked.finish(e),
     async *[Symbol.asyncIterator]() {
-      for await (const e of stream) {
-        if (e.type === "content_block_delta") {
-          if (e.delta.type === "text_delta") {
-            text += e.delta.text;
-            yield e.delta.text;
-          }
-        } else if (e.type === "message_start") {
-          const u = e.message.usage;
-          usage.input = u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-        } else if (e.type === "message_delta") usage.output = e.usage.output_tokens;
+      let completed = false;
+      try {
+        for await (const e of stream) {
+          if (e.type === "content_block_delta") {
+            if (e.delta.type === "text_delta") {
+              text += e.delta.text;
+              yield e.delta.text;
+            }
+          } else if (e.type === "message_start") {
+            const u = e.message.usage;
+            usage.input = u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+          } else if (e.type === "message_delta") usage.output = e.usage.output_tokens;
+        }
+        completed = true;
+      } finally {
+        if (!completed && !req.signal?.aborted) {
+          early = true;
+          stream.abort();
+        }
       }
     },
     async result() {
+      if (early) return { text, stop: "end", usage, call: tracked.finish() };
       try {
         const final = await stream.finalMessage();
         const all = final.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
@@ -210,17 +222,29 @@ function openaiStream(req: ModelRequest, tracked: TrackedCall): ModelStream {
   let refused = false;
   let final: OpenAI.Responses.Response | null = null;
   let consumed: Promise<void> | null = null;
+  /** The caller stopped reading before the end: the request is cancelled, not failed. */
+  let early = false;
   const consume = async function* () {
-    for await (const e of await opened) {
-      if (e.type === "response.output_text.delta") {
-        tracked.firstToken();
-        text += e.delta;
-        yield e.delta;
-      } else if (e.type === "response.refusal.delta") {
-        tracked.firstToken();
-        refused = true;
-      } else if (e.type === "response.completed" || e.type === "response.incomplete" || e.type === "response.failed") final = e.response;
-      else if (e.type === "error") throw new Error(`OpenAI: ${e.message}`);
+    const events = await opened;
+    let completed = false;
+    try {
+      for await (const e of events) {
+        if (e.type === "response.output_text.delta") {
+          tracked.firstToken();
+          text += e.delta;
+          yield e.delta;
+        } else if (e.type === "response.refusal.delta") {
+          tracked.firstToken();
+          refused = true;
+        } else if (e.type === "response.completed" || e.type === "response.incomplete" || e.type === "response.failed") final = e.response;
+        else if (e.type === "error") throw new Error(`OpenAI: ${e.message}`);
+      }
+      completed = true;
+    } finally {
+      if (!completed && !req.signal?.aborted && !final) {
+        early = true;
+        events.controller.abort();
+      }
     }
   };
   return {
@@ -232,6 +256,7 @@ function openaiStream(req: ModelRequest, tracked: TrackedCall): ModelStream {
       return it;
     },
     async result() {
+      if (early) return { text, stop: "end", usage: { input: 0, output: 0 }, call: tracked.finish() };
       try {
         // Not iterated by the caller (a one-shot call): drain it here.
         if (!consumed) for await (const _ of consume()) void _;

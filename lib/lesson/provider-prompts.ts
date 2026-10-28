@@ -10,7 +10,9 @@ const LINES: Partial<Record<Provider, Record<string, string[]>>> = {
     // The conversation reply is read as it streams: the actions line first, speech, then the sentinel and
     // one JSON line. Nothing else may come before the actions line or after the trailer.
     converse: [
-      `Output format, strictly: the very first line is "actions: " and the action names; then the spoken reply as plain sentences; then a line with exactly <<<trailer>>> and the JSON object on one line. No markdown, no headings, nothing after the JSON.`,
+      `Output format, strictly: the very first line is "actions: " and the action names; then the spoken reply as plain sentences; then a line with exactly <<<trailer>>> and the JSON object on one line. No markdown, no headings. Stop writing right after the JSON object: no tool calls, no further text.`,
+      // gpt-6-luna once skipped the actions line and spoke its own plan ("This is time-sensitive, so start a lesson…").
+      `Every sentence after the actions line is spoken aloud to the learner, as Chalky. Never write notes, reasoning or instructions to yourself there.`,
     ],
     // The planner's output is read line by line as JSON.
     plan: [`Output only JSON lines, one object per line, as specified: no markdown fences, no commentary, no blank lines between them.`],
