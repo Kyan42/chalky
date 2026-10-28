@@ -775,8 +775,10 @@ export default function Lesson() {
   const replyEndRef = useRef(0);
   /** Applies the merge rule; returns true when it handled the utterance. */
   const mergeRef = useRef<(said: string) => boolean>(() => false);
-  /** When the learner's last utterance arrived. */
+  /** When the learner started their last utterance (its first words heard). */
   const utteranceAtRef = useRef(0);
+  /** When the turn being heard now started (0: none). */
+  const turnStartRef = useRef(0);
   /** How the learner's latest words arrived, for the transcript. */
   const inputViaRef = useRef<"voice" | "typed" | "button">("typed");
   /** Adds an event to the running lesson's transcript; set by the running lesson. */
@@ -846,11 +848,15 @@ export default function Lesson() {
     onBargeIn: () => pauseRef.current(),
     onPartial: (text) => {
       if (!text.trim()) return;
+      // When they started saying it (an answer counts from its start, not from when Ink ended the turn).
+      if (!turnStartRef.current) turnStartRef.current = performance.now();
       captionAwaitingSpeech.current = false;
       setLearnerCaption(text);
     },
     onUtterance: (text) => {
       const said = text.trim();
+      const startedAt = turnStartRef.current || performance.now();
+      turnStartRef.current = 0;
       if (!said || haltedRef.current) return;
       setLearnerCaption(said);
       // A fragment of two words or fewer right after a reply ("That was.") is the end of what they were saying,
@@ -861,7 +867,7 @@ export default function Lesson() {
         return;
       }
       inputViaRef.current = "voice";
-      utteranceAtRef.current = performance.now();
+      utteranceAtRef.current = startedAt;
       if (mergeRef.current(said)) return;
       if (turnRef.current) turnRef.current(said);
       else if (pausedRef.current) {
