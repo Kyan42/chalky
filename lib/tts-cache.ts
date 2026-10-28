@@ -9,7 +9,9 @@ import { STOCK_LINES } from "./lesson/stock-lines";
 import { sonicStream, type BeatAudioEvent } from "./sonic";
 
 const STOCK = new Set(STOCK_LINES);
-const cache = new Map<string, BeatAudioEvent[]>();
+// On globalThis: instrumentation (which warms it) and the route can load separate copies of this module.
+const shared = globalThis as typeof globalThis & { __chalkyStockSpeech?: Map<string, BeatAudioEvent[]> };
+const cache = (shared.__chalkyStockSpeech ??= new Map<string, BeatAudioEvent[]>());
 
 export const isStock = (text: string) => STOCK.has(text);
 /** The cache key: the same line in another voice, speed or language is another recording. */
