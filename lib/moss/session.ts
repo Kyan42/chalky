@@ -12,7 +12,8 @@
  * sessions are found by the key in `sessions`.
  */
 import type { SessionIndex } from "@moss-js/moss";
-import { hasMossKeys, mossState } from "./blocks";
+import { hasMossKeys } from "@/lib/retrieval/docs";
+import { mossState } from "./blocks";
 
 type Live = {
   index: SessionIndex | null;

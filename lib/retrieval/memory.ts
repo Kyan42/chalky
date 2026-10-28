@@ -1,6 +1,6 @@
 /**
  * Learner memory: what a learner said in earlier lessons, from their Convex record (convex/learners.ts),
- * as one Moss session document per line: each confusion, what they already knew, what they wanted, and
+ * as one session document per line (lib/retrieval/session.ts, local or Moss engine): each confusion, what they already knew, what they wanted, and
  * each earlier lesson with what it got stuck on. Queried with the utterance (and the lesson's question)
  * before every reply; the best lines go into the fast model's prompt as "what this learner has said
  * before". Records are fetched at a lesson's first reply and then once a minute at most, never on a

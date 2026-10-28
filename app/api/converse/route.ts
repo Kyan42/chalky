@@ -9,8 +9,8 @@ import { converse, type ConverseEvent, type ConverseInput } from "@/lib/lesson/c
 import { decideIntake, intakeQuestion } from "@/lib/lesson/intake";
 import { cleanLearner, type BeatMode } from "@/lib/lesson/types";
 import { learnerIdFrom } from "@/lib/convexMirror";
-import { learnerMemory } from "@/lib/moss/memory";
-import { searchDocs } from "@/lib/moss/session";
+import { learnerMemory } from "@/lib/retrieval/memory";
+import { searchDocs } from "@/lib/retrieval/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   const input = parse(body);
   if (typeof input === "string") return Response.json({ error: input }, { status: 400 });
   // Retrieval before the call: the board elements (any scene) and the learner's earlier lines that best
-  // match what they said, both from Moss session indexes (lib/moss); neither is a tool the model calls.
+  // match what they said, both from session indexes (lib/retrieval/session.ts); neither is a tool the model calls.
   const lesson = typeof body.lesson === "string" && /^[a-z0-9-]{8,100}$/.test(body.lesson) ? body.lesson : null;
   const tr = performance.now();
   const [boardHits, memory] = await Promise.all([lesson ? searchDocs(`board-${lesson}`, input.utterance, 3) : Promise.resolve(null), learnerMemory(learnerIdFrom(request, body), `${input.utterance} ${input.question}`.trim(), lesson)]);

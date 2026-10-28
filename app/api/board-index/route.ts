@@ -1,9 +1,9 @@
 /**
  * POST /api/board-index  { lesson, docs: [{ id, label, scene, said }] }  →  { added, ms, status }
  * Keeps the lesson's board index current: one document per element on the board (any scene), sent by
- * the page as beats and sketches land. /api/converse searches it with each utterance (lib/moss/session.ts).
+ * the page as beats and sketches land. /api/converse searches it with each utterance (lib/retrieval/session.ts).
  */
-import { upsertDocs } from "@/lib/moss/session";
+import { upsertDocs } from "@/lib/retrieval/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
