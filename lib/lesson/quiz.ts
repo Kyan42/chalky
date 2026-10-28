@@ -9,8 +9,7 @@
  * All answer with a score 0..1, what was right and what was missing, and two or three spoken sentences.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { trackCall } from "./calllog";
+import { streamModel, type ModelMessage } from "./provider";
 import { CONVERSE_MODEL } from "./converse";
 import { DELEGATE_MODEL } from "./delegate";
 import { withVoiceRules } from "./preference-prompt";
@@ -37,27 +36,9 @@ export interface QuizGrade {
   call?: CallLog;
 }
 
-async function json<T>(model: string, name: string, system: string, content: Anthropic.MessageParam["content"], schema: object, maxTokens: number, signal?: AbortSignal): Promise<{ out: T; call: CallLog }> {
-  const tracked = trackCall(name, model);
-  let message;
-  let call: CallLog;
-  try {
-    message = await tracked.client.messages.create(
-      {
-        model,
-        max_tokens: maxTokens,
-        system,
-        // Haiku 5.5 turns thinking off with disabled; Sonnet 5.5 with between_tools.
-        thinking: model.startsWith("claude-sonnet-5-5") ? { type: "between_tools" } : { type: "disabled" },
-        output_config: { effort: "low", format: { type: "json_schema", schema } },
-        messages: [{ role: "user", content }],
-      } as Anthropic.MessageCreateParamsNonStreaming,
-      { signal },
-    );
-  } finally {
-    call = tracked.finish();
-  }
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+/** A grading call with thinking off, answering JSON against `schema`. */
+async function json<T>(model: string, name: string, system: string, content: ModelMessage["content"], schema: object, maxTokens: number, signal?: AbortSignal): Promise<{ out: T; call: CallLog }> {
+  const { text, call } = await streamModel({ name, model, system, messages: [{ role: "user", content }], maxTokens, effort: "off", schema, signal }).result();
   return { out: JSON.parse(text) as T, call };
 }
 
@@ -121,9 +102,9 @@ export async function gradeSketch(o: { question: string; ask: string; rubric: st
   ]
     .filter(Boolean)
     .join("\n\n");
-  const content: Anthropic.MessageParam["content"] = o.image
+  const content: ModelMessage["content"] = o.image
     ? [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: o.image } },
+        { type: "image", jpegBase64: o.image },
         { type: "text", text: `The board with the learner's drawing on it.\n\n${text}` },
       ]
     : text;

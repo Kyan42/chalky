@@ -6,14 +6,13 @@
  * board, with one repair turn on failure.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
 import type { AnimationDocument } from "@clayzo/animation/authoring";
 import { L3_SCHEMA, SCENE_LANGUAGE } from "@/experiments/visual-flex/prompts";
-import { anthropic } from "./anthropic";
+import { modelFor, streamModel, type ModelMessage } from "./provider";
 import { compileBoard, describeBoard, MAX_ELEMENTS, type BoardElement, type BoardSpec } from "./board";
 import type { PlannedBeat } from "./types";
 
-const MODEL = "claude-haiku-5-5";
+const MODEL = modelFor("visual");
 
 const SYSTEM = `You draw on a teacher's whiteboard, one beat of a spoken lesson at a time. A teacher voice speaks the sentence; your drawing starts the moment the anchor word is spoken, builds while the rest of the sentence plays, then holds still. The board keeps everything from earlier beats, like a real whiteboard, so build on it: add only what this beat needs, point at what is already there, and keep the board readable. Show the idea, don't repeat the sentence as text. Keep labels short. Answer with the requested output only.`;
 
@@ -67,7 +66,6 @@ export interface VisualResult {
 }
 
 export async function generateVisual(question: string, beat: PlannedBeat, board: BoardElement[], signal?: AbortSignal): Promise<VisualResult> {
-  const client = anthropic();
   const t0 = performance.now();
   const pointOnly = beat.mode === "point";
   const brief = [
@@ -81,35 +79,23 @@ export async function generateVisual(question: string, beat: PlannedBeat, board:
     "",
     describeBoard(board),
   ].join("\n");
-  const messages: Anthropic.MessageParam[] = [
+  const messages: ModelMessage[] = [
     { role: "user", content: `${brief}\n\n${SCENE_LANGUAGE}\n\n${BOARD_RULES}\n\nReturn JSON matching the schema.` },
   ];
   const attempts: VisualResult["attempts"] = [];
 
   for (let turn = 0; turn < 2; turn++) {
     const ta = performance.now();
-    const message = await client.messages
-      .stream(
-        {
-          model: MODEL,
-          max_tokens: 6000,
-          system: SYSTEM,
-          messages,
-          thinking: { type: "adaptive" },
-          output_config: { effort: "low", format: { type: "json_schema", schema: BOARD_SCHEMA } },
-        } as Anthropic.MessageStreamParams,
-        { signal },
-      )
-      .finalMessage();
-    const attempt = { ms: Math.round(performance.now() - ta), outputTokens: message.usage.output_tokens, stopReason: message.stop_reason, error: null as string | null };
+    const message = await streamModel({ name: "visual", model: MODEL, system: SYSTEM, messages: [...messages], maxTokens: 6000, effort: "low", schema: BOARD_SCHEMA, signal }).result();
+    const attempt = { ms: Math.round(performance.now() - ta), outputTokens: message.usage.output, stopReason: message.stop as string | null, error: null as string | null };
     attempts.push(attempt);
-    if (message.stop_reason === "refusal") {
+    if (message.stop === "refusal") {
       attempt.error = "refusal";
       break;
     }
     try {
-      if (message.stop_reason === "max_tokens") throw new Error("output was cut off at max_tokens");
-      const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+      if (message.stop === "max_tokens") throw new Error("output was cut off at max_tokens");
+      const text = message.text;
       const spec = JSON.parse(text) as BoardSpec;
       if (pointOnly) {
         // A pointing beat never adds or wipes anything, whatever the model sent.
@@ -127,7 +113,7 @@ export async function generateVisual(question: string, beat: PlannedBeat, board:
       };
     } catch (e) {
       attempt.error = String((e as Error).message ?? e).slice(0, 800);
-      messages.push({ role: "assistant", content: message.content as Anthropic.ContentBlockParam[] });
+      messages.push({ role: "assistant", content: message.text });
       messages.push({ role: "user", content: `That failed with this error:\n${attempt.error}\n\nFix it and answer again in the same format.` });
     }
   }

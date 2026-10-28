@@ -4,19 +4,18 @@
  * scene-language elements, scaled into the beat's region; the browser compiles
  * the scene's beats into one Clayzo document.
  *
- * Beat 1 is drawn by Haiku (it has to be on the board within seconds); later
- * beats by Sonnet (Opus in slow mode), whose boards read more cleanly, with a hard deadline and a
- * Haiku fallback instead of a repair turn. A beat that still fails just plays
- * with the board as it was.
+ * Beat 1 is drawn by the fast model (it has to be on the board within seconds); later
+ * beats by the mid model (the strongest in slow mode), whose boards read more cleanly, with a hard deadline
+ * and a fast-model fallback instead of a repair turn. A beat that still fails just plays with the board as
+ * it was. Models per role: lib/lesson/provider.ts. Parallel draws are capped per provider (DRAW_CONCURRENCY).
  *
  * Draw modes (lib/lesson/language.ts DrawMode): fast draws every beat from presets and freehand; slow
  * makes about FREE_SHARE of beats (never the first) free, allowed one new block as well, which is kept
  * in a local file (lib/blocks/learned.ts) for later lessons; the Moss index stays the catalog alone.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
 import { asBlock } from "@/lib/blocks/swap";
-import { trackCall } from "./calllog";
+import { modelFor as roleModel, providerOf, streamModel, type Provider } from "./provider";
 import { DRAW_SYSTEM, drawPrompt, FREE_SCHEMA, PRESET_SCHEMA, type DrawMode } from "./language";
 import { cleanId } from "./planner";
 import { fitToRegion, PRESET_KINDS, type PresetElement } from "./presets";
@@ -26,10 +25,41 @@ import { cleanNewBlock } from "@/lib/blocks/learn";
 import { blocksForBeat } from "@/lib/moss/blocks";
 import { loadLearned, saveLearned } from "@/lib/blocks/learned";
 
-const FAST_MODEL = process.env.DRAW_FAST_MODEL || "claude-haiku-5-5";
-const MODEL = process.env.DRAW_MODEL || "claude-sonnet-5-5";
-/** Slow mode draws its beats (all but the first) with Opus: the free beats author new blocks. */
-const SLOW_MODEL = process.env.DRAW_SLOW_MODEL || "claude-opus-5-5";
+const FAST_MODEL = roleModel("draw-fast");
+const MODEL = roleModel("draw");
+/** Slow mode draws its beats (all but the first) with the strongest model: the free beats author new blocks. */
+const SLOW_MODEL = roleModel("draw-slow");
+
+/**
+ * Parallel draws per provider: a new OpenAI account is low-tier, so at most OPENAI_DRAW_CONCURRENCY (default 4)
+ * at once; Anthropic is uncapped unless ANTHROPIC_DRAW_CONCURRENCY says otherwise. A held call waits for a
+ * slot (logged), and its deadline starts once it has one. 429s still go through the SDK's retry and backoff.
+ */
+const DRAW_CAP: Record<Provider, number> = {
+  openai: Number(process.env.OPENAI_DRAW_CONCURRENCY) || 4,
+  anthropic: Number(process.env.ANTHROPIC_DRAW_CONCURRENCY) || 0,
+};
+const drawing: Record<Provider, number> = { openai: 0, anthropic: 0 };
+const waiting: Record<Provider, (() => void)[]> = { openai: [], anthropic: [] };
+async function drawSlot(provider: Provider, beatId: string): Promise<{ release: () => void; queuedMs: number }> {
+  const cap = DRAW_CAP[provider];
+  const t0 = performance.now();
+  if (cap > 0 && drawing[provider] >= cap) {
+    console.info(`[draw] ${beatId}: ${provider} cap of ${cap} parallel draws reached, waiting for a slot`);
+    await new Promise<void>((r) => waiting[provider].push(r));
+  }
+  drawing[provider]++;
+  let released = false;
+  return {
+    queuedMs: Math.round(performance.now() - t0),
+    release: () => {
+      if (released) return;
+      released = true;
+      drawing[provider]--;
+      waiting[provider].shift()?.();
+    },
+  };
+}
 const TIMEOUT_MS = Number(process.env.DRAW_TIMEOUT_MS) || 20000;
 /** Opus is slower, and slow mode's beats are drawn well ahead of when they play. */
 const SLOW_TIMEOUT_MS = Number(process.env.DRAW_SLOW_TIMEOUT_MS) || 40000;
@@ -122,31 +152,35 @@ function cleanElements(raw: unknown, beat: PlannedBeat, earlier: PlannedBeat[], 
 }
 
 async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], model: string, timeoutMs: number, signal?: AbortSignal, blocks: Block[] = [], free = false): Promise<DrawResult> {
+  const slot = await drawSlot(providerOf(model), beat.id);
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(timeoutMs);
   const abort = signal ? AbortSignal.any([signal, deadline]) : deadline;
-  const tracked = trackCall("draw", model);
-  const fail = (error: string, outputTokens = 0): DrawResult => ({ elements: [], ms: ms(), model, outputTokens, dropped: 0, swapped: 0, error, calls: [tracked.finish(error)] });
+  const stream = streamModel({
+    name: "draw",
+    model,
+    system: DRAW_SYSTEM,
+    messages: [{ role: "user", content: drawPrompt(question, beat, earlier, blocks, free) }],
+    // A new block's line art is long.
+    maxTokens: free ? 10000 : 4000,
+    effort: "low",
+    schema: free ? FREE_SCHEMA : PRESET_SCHEMA,
+    signal: abort,
+  });
+  if (slot.queuedMs) stream.log.queuedMs = slot.queuedMs;
+  const done = () => (stream.log.totalMs === null ? stream.fail(null) : stream.log);
+  const fail = (error: string, outputTokens = 0): DrawResult => {
+    const call = stream.log.totalMs === null ? stream.fail(error) : stream.log;
+    call.error ??= error;
+    return { elements: [], ms: ms(), model, outputTokens, dropped: 0, swapped: 0, error, calls: [call] };
+  };
   try {
-    const message = await tracked
-      .watch(tracked.client.messages.stream(
-        {
-          model,
-          // A new block's line art is long.
-          max_tokens: free ? 10000 : 4000,
-          system: DRAW_SYSTEM,
-          messages: [{ role: "user", content: drawPrompt(question, beat, earlier, blocks, free) }],
-          thinking: { type: "adaptive" },
-          output_config: { effort: "low", format: { type: "json_schema", schema: free ? FREE_SCHEMA : PRESET_SCHEMA } },
-        } as Anthropic.MessageStreamParams,
-        { signal: abort },
-      ))
-      .finalMessage();
-    const outputTokens = message.usage.output_tokens;
-    if (message.stop_reason === "refusal") return fail("refusal", outputTokens);
-    if (message.stop_reason === "max_tokens") return fail("cut off at max_tokens", outputTokens);
-    const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    const message = await stream.result();
+    const outputTokens = message.usage.output;
+    if (message.stop === "refusal") return fail("refusal", outputTokens);
+    if (message.stop === "max_tokens") return fail("cut off at max_tokens", outputTokens);
+    const text = message.text;
     const parsed = JSON.parse(text) as { elements?: unknown; newBlocks?: unknown };
     // A free beat's new block is registered before its elements are fitted (fitToRegion sizes blocks by id).
     const fresh = free && Array.isArray(parsed.newBlocks) ? parsed.newBlocks.slice(0, 1).map(cleanNewBlock).filter((b): b is Block => !!b) : [];
@@ -158,9 +192,11 @@ async function attempt(question: string, beat: PlannedBeat, earlier: PlannedBeat
     // Kept only once a lesson actually draws it.
     const learned = fresh.filter((b) => placed.has(b.id) && saveLearned(b)).map((b) => b.id);
     const learnedUsed = [...placed].flatMap((id) => (id && isLearned(id) ? [blockById(id)!] : []));
-    return { elements, ms: ms(), model, outputTokens, dropped, swapped, free, learned, blocks: learnedUsed, error: elements.length ? null : "no usable elements", calls: [tracked.finish()] };
+    return { elements, ms: ms(), model, outputTokens, dropped, swapped, free, learned, blocks: learnedUsed, error: elements.length ? null : "no usable elements", calls: [done()] };
   } catch (e) {
     return fail(deadline.aborted ? `deadline (${timeoutMs} ms)` : String((e as Error)?.message ?? e).slice(0, 300));
+  } finally {
+    slot.release();
   }
 }
 

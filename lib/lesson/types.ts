@@ -142,6 +142,8 @@ export interface CallLog {
   retries: number;
   attempts: CallAttempt[];
   error: string | null;
+  /** Waited this long for a slot under the provider's parallel-draw cap before the call went out. */
+  queuedMs?: number;
   /** For a plan change: what each scene holds once it is in, and what the scene rules fixed (lib/lesson/scenes.ts). */
   layout?: {
     scenes: { scene: number; kept: number; draws: number; points: number; sketches: number }[];
