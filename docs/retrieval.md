@@ -46,11 +46,12 @@ Both engines were run on the same block text; the Moss index was rebuilt from it
 
 | Engine | In top 3 | Miss | Query median | Max |
 |---|---|---|---|---|
-| local | **25 / 26** | `h2o` (4th: plant, roots, seedling) | 7.3 ms | 26 ms |
-| Moss | 25 / 26 | `h2o` (plant, roots, seedling) | 6.8 ms | 13.5 ms |
+| local | **25 / 26** | `h2o` (4th: plant, roots, seedling) | 4.0 ms | 13.7 ms |
+| Moss | 25 / 26 | `h2o` (plant, roots, seedling) | 7.3 ms | 12.4 ms |
 | keyword fallback (top 5) | 25 / 26 (24 before the attention tags) | glucose | <1 ms | |
 
-The local median includes embedding the query; Moss's query also embeds in process.
+The local median includes embedding the query; Moss's query also embeds in process. Latencies are from
+the run on AC power (2026-10-28); scores are the same on every run.
 
 **How it got to 25.** The first local run scored 24/26 (`h2o` 9th, `attention` 13th). Three general changes:
 
@@ -70,41 +71,40 @@ Every blend from 0.3 to 0.7 scores 25; 0.8 still scores 25 but ranks `h2o` lower
 
 ## Timings
 
-The two sets below were taken under different conditions, and only the first is a fair absolute number.
-The laptop was on battery (25% then 18%, discharging) for the second half of the work, and Windows throttled
-it: both engines got 10-20x slower, and their order swapped between runs.
-**Redo this table on AC power with `npx tsx --env-file=.env.local scripts/bench-retrieval.ts`**
-(for a cold load add `RETRIEVAL_CACHE_DIR=<empty folder>`).
-
-**Light load** (first hours of the session, from the prototype and the fixture runs):
+`npx tsx --env-file=.env.local scripts/bench-retrieval.ts` on Keyon's laptop, on AC power, 2026-10-28.
+The engines run interleaved in one process (local, Moss, local, Moss…), and the same queries go to both.
+Three runs: two warm, one cold (`RETRIEVAL_CACHE_DIR` pointed at an empty folder, so the 23 MB
+model was downloaded first). Medians are per query or per doc. Ranges cover the three runs.
 
 | Measure | Local | Moss |
 |---|---|---|
-| Model load, cold (download 23 MB + load) | 2.1 s | n/a (cloud index load 1.8-2.1 s) |
-| Model load, warm (from `.cache`) | 0.66-1.3 s in a script, 2.9 s in `next dev` | |
-| First sentence after load | 67-69 ms (now part of the warm-up) | |
-| Embed one short line | 4.0 ms median | |
-| Embed block docs (batches of 32) | 30 ms a block (300 blocks in 9 s, once, offline) | |
-| Block query (fixture, 26 briefs) | median 7.3 ms | median 6.8 ms |
-| Memory (process RSS) | +75 MB for the model in the prototype | |
+| Start-up, cold | 2.8 s (download + load + first sentence) | index load 1.8 s (the index is built in the cloud) |
+| Start-up, warm (model in `.cache`) | 0.5-2.4 s | index load 1.8-3.6 s |
+| Embed one board or memory line | 3.2-3.5 ms (p95 5-7 ms) | embedded inside Moss |
+| Embed block docs, batches of 64 | 4.1-5.5 ms a block (300 blocks offline in about 1.5 s) | a cloud index build: 8-9 s to upsert 300 |
+| **Block query** (8 briefs × 4, top 5) | **4.3-4.8 ms** (p95 7-9 ms) | 9.2-16.3 ms (p95 17-39 ms) |
+| **Board**, 8 elements: make and index | **23-47 ms** | 1.1-1.3 s (session creation) |
+| **Board** query | **1.7-2.0 ms** (p95 2.4-3.0 ms) | 3.4 ms (p95 4.3-4.4 ms) |
+| **Memory**, 6 lines: make and index | **14-17 ms** | 326-338 ms |
+| **Memory** query | **1.9 ms** (p95 3-12 ms) | 3.4-3.8 ms (p95 4-5 ms) |
+| Fixture, 26 briefs, top 3 | 4.0 ms median, 13.7 ms max | 7.3 ms median, 12.4 ms max |
+| Process memory | +190-212 MB RSS once the model is loaded (89-100 → 279-301 MB) | Moss client plus index; the process ended at 720-740 MB with both loaded |
 
-**Throttled, on battery** (`bench-retrieval.ts`, engines interleaved; two runs):
+So on this machine the local engine is about 2x faster per query than Moss for blocks, board and memory.
+It makes a board or memory index in tens of milliseconds where Moss's session takes about a second.
+It costs about 200 MB of memory and a 0.5-2.8 s model load at server start, which
+`instrumentation.ts` does before the first lesson. A board session no longer has to be made ahead,
+and Moss's spare-session pool has no local counterpart.
 
-| Measure | Local, run 1 / run 2 | Moss, run 1 / run 2 |
-|---|---|---|
-| Model load + first sentence | 13.3 s warm / 16.8 s cold | index load 5.8 s / 8.3 s |
-| Embed one board/memory line | 170 / 264 ms median | |
-| Block query, 5 hits | 159 / 321 ms median | 172 / 262 ms median |
-| Board, 8 docs: index / query | 496 ms, 29 ms / 1.3 s, 124 ms | 3.8 s, 58 ms / 11 s, 25 ms |
-| Memory, 6 lines: index / query | 284 ms, 40 ms / 1.1 s, 124 ms | 1.1 s, 44 ms / 0.9 s, 44 ms |
-| RSS after loading the local model | 89 → 304-312 MB (transformers.js, onnxruntime and the model) | |
+Inside a server the numbers carry extra event-loop time. The production server (`next start`, keys
+blanked) was only measured on battery, so treat its numbers as untested on AC: steady block queries
+ran 27-62 ms, and the first board upsert took 4.3 s while start-up work was still running. In the
+real lesson below, on battery, `next dev` reported board searches of 41-121 ms. Until the model is
+ready, the fallbacks answer.
 
-What holds regardless of throttling:
-
-- The local engine has no cloud round trip. It needs no index build on Moss, and a board needs no session creation (Moss's took 0.9-11 s here, 1-7 s live).
-- The process gains roughly 215 MB for the local engine.
-- The model takes seconds to load at server start; `instrumentation.ts` hides that, as it hid Moss's index load.
-- In the production server (`next start`, keys blanked, battery), steady block queries ran 27-62 ms, and the first board upsert took 4.3 s while startup work was still running. Until the model is ready, the fallbacks answer.
+Earlier runs on battery (25%, then 18%, discharging) were 10-20x slower for both engines, and their
+order swapped between runs, so they are not reported. Re-run the command above on AC power after
+changing the model or the blend.
 
 ## A real lesson (`scripts/e2e-retrieval.mjs`)
 
