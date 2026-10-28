@@ -6,7 +6,9 @@
  * Authorization header, for environments whose egress proxy injects it. When the
  * browser aborts (interrupt), the upstream Sonic request is aborted too.
  */
+import { readPreferences } from "@/lib/preferences";
 import { sonicStream, type BeatAudioEvent } from "@/lib/sonic";
+import { cachedSpeech, isStock, recordStock, stockKey } from "@/lib/tts-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +28,19 @@ export async function POST(request: Request) {
     },
     { once: true },
   );
-  const savedSpeed = request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith("chalky-speed="))?.split("=")[1];
-  const events = sonicStream(text, upstream.signal, savedSpeed ? Number(savedSpeed) : undefined);
+  const cookie = request.headers.get("cookie") ?? "";
+  const savedSpeed = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("chalky-speed="))?.split("=")[1];
   const encoder = new TextEncoder();
+  // Chalky's fixed lines (the greeting, the acks…): from the cache at once, or fetched once and kept.
+  const prefs = readPreferences(cookie);
+  const key = isStock(text) ? stockKey(text, prefs.voice, savedSpeed ?? "", prefs.language) : null;
+  const cached = key ? cachedSpeech(key) : undefined;
+  if (cached) {
+    console.info(`[tts] "${text.slice(0, 40)}" from the cache`);
+    return new Response(cached.map((e) => JSON.stringify(e) + "\n").join(""), { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
+  }
+  const fresh = sonicStream(text, upstream.signal, savedSpeed ? Number(savedSpeed) : undefined);
+  const events = key ? recordStock(key, fresh) : fresh;
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {

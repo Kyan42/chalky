@@ -44,6 +44,7 @@ import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps 
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import type { DrawMode } from "@/lib/lesson/language";
+import { GREETING, INTAKE_ACKS, QUIET_SHOW, RESEARCH_EMPTY_MID, RESEARCH_EMPTY_START } from "@/lib/lesson/stock-lines";
 import { PREFERENCES_CHANGED, readPreferences, socratic, voiceInterruptOn } from "@/lib/preferences";
 import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
@@ -72,7 +73,6 @@ const SOCRATIC_ONE_TRY = true;
 const ECHO_TAIL_MS = 300;
 const WORDS_PER_SECOND = 2.6;
 const HIGHLIGHT_SECONDS = 1.8;
-const GREETING = "Hey, I'm Chalky! What do you want to learn today?";
 const GOODBYE = "Okay, let's stop here. Nice work today!";
 /** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
@@ -99,8 +99,6 @@ function savedDrawMode(): DrawMode {
     return "fast";
   }
 }
-/** Said the moment the intake answer lands, while the fast model decides (no silence while it thinks). */
-const INTAKE_ACKS = ["Got it, give me a second.", "Okay, let me set that up.", "Great, one moment while I sketch this out."];
 /** If nothing has been heard for this long while a beat is still being planned, say a short line. */
 const FILLER_AFTER_MS = 8000;
 const FILLERS = ["Almost there, I'm laying out the board.", "Still sketching this out, just a moment."];
@@ -1516,7 +1514,7 @@ export default function Lesson() {
             const found = researchJob ? await researchJob : null;
             const material = found?.status === "ready" ? found.material : null;
             lessonMaterial = material;
-            if (researchJob && !material) researchNote = "I couldn't find anything recent on that, so here's what I know.";
+            if (researchJob && !material) researchNote = RESEARCH_EMPTY_START;
             return post("/api/plan", { question: q, ...(material ? { material } : {}) });
           })();
       if (!res.ok || !res.body) throw new Error(`planning failed (${res.status})`);
@@ -1956,7 +1954,7 @@ export default function Lesson() {
         if (quiet) {
           logEv({ kind: "socratic-quiet", beatId, try: k + 1, waitedMs: QUESTION_WAIT_MS });
           setStatus("speaking");
-          await sayLine("No worries, let me just show you.");
+          await sayLine(QUIET_SHOW);
           if (tries.length) done("skipped");
           return;
         }
@@ -2810,7 +2808,7 @@ export default function Lesson() {
           setResearching(false);
           if (abort.signal.aborted) return -1;
           if (f.status !== "ready") {
-            const honest = "I couldn't find anything recent on that, so I'll stick with what I know.";
+            const honest = RESEARCH_EMPTY_MID;
             logEv({ kind: "say", who: "chalky", role: "research-empty", text: honest });
             setStatus("speaking");
             await playBeat(line(honest), abort.signal, null).catch(() => {});
@@ -3394,12 +3392,13 @@ export default function Lesson() {
   const startTalking = useCallback(async () => {
     try {
       setTreeRevealed(false);
-      await voice.start();
-      // The first connection already carries Chalky's name and the seed science vocabulary.
+      // The greeting (cached on the server) plays at once while Ink connects, not after: Start talking answers
+      // right away. The first connection already carries Chalky's name and the seed science vocabulary.
+      const mic = voice.start();
       const abort = new AbortController();
       abortRef.current = abort;
       setStatus("speaking");
-      await playBeat(line(GREETING), abort.signal, null, () => setTreeRevealed(true));
+      await Promise.all([mic, playBeat(line(GREETING), abort.signal, null, () => setTreeRevealed(true))]);
       setStatus("idle");
     } catch (e) {
       setError(`Voice couldn't start: ${String((e as Error).message ?? e)}. You can still type.`);
