@@ -77,7 +77,9 @@ const GOODBYE = "Okay, let's stop here. Nice work today!";
 /** Statuses in which Chalky is busy talking or about to: the open mic is muted (hold Space to barge in). */
 const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"]);
 /** Seconds of silence after the intake question before the lesson just goes on. */
-const INTAKE_SILENCE_MS = 4000;
+const INTAKE_SILENCE_MS = 12_000;
+/** The lesson went on after the intake's silence, and the learner's first words came this soon after: their answer. */
+const LATE_INTAKE_MS = 6000;
 /** After a reply ends, this long during which a two-word fragment is not taken as a new turn. */
 const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
@@ -773,6 +775,8 @@ export default function Lesson() {
   const replyEndRef = useRef(0);
   /** Applies the merge rule; returns true when it handled the utterance. */
   const mergeRef = useRef<(said: string) => boolean>(() => false);
+  /** When the learner's last utterance arrived. */
+  const utteranceAtRef = useRef(0);
   /** How the learner's latest words arrived, for the transcript. */
   const inputViaRef = useRef<"voice" | "typed" | "button">("typed");
   /** Adds an event to the running lesson's transcript; set by the running lesson. */
@@ -847,6 +851,7 @@ export default function Lesson() {
         return;
       }
       inputViaRef.current = "voice";
+      utteranceAtRef.current = performance.now();
       if (mergeRef.current(said)) return;
       if (turnRef.current) turnRef.current(said);
       else if (pausedRef.current) {
@@ -2598,6 +2603,10 @@ export default function Lesson() {
      * Returns the list position to play next (`resumeAt` replays the beat cut
      * off), or -1 when the lesson was stopped.
      */
+    /** The intake ended on silence and the lesson went on: when, and what was asked (a first answer soon after is the intake's). */
+    let lateIntake = null as { at: number; asked: { say: string; kind?: string; model?: string }; tAsk: number } | null;
+    /** The intake decision (set where the intake runs; a late answer uses it too). */
+    let decideIntake = async (_answer: string, _iq: { say: string; kind?: string; model?: string }, _tAsk: number): Promise<void> => {};
     const converseAt = (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> =>
       converseTurns(i, wordIndex, resumeAt, bridge).finally(() => showInk([]));
     const converseTurns = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
@@ -2640,6 +2649,17 @@ export default function Lesson() {
           local: heardText === null || isResume(heardText),
           escalation,
         });
+        // The lesson started on the intake's silence and this came right after: it is the intake answer.
+        if (heardText !== null && lateIntake && utteranceAtRef.current - lateIntake.at < LATE_INTAKE_MS && !isResume(heardText)) {
+          const late = lateIntake;
+          lateIntake = null;
+          logEv({ kind: "intake-late-answer", text: heardText, msAfterStart: Math.round(utteranceAtRef.current - late.at) });
+          await decideIntake(heardText, late.asked, late.tAsk);
+          setStatus("waiting");
+          settleCut();
+          return resumeAt;
+        }
+        lateIntake = null;
         if (heardText !== null) {
           learner.replies = [...learner.replies, heardText].slice(-5);
           noteLearner();
@@ -2888,6 +2908,46 @@ export default function Lesson() {
         }
         if (abort.signal.aborted) throw new DOMException("stopped", "AbortError");
       }
+    /**
+     * The intake answer: an ack at once, the fast model decides, and if the plan should change it is rewritten
+     * from beat 2 (beat 2 waits for it). Also used for an answer that came just after the lesson began on silence.
+     */
+    decideIntake = async (answer: string, iq: { say: string; kind?: string; model?: string }, tAsk: number) => {
+      learner.replies = [answer];
+      const tDecide = performance.now();
+      const deciding: Promise<{ amend?: boolean; note?: string; learner?: Partial<LearnerRecord>; error?: string; call?: unknown }> = post("/api/converse", {
+        intent: "intake_answer",
+        question: q,
+        asked: iq.say,
+        answer,
+        beats: list.slice(0, 3).map((s) => s.beat.say),
+      })
+        .then((r) => r.json())
+        .catch((e) => ({ error: String(e) }));
+      // Answer the learner at once, while the fast model decides: never silence after they speak.
+      const ack = INTAKE_ACKS[Math.floor(Math.random() * INTAKE_ACKS.length)];
+      logEv({ kind: "say", who: "chalky", role: "intake-ack", text: ack });
+      setStatus("speaking");
+      await playBeat(line(ack), abort.signal, null).catch(() => {});
+      setStatus("replying");
+      const decision = await deciding;
+      Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
+      noteLearner();
+      const decideMs = Math.round(performance.now() - tDecide);
+      logEv({ kind: "intake-decision", skipped: false, amend: !!decision.amend, note: decision.note ?? "", learner: decision.learner ?? null, call: decision.call ?? null, error: decision.error ?? null, decideMs, intakeMs: Math.round(performance.now() - tAsk) });
+      if (decision.amend && decision.note && !abort.signal.aborted) {
+        // Beat 1 plays as planned; everything after it is rewritten for this learner.
+        let release: () => void = () => {};
+        intakeGate = new Promise<void>((r) => (release = r));
+        void firstBeatPlanned.then(() => {
+          if (list.length >= 1 && !abort.signal.aborted) replan(1, decision.note!, answer, true);
+          release();
+        });
+      }
+      setIntakeView(
+        `Asked “${iq.say}” (${iq.kind}, ${iq.model}); answer “${answer}”; ${decision.error ? `decision failed: ${decision.error}` : decision.amend ? `the plan is rewritten from beat 2: ${decision.note}` : "the plan stays as it is"} (decided in ${(decideMs / 1000).toFixed(1)} s); the intake took ${((performance.now() - tAsk) / 1000).toFixed(1)} s.`,
+      );
+    };
       const iq = direct ? await intakeAsk : pendingIntake ? { say: pendingIntake, kind: "action", model: "converse", ms: undefined, call: undefined, spoken: true } : null;
       if (iq?.say && !abort.signal.aborted) {
         const tAsk = performance.now();
@@ -2925,42 +2985,8 @@ export default function Lesson() {
             noteLearner();
           }
           logEv({ kind: "intake-decision", skipped: true, reason: answer ? "skip phrase" : "silence", intakeMs: waitedMs });
-        } else {
-          learner.replies = [answer];
-          const tDecide = performance.now();
-          const deciding: Promise<{ amend?: boolean; note?: string; learner?: Partial<LearnerRecord>; error?: string; call?: unknown }> = post("/api/converse", {
-            intent: "intake_answer",
-            question: q,
-            asked: iq.say,
-            answer,
-            beats: list.slice(0, 3).map((s) => s.beat.say),
-          })
-            .then((r) => r.json())
-            .catch((e) => ({ error: String(e) }));
-          // Answer the learner at once, while the fast model decides: never silence after they speak.
-          const ack = INTAKE_ACKS[Math.floor(Math.random() * INTAKE_ACKS.length)];
-          logEv({ kind: "say", who: "chalky", role: "intake-ack", text: ack });
-          setStatus("speaking");
-          await playBeat(line(ack), abort.signal, null).catch(() => {});
-          setStatus("replying");
-          const decision = await deciding;
-          Object.assign(learner, { level: decision.learner?.level ?? "unknown", prior: decision.learner?.prior ?? "", focus: decision.learner?.focus ?? "" });
-          noteLearner();
-          const decideMs = Math.round(performance.now() - tDecide);
-          logEv({ kind: "intake-decision", skipped: false, amend: !!decision.amend, note: decision.note ?? "", learner: decision.learner ?? null, call: decision.call ?? null, error: decision.error ?? null, decideMs, intakeMs: Math.round(performance.now() - tAsk) });
-          if (decision.amend && decision.note && !abort.signal.aborted) {
-            // Beat 1 plays as planned; everything after it is rewritten for this learner.
-            let release: () => void = () => {};
-            intakeGate = new Promise<void>((r) => (release = r));
-            void firstBeatPlanned.then(() => {
-              if (list.length >= 1 && !abort.signal.aborted) replan(1, decision.note!, answer, true);
-              release();
-            });
-          }
-          setIntakeView(
-            `Asked “${iq.say}” (${iq.kind}, ${iq.model}); answer “${answer}”; ${decision.error ? `decision failed: ${decision.error}` : decision.amend ? `the plan is rewritten from beat 2: ${decision.note}` : "the plan stays as it is"} (decided in ${(decideMs / 1000).toFixed(1)} s); the intake took ${((performance.now() - tAsk) / 1000).toFixed(1)} s.`,
-          );
-        }
+        } else await decideIntake(answer, { say: iq.say, kind: iq.kind, model: iq.model }, tAsk);
+        if (!answer) lateIntake = { at: performance.now(), asked: { say: iq.say, kind: iq.kind, model: iq.model }, tAsk };
       }
 
       let i = 0;
