@@ -44,7 +44,7 @@ import { mergeTimestamps, normalizeWord, resolveAt, wordAt, type WordTimestamps 
 import type { ConverseAction, ConverseEvent, ConverseTrailer, Exchange, SketchSide } from "@/lib/lesson/converse";
 import { compilePresetBoard, type LayoutReport, type PresetElement } from "@/lib/lesson/presets";
 import type { DrawMode } from "@/lib/lesson/language";
-import { readPreferences, socratic } from "@/lib/preferences";
+import { PREFERENCES_CHANGED, readPreferences, socratic, voiceInterruptOn } from "@/lib/preferences";
 import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
@@ -52,7 +52,7 @@ import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
 import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
-import { useHybridMic } from "@/lib/voice/useHybridMic";
+import { realWords, useHybridMic } from "@/lib/voice/useHybridMic";
 import { captionWindow } from "@/lib/captions";
 
 const TPS = 240;
@@ -80,6 +80,8 @@ const MUTED: ReadonlySet<string> = new Set(["planning", "speaking", "replying"])
 const INTAKE_SILENCE_MS = 12_000;
 /** The lesson went on after the intake's silence, and the learner's first words came this soon after: their answer. */
 const LATE_INTAKE_MS = 6000;
+/** Said while a reply is in flight: a new question or topic, which replaces the one sent (else it is ignored). */
+const REPLACES_QUESTION = /\?|\b(what|how|why|when|where|who|which|teach|explain|tell me|show me|learn|instead|actually|can you|could you)\b/i;
 /** After a reply ends, this long during which a two-word fragment is not taken as a new turn. */
 const FRAGMENT_GRACE_MS = 2000;
 /** The hand arrives on an element this long before Chalky names it, as a teacher's hand leads the voice. */
@@ -821,8 +823,18 @@ export default function Lesson() {
     haltedRef.current = on;
     setHalted(on);
   }, []);
+  /** Voice interrupt (Preferences): talking over Chalky pauses it; off, Space does. Read again when it changes. */
+  const [voiceInterrupt, setVoiceInterrupt] = useState(true);
+  useEffect(() => {
+    const read = () => setVoiceInterrupt(voiceInterruptOn(readPreferences(document.cookie)));
+    read();
+    window.addEventListener(PREFERENCES_CHANGED, read);
+    return () => window.removeEventListener(PREFERENCES_CHANGED, read);
+  }, []);
   const voice = useHybridMic({
-    voiceBargeIn: true,
+    voiceBargeIn: voiceInterrupt,
+    // A reply still being written (no sound yet): three real words to cut in, so a bystander's fragment can't abort it.
+    bargeWords: status === "replying" ? 3 : 2,
     onVoiceBargeIn: (partial) => logRef.current({ kind: "voice-barge", partial, status: statusRef.current }),
     onVoiceIgnored: (text) => logRef.current({ kind: "voice-ignored", text }),
     // Before any topic is known: Chalky's name and common science and learning words (Ink takes at most 100).
@@ -3342,20 +3354,19 @@ export default function Lesson() {
     cutInRef.current = interrupt;
     lessonBusyRef.current = () => !!abortRef.current && !abortRef.current.signal.aborted && (MUTED.has(statusRef.current) || !!pausedRef.current) && !turnRef.current;
     mergeRef.current = (said) => {
-      // A reply is in flight for the learner's last words: a quick "oh" or "wait" joins that question instead
-      // of replacing it; a longer second utterance re-asks with both, in order.
+      // A reply is in flight: the learner's words have gone to the model, and nothing joins them any more (the
+      // mic's own merge window covers their turn before it is sent). A new question or topic ("wait, teach me
+      // virtual machines") replaces the pending question; anything else (a bystander, a fragment) is ignored.
       const last = lastLearnerRef.current;
       if (!replyAbortRef.current || !last) return false;
-      if (said.split(/\s+/).length <= 2 && !isResume(said)) {
-        last.text = `${last.text} ${said}`;
-        logRef.current({ kind: "utterance-merged", text: said, into: last.text, action: "kept the reply" });
-        if (pausedRef.current) resumePlayback();
+      if (REPLACES_QUESTION.test(said) && realWords(said) >= 3) {
+        logRef.current({ kind: "question-replaced", text: said, replaced: last.text });
+        queueRef.current.push(said);
+        interrupt();
         return true;
       }
-      const both = `${last.text} ${said}`;
-      logRef.current({ kind: "utterance-merged", text: said, into: both, action: "re-asked with both" });
-      queueRef.current.push(both);
-      interrupt();
+      logRef.current({ kind: "voice-ignored", text: said, why: "a reply is in flight for the question already sent" });
+      if (pausedRef.current) resumePlayback();
       return true;
     };
   }, [interrupt, pausePlayback, resumePlayback, halt]);

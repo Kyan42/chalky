@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_PREFERENCES, LANGUAGES, parsePreferences, type Preferences as Settings } from "@/lib/preferences";
+import { DEFAULT_PREFERENCES, LANGUAGES, parsePreferences, PREFERENCES_CHANGED, voiceInterruptOn, type Preferences as Settings } from "@/lib/preferences";
 import { DEFAULT_VOICE_ID, SPEEDS, VOICES } from "@/lib/voices";
 import LearningHistory from "./LearningHistory";
 import type { LearningSession } from "@/lib/learning-history";
@@ -29,6 +29,7 @@ export default function Preferences({ onContinue }: { onContinue?: (session: Lea
     const next = { ...settings, [key]: value };
     setSettings(next);
     document.cookie = `chalky-preferences=${encodeURIComponent(JSON.stringify(next))}; Max-Age=31536000; Path=/; SameSite=Lax`;
+    window.dispatchEvent(new Event(PREFERENCES_CHANGED));
   }
   const [speed, setSpeed] = useState("default");
   useEffect(() => {
@@ -93,6 +94,10 @@ export default function Preferences({ onContinue }: { onContinue?: (session: Lea
         <div className="preference-field">
           <label htmlFor="lesson-pace">Teaching pace</label><p>Separate from how fast the voice speaks.</p>
           <select id="lesson-pace" value={settings.pace} onChange={e => update("pace", e.target.value as Settings["pace"])}><option value="balanced">Adapt as we go</option><option value="stepwise">Step by step, with more check-ins</option><option value="concise">Concise, get to the point</option></select>
+        </div>
+        <div className="preference-field">
+          <label htmlFor="voice-interrupt">Voice interrupt</label><p>Talk over Chalky to pause it. Off in a loud room: hold Space instead.</p>
+          <select id="voice-interrupt" data-testid="pref-interrupt" value={voiceInterruptOn(settings) ? "on" : "off"} onChange={e => update("interrupt", e.target.value as Settings["interrupt"])}><option value="on">On</option><option value="off">Off (hold Space instead)</option></select>
         </div>
         <div className="preference-field">
           <label htmlFor="lesson-draw">Drawing</label><p>Slow mode is slower, and new drawings are kept for later lessons.</p>

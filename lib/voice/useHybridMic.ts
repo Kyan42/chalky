@@ -86,6 +86,11 @@ export interface HybridMicOptions {
    * cough, an "mm". Space keeps working either way.
    */
   voiceBargeIn?: boolean;
+  /**
+   * Real words a voice barge-in needs (default 2, with "stop"/"wait" counting alone). Above 2, the one-word
+   * fast path is off too: e.g. 3 while a reply is still being written, so a bystander's fragment can't abort it.
+   */
+  bargeWords?: number;
   /** A voice barge-in fired, on this partial transcript. */
   onVoiceBargeIn?: (partial: string) => void;
   /** A turn heard while Chalky spoke was dropped: it never reached two real words. */
@@ -177,7 +182,8 @@ export function useHybridMic(options: HybridMicOptions) {
           if (held.current && t.trim()) held.current.words = true;
           // Voice barge-in: the first partial with two real words while Chalky talks pauses it at once;
           // a turn that opens with "stop", "wait", "pause" or "hold on" counts on that one word (Leo's fast path).
-          if (turnWhileSpeaking.current && !voiceBarged.current && (realWords(t) >= 2 || COMMAND_WORD.test(t.trim()))) {
+          const need = opts.current.bargeWords ?? 2;
+          if (turnWhileSpeaking.current && !voiceBarged.current && (realWords(t) >= need || (need <= 2 && COMMAND_WORD.test(t.trim())))) {
             voiceBarged.current = true;
             opts.current.onVoiceBargeIn?.(t);
             opts.current.onBargeIn?.();
