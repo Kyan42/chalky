@@ -10,17 +10,17 @@
  * the first sentence. "ok / got it / keep going" never reaches a model.
  */
 import "server-only";
+import { handoffQuestion } from "./conversation-handoff";
 import { researchQuery } from "@/lib/research/query";
-import Anthropic from "@anthropic-ai/sdk";
-import { trackCall } from "./calllog";
+import { apiError, modelFor, streamModel, type ModelRequest, type ModelStream } from "./provider";
 import { cleanId } from "./planner";
 import { isHesitant, isQuestion, isResume, isStillLost, wantsToEnd } from "./resume";
 import { NOTE_RULES } from "./voice";
 import { withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type CallLog, type LearnerRecord } from "./types";
 
-export const CONVERSE_MODEL = process.env.CONVERSE_MODEL || "claude-haiku-5-5";
-export const CONVERSE_FALLBACK_MODEL = process.env.CONVERSE_FALLBACK_MODEL || "claude-sonnet-5-5";
+export const CONVERSE_MODEL = modelFor("converse");
+export const CONVERSE_FALLBACK_MODEL = modelFor("converse-fallback");
 
 /** 1 answer: a brief grounded answer. 2 detour: a short side explanation with a drawing. 3 replan: change the lesson. */
 /** confirm: they got it, acknowledge and go on. answer: point at what's on the board. detour: draw what's missing. replan: change the lesson. */
@@ -201,6 +201,26 @@ export { isResume };
 
 const SENTINEL = "<<<trailer>>>";
 
+/** The first complete JSON object in `text` (braces matched outside strings), or null if none is complete yet. */
+export function firstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let k = start; k < text.length; k++) {
+    const c = text[k];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(start, k + 1);
+  }
+  return null;
+}
+
 const SYSTEM = `You are Chalky, a warm, clear teacher at a whiteboard. The learner just said something, before a lesson or during one. Reply out loud, briefly, and choose what happens next as a list of actions. The board does the explaining: you point at it or draw on it, you don't lecture.
 
 The actions (several per turn, applied in order):
@@ -230,7 +250,7 @@ Choosing:
 - A question is never just a "say" that moves on: answer it (point, or sketch what is missing) and end with a short check question ("ask"), then wait. Only when they also said to go on does the lesson continue.
 - A hesitant yes ("yeah, I think so", "kind of"): ask ONE specific, low-pressure question that reveals the uncertain part, optionally after a small hint. Use "ask" and wait. Never treat hesitation as permission to continue.
 Never open with "good question", "great question" or similar, and never repeat their question back.
-- A new topic or a preferred approach takes priority over the plan. If they say this is boring, ask what kind of example would help, then use it. Do not steer back to the plan without their agreement.
+- When handing the turn back to the learner, end your spoken reply with one brief, natural question and wait. It can be an invitation or a simple check, not a test. Do not add a question to a goodbye or while handing off to a lesson that will continue speaking. A new topic or a preferred approach takes priority over the plan. If they say this is boring, ask what kind of example would help, then use it. Do not steer back to the plan without their agreement.
 - Off the lesson's path otherwise (a quick aside): answer briefly by the same rules.
 At most two spoken sentences, except a quick "say" answer may use three. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
@@ -636,28 +656,28 @@ function describeInk(ink: ConverseInk | undefined): string {
   return lines.join(" ");
 }
 
-async function params(model: string, input: ConverseInput): Promise<Anthropic.MessageStreamParams> {
-  const base: Anthropic.MessageStreamParams = {
+/** The reply's request: the cached system prompt, the board picture with their ink when there is one, thinking off. */
+async function params(model: string, input: ConverseInput, signal: AbortSignal): Promise<ModelRequest> {
+  return {
+    name: "converse",
     model,
-    max_tokens: 700,
-    system: [{ type: "text", text: `${await withVoiceRules(SYSTEM)}\n\n${NOTE_RULES}`, cache_control: { type: "ephemeral" } }],
-    output_config: { effort: "low" },
+    maxTokens: 700,
+    system: `${await withVoiceRules(SYSTEM)}\n\n${NOTE_RULES}`,
+    cacheSystem: true,
+    effort: "off",
+    signal,
     messages: [
       {
         role: "user",
         content: input.ink?.image
           ? [
-              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: input.ink.image } },
+              { type: "image", jpegBase64: input.ink.image },
               { type: "text", text: `The board as the learner sees it, with their ink on top.\n\n${context(input)}` },
             ]
           : context(input),
       },
     ],
   };
-  // Haiku 5.5 accepts thinking off at low effort; Sonnet 5.5 turns it off with between_tools.
-  if (model.startsWith("claude-haiku")) base.thinking = { type: "disabled" };
-  else if (model.startsWith("claude-sonnet-5-5")) base.thinking = { type: "between_tools" };
-  return base;
 }
 
 export async function* converse(input: ConverseInput, signal: AbortSignal): AsyncGenerator<ConverseEvent> {
@@ -675,7 +695,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
   const calls: CallLog[] = [];
   let model = CONVERSE_MODEL;
   let fellBack = false;
-  let callsInFlight: ReturnType<typeof trackCall> | null = null;
+  let callsInFlight: ModelStream | null = null;
   for (let attempt = 0; ; attempt++) {
     yield { type: "start", model, local: false, tMs: ms() };
     let sentences = 0;
@@ -712,74 +732,72 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       return { type: "sentence", text, tMs: ms() };
     };
     try {
-      const tracked = trackCall("converse", model);
-      callsInFlight = tracked;
-      const stream = tracked.watch(tracked.client.messages.stream(await params(model, input), { signal }));
-      for await (const event of stream) {
+      const stream = streamModel(await params(model, input, signal));
+      callsInFlight = stream;
+      for await (const delta of stream) {
         if (signal.aborted) break;
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          if (inTrailer) {
-            trailerText += event.delta.text;
-            continue;
-          }
-          if (header !== null) {
-            header += event.delta.text;
-            const nl = header.indexOf("\n");
-            if (nl < 0 && header.length < 40) continue;
-            const m = /^\s*actions?\s*:\s*([^\n]*)/i.exec(header);
-            if (m) names = [...m[1].toLowerCase().matchAll(ACTION_NAMES)].map((x) => x[1].replace(/\s+/g, ""));
-            pending += m ? header.slice(nl >= 0 ? nl + 1 : header.length) : header;
-            header = null;
-            // Still lost, or asking for a drawing: escalate now, and say only the hand-off, not the model's answer.
-            const forced = input.beats.length ? forcedLevel(input) : null;
-            if (forced && RANK[levelOf(names)] < RANK[forced]) {
-              console.info(`[converse] escalated ${names.join(", ") || "?"} -> ${forced} ("${input.utterance.slice(0, 80)}")`);
-              names = [forced === "replan" ? "amend:replace_from" : "amend:insert_after"];
-              budget = 1;
-              yield { type: "actions", names, tMs: ms() };
-              yield { type: "level", level: forced, tMs: ms() };
-              const ev = say(HANDOFF[forced]!);
-              if (ev) yield ev;
-              capped = true;
-            } else if (m) {
-              // A hesitant yes gets a small hint at most, then its one question.
-              budget = isHesitant(input.utterance) ? 2 : sentenceBudget(names);
-              yield { type: "actions", names, tMs: ms() };
-              yield { type: "level", level: levelOf(names), tMs: ms() };
-            }
-          } else pending += event.delta.text;
-          if (capped && !pending.includes(SENTINEL)) continue;
-          const cut = pending.indexOf(SENTINEL);
-          if (cut >= 0) {
-            // Everything before the sentinel is speech; after it, the trailer.
-            const speech = pending.slice(0, cut).trim();
-            trailerText = pending.slice(cut + SENTINEL.length);
-            pending = "";
-            inTrailer = true;
-            const ev = speech ? say(speech) : null;
+        if (inTrailer) {
+          trailerText += delta;
+          // The trailer is one JSON object: once it is whole, nothing after it is read (some models run on).
+          if (firstJsonObject(trailerText)) break;
+          continue;
+        }
+        if (header !== null) {
+          header += delta;
+          const nl = header.indexOf("\n");
+          if (nl < 0 && header.length < 40) continue;
+          const m = /^\s*actions?\s*:\s*([^\n]*)/i.exec(header);
+          if (m) names = [...m[1].toLowerCase().matchAll(ACTION_NAMES)].map((x) => x[1].replace(/\s+/g, ""));
+          pending += m ? header.slice(nl >= 0 ? nl + 1 : header.length) : header;
+          header = null;
+          // Still lost, or asking for a drawing: escalate now, and say only the hand-off, not the model's answer.
+          const forced = input.beats.length ? forcedLevel(input) : null;
+          if (forced && RANK[levelOf(names)] < RANK[forced]) {
+            console.info(`[converse] escalated ${names.join(", ") || "?"} -> ${forced} ("${input.utterance.slice(0, 80)}")`);
+            names = [forced === "replan" ? "amend:replace_from" : "amend:insert_after"];
+            budget = 1;
+            yield { type: "actions", names, tMs: ms() };
+            yield { type: "level", level: forced, tMs: ms() };
+            const ev = say(HANDOFF[forced]!);
             if (ev) yield ev;
-            continue;
+            capped = true;
+          } else if (m) {
+            // A hesitant yes gets a small hint at most, then its one question.
+            budget = isHesitant(input.utterance) ? 2 : sentenceBudget(names);
+            yield { type: "actions", names, tMs: ms() };
+            yield { type: "level", level: levelOf(names), tMs: ms() };
           }
-          // Emit whole sentences as they complete; a sentinel in progress ("<<<tra") is never a sentence.
-          for (;;) {
-            const end = sentenceEnd(pending);
-            if (end < 0) break;
-            const sentence = pending.slice(0, end).trim();
-            if (sentence.includes("<<")) break;
-            pending = pending.slice(end);
-            const ev = sentence ? say(sentence) : null;
-            if (ev) yield ev;
-          }
-        } else if (event.type === "message_delta") {
-          usage.output = event.usage.output_tokens;
-        } else if (event.type === "message_start") {
-          const u = event.message.usage;
-          usage.input = u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+        } else pending += delta;
+        if (capped && !pending.includes(SENTINEL)) continue;
+        const cut = pending.indexOf(SENTINEL);
+        if (cut >= 0) {
+          // Everything before the sentinel is speech; after it, the trailer.
+          const speech = pending.slice(0, cut).trim();
+          trailerText = pending.slice(cut + SENTINEL.length);
+          pending = "";
+          inTrailer = true;
+          const ev = speech ? say(speech) : null;
+          if (ev) yield ev;
+          continue;
+        }
+        // Emit whole sentences as they complete; a sentinel in progress ("<<<tra") is never a sentence.
+        for (;;) {
+          const end = sentenceEnd(pending);
+          if (end < 0) break;
+          const sentence = pending.slice(0, end).trim();
+          if (sentence.includes("<<")) break;
+          pending = pending.slice(end);
+          const ev = sentence ? say(sentence) : null;
+          if (ev) yield ev;
         }
       }
       if (signal.aborted) return;
-      const final = await stream.finalMessage();
-      if (final.stop_reason === "refusal") throw new Error("Chalky couldn't answer that");
+      const final = await stream.result();
+      // CONVERSE_LOG_RAW=1: the model's whole reply as written (format tuning, docs/openai.md).
+      if (process.env.CONVERSE_LOG_RAW === "1") console.info(`[converse raw] ${model}: ${JSON.stringify(final.text)}`);
+      usage.input = final.usage.input;
+      usage.output = final.usage.output;
+      if (final.stop === "refusal") throw new Error("Chalky couldn't answer that");
       // Flush what is left. If the sentinel never came, a trailing JSON object is still the trailer.
       const rest = pending.trim();
       if (rest) {
@@ -792,7 +810,8 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       let trailer: ConverseTrailer;
       let modelCues: unknown[] = [];
       try {
-        const json = trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
+        // The first whole JSON object: text after it (a model running on past the trailer) is not part of it.
+        const json = firstJsonObject(trailerText) ?? trailerText.slice(trailerText.indexOf("{"), trailerText.lastIndexOf("}") + 1);
         const raw = JSON.parse(json);
         if (Array.isArray(raw?.cursor)) modelCues = raw.cursor;
         trailer = cleanTrailer(raw, input, spoken);
@@ -802,22 +821,29 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       } catch {
         trailer = fallbackTrailer(input, spoken);
       }
-      // An ask the reply never got to say aloud (it spoke no question): say it now, before the trailer.
-      if (trailer.check && !spoken.includes("?")) {
-        spoken += (spoken ? " " : "") + trailer.check;
-        yield { type: "sentence", text: trailer.check, tMs: ms() };
+      // Sentence limits or trailer normalization can otherwise leave an unexplained wait.
+      const canContinue = input.beats.length > 0 &&
+        (trailer.cut !== "next" || input.beatIndex < input.beats.length - 1);
+      const question = handoffQuestion(trailer, spoken, canContinue);
+      if (question) {
+        trailer.check = question;
+        trailer.resume = "wait";
+        trailer.actions = trailer.actions.filter((action) => action.type !== "ask" && action.type !== "resume");
+        trailer.actions.push({ type: "ask", question }, { type: "resume", how: "wait" });
+        spoken += (spoken ? " " : "") + question;
+        yield { type: "sentence", text: question, tMs: ms() };
       }
       yield { type: "trailer", trailer, tMs: ms(), modelCues };
-      calls.push(tracked.finish());
+      calls.push(final.call);
       yield { type: "done", tMs: ms(), model, inputTokens: usage.input, outputTokens: usage.output, fellBack, calls };
       return;
     } catch (error) {
       if (signal.aborted) return;
       // Nothing has been spoken yet: try the fallback model once.
       if (attempt === 0 && sentences === 0 && model !== CONVERSE_FALLBACK_MODEL) {
-        const why = error instanceof Anthropic.APIError ? `${error.status} ${error.message}` : String((error as Error)?.message ?? error);
+        const why = apiError(error);
         console.warn(`[converse] ${model} failed before the first sentence (${why}); falling back to ${CONVERSE_FALLBACK_MODEL}`);
-        if (callsInFlight) calls.push(callsInFlight.finish(error));
+        if (callsInFlight) calls.push(callsInFlight.log.totalMs === null ? callsInFlight.fail(error) : callsInFlight.log);
         model = CONVERSE_FALLBACK_MODEL;
         fellBack = true;
         continue;

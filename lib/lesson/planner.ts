@@ -14,12 +14,12 @@
  */
 import "server-only";
 import { allBlocks } from "@/lib/blocks";
-import { trackCall } from "./calllog";
+import { modelFor, streamModel } from "./provider";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
 import { socraticOn, withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type Region } from "./types";
 
-const MODEL = process.env.PLANNER_MODEL || "claude-opus-5-5";
+const MODEL = modelFor("planner");
 
 // Medium effort thought for about 25 s before the first beat; low takes about 3 s with similar depth.
 const EFFORT = (process.env.PLANNER_EFFORT ?? "low") as "low" | "medium" | "high";
@@ -29,10 +29,6 @@ const EFFORT = (process.env.PLANNER_EFFORT ?? "low") as "low" | "medium" | "high
  * PLANNER_THINKING=off turns thinking off (Sonnet 5.5: between_tools; others: disabled),
  * PLANNER_TITLE_FIRST=1 tells the model to write the title line at once.
  */
-function plannerThinking(model: string) {
-  if (process.env.PLANNER_THINKING !== "off") return { type: "adaptive" as const };
-  return model.startsWith("claude-sonnet-5-5") ? ({ type: "between_tools" } as const) : ({ type: "disabled" } as const);
-}
 const TITLE_FIRST = "Start writing at once with the title line, then the first beat; do not plan the whole lesson in your head first.";
 /** The planner's list of ready-made drawings: the catalog and every learned block (lib/blocks/learned.ts). */
 const BLOCK_IDS = "{{BLOCK_IDS}}";
@@ -292,33 +288,33 @@ const MATERIAL_RULES = `Teach this from the material below (recent sources found
 export async function* planLesson(question: string, signal: AbortSignal, effort: typeof EFFORT = EFFORT, material?: string): AsyncGenerator<PlanEvent> {
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
-  const tracked = trackCall("plan", MODEL);
   const socratic = await socraticOn();
-  const stream = tracked.client.messages.stream(
-    {
-      model: MODEL,
-      max_tokens: 14000,
-      system: socratic ? `${await plannerSystem()}\n\n${SOCRATIC_RULES}` : await plannerSystem(),
-      thinking: plannerThinking(MODEL),
-      output_config: { effort },
-      messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
-    },
-    { signal },
-  );
+  const stream = streamModel({
+    name: "plan",
+    model: MODEL,
+    maxTokens: 14000,
+    system: socratic ? `${await plannerSystem()}\n\n${SOCRATIC_RULES}` : await plannerSystem(),
+    effort: process.env.PLANNER_THINKING === "off" ? "off" : effort,
+    messages: [{ role: "user", content: material ? `${question}\n\n${MATERIAL_RULES}\n\n<material>\n${material}\n</material>` : question }],
+    signal,
+  });
 
   let pending = "";
   let beats = 0;
   const st: PlanState = { scene: 0, known: new Map(), socratic };
   const lines: string[] = [];
-  stream.on("text", (delta) => {
-    tracked.firstToken();
-    pending += delta;
-    let nl: number;
-    while ((nl = pending.indexOf("\n")) >= 0) {
-      lines.push(pending.slice(0, nl));
-      pending = pending.slice(nl + 1);
+  // Whole lines go to the parser as they arrive; the stream's result once it ends.
+  const done = (async () => {
+    for await (const delta of stream) {
+      pending += delta;
+      let nl: number;
+      while ((nl = pending.indexOf("\n")) >= 0) {
+        lines.push(pending.slice(0, nl));
+        pending = pending.slice(nl + 1);
+      }
     }
-  });
+    return stream.result();
+  })();
 
   const parse = function* (line: string): Generator<PlanEvent> {
     const trimmed = line.trim();
@@ -352,7 +348,6 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   };
 
   // Drain whole lines as they arrive, then whatever is left once the stream ends.
-  const done = stream.finalMessage();
   let finished = false;
   done.finally(() => (finished = true)).catch(() => {});
   while (!finished || lines.length) {
@@ -365,14 +360,14 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
   }
   const message = await done;
   if (pending.trim()) yield* parse(pending);
-  if (message.stop_reason === "refusal") throw new Error("the planner declined this question");
+  if (message.stop === "refusal") throw new Error("the planner declined this question");
   const last = beats ? dueQuiz(st, false) : null;
   if (last) {
     console.info(`[plan] the last section ended without a quiz: added a ${last.quiz} quiz`);
     yield { type: "beat", beat: checkBeat(last, beats++, st), tMs: ms() };
   }
   if (!beats) throw new Error("the planner returned no beats");
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call: tracked.finish() };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input, outputTokens: message.usage.output, call: message.call };
 }
 
 /**
@@ -391,7 +386,7 @@ export async function* planLesson(question: string, signal: AbortSignal, effort:
 export type AmendOp = "insert_after" | "replace_from";
 
 /** Sonnet by default: a detour or a new ending is a few beats, and the learner is waiting (Opus took about 30 s for four beats). */
-const AMEND_MODEL = process.env.AMEND_MODEL || "claude-sonnet-5-5";
+const AMEND_MODEL = modelFor("amend");
 
 export interface AmendRequest {
   question: string;
@@ -484,31 +479,30 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const kept = r.op === "replace_from" ? r.beats.slice(0, Math.max(0, r.index)) : r.beats;
   const maxScene = Math.max(1, kept.reduce((m, b) => Math.max(m, b.scene || 0), 0));
   const newScene = r.op === "replace_from" ? maxScene : maxScene + 1;
-  const tracked = trackCall(`amend:${r.op}`, AMEND_MODEL);
   // Openers are for a lesson's sections (a rewrite's too), not a detour's beats.
   const socratic = r.op === "replace_from" && (await socraticOn());
-  const stream = tracked.client.messages.stream(
-    {
-      model: AMEND_MODEL,
-      max_tokens: 8000,
-      system: socratic ? `${await withVoiceRules(withBlocks(SYSTEM))}\n\n${SOCRATIC_RULES}` : await withVoiceRules(withBlocks(SYSTEM)),
-      thinking: { type: "adaptive" },
-      output_config: { effort: EFFORT },
-      messages: [{ role: "user", content: amendPrompt(r, newScene) }],
-    },
-    { signal },
-  );
+  const stream = streamModel({
+    name: `amend:${r.op}`,
+    model: AMEND_MODEL,
+    maxTokens: 8000,
+    system: socratic ? `${await withVoiceRules(withBlocks(SYSTEM))}\n\n${SOCRATIC_RULES}` : await withVoiceRules(withBlocks(SYSTEM)),
+    effort: EFFORT,
+    messages: [{ role: "user", content: amendPrompt(r, newScene) }],
+    signal,
+  });
   let pending = "";
   const lines: string[] = [];
-  stream.on("text", (delta) => {
-    tracked.firstToken();
-    pending += delta;
-    let nl: number;
-    while ((nl = pending.indexOf("\n")) >= 0) {
-      lines.push(pending.slice(0, nl));
-      pending = pending.slice(nl + 1);
+  const done = (async () => {
+    for await (const delta of stream) {
+      pending += delta;
+      let nl: number;
+      while ((nl = pending.indexOf("\n")) >= 0) {
+        lines.push(pending.slice(0, nl));
+        pending = pending.slice(nl + 1);
+      }
     }
-  });
+    return stream.result();
+  })();
   // Scenes only move forward from the plan's last one; the new part starts in a fresh scene.
   const st: PlanState = { scene: maxScene, known: new Map(), socratic };
   if (r.op === "replace_from") st.known.set(newScene, new Set(kept.filter((b) => b.scene === newScene).flatMap((b) => b.adds.map((a) => a.id))));
@@ -583,7 +577,6 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
     const beat = guard.guard({ ...checked, id: `${r.prefix}-${n}` }, st);
     yield { type: "beat", beat, tMs: ms() };
   };
-  const done = stream.finalMessage();
   let finished = false;
   done.finally(() => (finished = true)).catch(() => {});
   while (!finished || lines.length) {
@@ -596,7 +589,7 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   }
   const message = await done;
   if (pending.trim()) yield* parse(pending);
-  if (message.stop_reason === "refusal") throw new Error("the planner declined this change");
+  if (message.stop === "refusal") throw new Error("the planner declined this change");
   if (!n) throw new Error("the planner returned no beats");
   const lastQuiz = r.op === "replace_from" ? dueQuiz(st, false) : null;
   if (lastQuiz) {
@@ -608,6 +601,6 @@ export async function* amendLesson(r: AmendRequest, signal: AbortSignal): AsyncG
   const layout = guard.summary();
   console.info(`[amend] ${r.prefix}: scenes ${layout.scenes.map((s) => `${s.scene}: ${s.kept}+${s.draws} drawings, ${s.points} points`).join("; ")}${layout.notes.length ? ` | ${layout.notes.join(" | ")}` : ""}`);
   // On the call log, so the page's amend-done event carries it into the transcript.
-  const call = { ...tracked.finish(), layout };
-  yield { type: "done", tMs: ms(), inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, call, ...(notes.length || layout.notes.length ? { notes: [...notes, ...layout.notes] } : {}) };
+  const call = { ...message.call, layout };
+  yield { type: "done", tMs: ms(), inputTokens: message.usage.input, outputTokens: message.usage.output, call, ...(notes.length || layout.notes.length ? { notes: [...notes, ...layout.notes] } : {}) };
 }

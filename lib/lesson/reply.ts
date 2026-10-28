@@ -4,11 +4,10 @@
  * the lesson should do next.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
+import { modelFor, streamModel } from "./provider";
 import { withVoiceRules } from "./preference-prompt";
 
-const MODEL = "claude-opus-5-5";
+const MODEL = modelFor("reply");
 
 export type ReplyIntent = "continue" | "stop";
 
@@ -39,16 +38,9 @@ export async function reply(o: { question: string; said: string[]; now?: string;
       : "You had just asked the learner a check-in question.",
     `The learner said: "${o.heard}"`,
   ].join("\n\n");
-  const message = await anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 2000,
-    system: await withVoiceRules(SYSTEM),
-    thinking: { type: "adaptive" },
-    output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-    messages: [{ role: "user", content: context }],
-  } as Anthropic.MessageCreateParamsNonStreaming);
-  if (message.stop_reason === "refusal") throw new Error("Chalky couldn't answer that");
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  const r = await streamModel({ name: "reply", model: MODEL, system: await withVoiceRules(SYSTEM), messages: [{ role: "user", content: context }], maxTokens: 2000, effort: "low", schema: SCHEMA }).result();
+  if (r.stop === "refusal") throw new Error("Chalky couldn't answer that");
+  const text = r.text;
   const parsed = JSON.parse(text) as { say: string; intent: ReplyIntent };
   return { say: parsed.say.trim(), intent: parsed.intent, ms: Math.round(performance.now() - t0) };
 }

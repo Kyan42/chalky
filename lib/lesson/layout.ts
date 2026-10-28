@@ -6,12 +6,11 @@
  * The planner's per-beat layout stays as the first guess, so nothing waits.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { trackCall } from "./calllog";
+import { modelFor, streamModel } from "./provider";
 import { cleanId } from "./planner";
 import type { CallLog, PlannedBeat, Region } from "./types";
 
-const MODEL = process.env.LAYOUT_MODEL || "claude-sonnet-5-5";
+const MODEL = modelFor("layout");
 const TIMEOUT_MS = Number(process.env.LAYOUT_TIMEOUT_MS) || 25000;
 
 /** A beat drawn before the layout ran: it keeps its region, and these are the ids actually on the board. */
@@ -99,22 +98,18 @@ function cleanRegion(raw: unknown, fallback: Region): Region {
 export async function layoutLesson(question: string, beats: PlannedBeat[], fixed: FixedBeat[], signal?: AbortSignal): Promise<{ beats: LaidOutBeat[]; ms: number; model: string; call: CallLog }> {
   const t0 = performance.now();
   const deadline = AbortSignal.timeout(TIMEOUT_MS);
-  const tracked = trackCall("layout", MODEL);
-  const message = await tracked
-    .watch(tracked.client.messages.stream(
-      {
-        model: MODEL,
-        max_tokens: 8000,
-        system: "You plan whiteboard layouts. Answer with the requested JSON only.",
-        messages: [{ role: "user", content: prompt(question, beats, fixed) }],
-        thinking: { type: "adaptive" },
-        output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-      } as Anthropic.MessageStreamParams,
-      { signal: signal ? AbortSignal.any([signal, deadline]) : deadline },
-    ))
-    .finalMessage();
-  if (message.stop_reason !== "end_turn") throw new Error(`layout stopped: ${message.stop_reason}`);
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  const message = await streamModel({
+    name: "layout",
+    model: MODEL,
+    system: "You plan whiteboard layouts. Answer with the requested JSON only.",
+    messages: [{ role: "user", content: prompt(question, beats, fixed) }],
+    maxTokens: 8000,
+    effort: "low",
+    schema: SCHEMA,
+    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  }).result();
+  if (message.stop !== "end") throw new Error(`layout stopped: ${message.stop}`);
+  const text = message.text;
   const raw = (JSON.parse(text) as { beats: Partial<LaidOutBeat>[] }).beats;
 
   const out: LaidOutBeat[] = [];
@@ -153,5 +148,5 @@ export async function layoutLesson(question: string, beats: PlannedBeat[], fixed
         : [];
     out.push({ id: beat.id, scene, region: cleanRegion(l?.region, beat.region), adds, points });
   }
-  return { beats: out, ms: Math.round(performance.now() - t0), model: MODEL, call: tracked.finish() };
+  return { beats: out, ms: Math.round(performance.now() - t0), model: MODEL, call: message.call };
 }

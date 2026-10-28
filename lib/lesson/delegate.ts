@@ -6,15 +6,14 @@
  * answers with actions from the same vocabulary (go_to, highlight, amend,
  * resume) and no words: the fast model already said a line to cover the wait.
  *
- * Sonnet 5.5 by default (DELEGATE_MODEL overrides), thinking off, JSON out.
+ * The mid model by default (lib/lesson/provider.ts; DELEGATE_MODEL overrides), thinking off, JSON out.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { trackCall } from "./calllog";
+import { modelFor, streamModel } from "./provider";
 import type { AmendAction, ConverseAction, ConverseResume, Exchange } from "./converse";
 import { describeLearner, type CallLog, type LearnerRecord } from "./types";
 
-export const DELEGATE_MODEL = process.env.DELEGATE_MODEL || "claude-sonnet-5-5";
+export const DELEGATE_MODEL = modelFor("delegate");
 
 export interface DelegateScene {
   scene: number;
@@ -125,36 +124,26 @@ export function cleanDelegated(raw: unknown, o: Pick<DelegateInput, "scenes" | "
 
 export async function delegate(input: DelegateInput, signal?: AbortSignal): Promise<DelegateResult> {
   const t0 = performance.now();
-  const tracked = trackCall("delegate", DELEGATE_MODEL);
-  let message;
-  let call: CallLog | undefined;
-  try {
-    message = await tracked.client.messages.create(
+  const { text, call } = await streamModel({
+    name: "delegate",
+    model: DELEGATE_MODEL,
+    system: SYSTEM,
+    maxTokens: 1200,
+    effort: "off",
+    schema: SCHEMA,
+    signal,
+    messages: [
       {
-        model: DELEGATE_MODEL,
-        max_tokens: 1200,
-        system: SYSTEM,
-        // Sonnet 5.5 turns thinking off with between_tools.
-        thinking: DELEGATE_MODEL.startsWith("claude-sonnet-5-5") ? { type: "between_tools" } : { type: "disabled" },
-        output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-        messages: [
-          {
-            role: "user",
-            content: input.image
-              ? [
-                  { type: "image", source: { type: "base64", media_type: "image/jpeg", data: input.image } },
-                  { type: "text", text: `The board as the learner sees it, with their ink on top.\n\n${context(input)}` },
-                ]
-              : context(input),
-          },
-        ],
-      } as Anthropic.MessageCreateParamsNonStreaming,
-      { signal },
-    );
-  } finally {
-    call = tracked.finish();
-  }
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+        role: "user",
+        content: input.image
+          ? [
+              { type: "image", jpegBase64: input.image },
+              { type: "text", text: `The board as the learner sees it, with their ink on top.\n\n${context(input)}` },
+            ]
+          : context(input),
+      },
+    ],
+  }).result();
   let raw: unknown = null;
   try {
     raw = JSON.parse(text);

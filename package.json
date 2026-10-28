@@ -17,6 +17,7 @@
     "convex": "^1.48.0",
     "framer-motion": "^14.6.0",
     "next": "^15.5.28",
+    "openai": "^7.45.1",
     "perfect-freehand": "^1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

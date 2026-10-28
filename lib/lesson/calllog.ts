@@ -5,22 +5,24 @@
  * headers. Routes return the CallLog to the page, which puts it in the lesson
  * transcript, so a slow run can be told apart: our contention, a retry, a
  * rate limit, or the API simply being slow.
+ *
+ * Provider-neutral: the instrumented fetch goes into either SDK (lib/lesson/provider.ts). Anthropic sends
+ * `request-id` and `anthropic-ratelimit-*`; OpenAI sends `x-request-id` and `x-ratelimit-*`.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "./anthropic";
 import type { CallAttempt, CallLog } from "./types";
 
 /** Explicit, so the transcript can say how many retries were possible. */
 export const MAX_RETRIES = 2;
 
+const RATE_LIMIT_PREFIXES = ["anthropic-ratelimit-", "x-ratelimit-"];
+
 export interface TrackedCall {
-  client: Anthropic;
   log: CallLog;
+  /** A fetch for the SDK client: records every attempt on the log. */
+  fetch: typeof fetch;
   /** Mark the first token (call once; later calls are ignored). */
   firstToken: () => void;
-  /** Watch a MessageStream for its first content delta. */
-  watch: <S extends { on: (event: "streamEvent", fn: (e: { type: string }) => void) => unknown }>(stream: S) => S;
   /** Stamps the total time and returns the log. */
   finish: (error?: unknown) => CallLog;
 }
@@ -36,9 +38,10 @@ export function trackCall(name: string, model: string): TrackedCall {
       const h = response.headers;
       const rateLimit: Record<string, string> = {};
       h.forEach((v, k) => {
-        if (k.startsWith("anthropic-ratelimit-")) rateLimit[k.slice("anthropic-ratelimit-".length)] = v;
+        const prefix = RATE_LIMIT_PREFIXES.find((p) => k.startsWith(p));
+        if (prefix) rateLimit[k.slice(prefix.length)] = v;
       });
-      const attempt: CallAttempt = { n, status: response.status, headersMs: Math.round(performance.now() - ta), atMs: Math.round(ta - t0), requestId: h.get("request-id") };
+      const attempt: CallAttempt = { n, status: response.status, headersMs: Math.round(performance.now() - ta), atMs: Math.round(ta - t0), requestId: h.get("request-id") ?? h.get("x-request-id") };
       const retryAfter = h.get("retry-after");
       if (retryAfter) attempt.retryAfter = retryAfter;
       // Rate-limit headers only matter when they say something is short; keep them on any non-200.
@@ -52,20 +55,13 @@ export function trackCall(name: string, model: string): TrackedCall {
       throw e;
     }
   };
-  const client = anthropic().withOptions({ maxRetries: MAX_RETRIES, fetch: instrumented as never });
   const firstToken = () => {
     if (log.ttftMs === null) log.ttftMs = Math.round(performance.now() - t0);
   };
   return {
-    client,
     log,
+    fetch: instrumented as typeof fetch,
     firstToken,
-    watch: (stream) => {
-      stream.on("streamEvent", (e) => {
-        if (e.type === "content_block_delta") firstToken();
-      });
-      return stream;
-    },
     finish: (error) => {
       log.totalMs = Math.round(performance.now() - t0);
       if (error) log.error = String((error as Error)?.message ?? error).slice(0, 200);

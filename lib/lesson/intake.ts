@@ -2,12 +2,11 @@
  * The intake: before teaching, Chalky asks the learner one short question
  * (what they already know, or which part they care about), then decides from
  * the answer whether the plan, already being written from the raw question,
- * should change after its first beat. Haiku with thinking off: both calls sit
+ * should change after its first beat. The fast model with thinking off: both calls sit
  * on the path to first sound.
  */
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { trackCall } from "./calllog";
+import { streamModel } from "./provider";
 import { NOTE_RULES } from "./voice";
 import { withVoiceRules } from "./preference-prompt";
 import { CONVERSE_MODEL } from "./converse";
@@ -69,26 +68,15 @@ const DECIDE_SCHEMA = {
 };
 
 async function json<T>(system: string, user: string, schema: object, maxTokens: number, signal?: AbortSignal, onCall?: (c: CallLog) => void): Promise<T> {
-  const tracked = trackCall("intake-decide", CONVERSE_MODEL);
-  let message;
+  const stream = streamModel({ name: "intake-decide", model: CONVERSE_MODEL, system, messages: [{ role: "user", content: user }], maxTokens, effort: "off", schema, signal });
+  let result;
   try {
-    message = await tracked.client.messages.create(
-    {
-      model: CONVERSE_MODEL,
-      max_tokens: maxTokens,
-      system,
-      thinking: { type: "disabled" },
-      output_config: { effort: "low", format: { type: "json_schema", schema } },
-      messages: [{ role: "user", content: user }],
-    } as Anthropic.MessageCreateParamsNonStreaming,
-    { signal },
-    );
+    result = await stream.result();
   } finally {
-    onCall?.(tracked.finish());
+    onCall?.(stream.log);
   }
-  if (message.stop_reason === "refusal") throw new Error("refused");
-  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-  return JSON.parse(text) as T;
+  if (result.stop === "refusal") throw new Error("refused");
+  return JSON.parse(result.text) as T;
 }
 
 /**
@@ -100,30 +88,19 @@ export async function intakeQuestion(question: string, signal?: AbortSignal, bud
   const t0 = performance.now();
   const ms = () => Math.round(performance.now() - t0);
   const deadline = AbortSignal.timeout(budgetMs);
-  const tracked = trackCall("intake-ask", CONVERSE_MODEL);
+  const stream = streamModel({ name: "intake-ask", model: CONVERSE_MODEL, system: await withVoiceRules(ASK_SYSTEM), messages: [{ role: "user", content: `The learner asked: "${question}"` }], maxTokens: 60, effort: "off", signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
   try {
-    const message = await tracked.client.messages.create(
-      {
-        model: CONVERSE_MODEL,
-        max_tokens: 60,
-        system: await withVoiceRules(ASK_SYSTEM),
-        thinking: { type: "disabled" },
-        output_config: { effort: "low" },
-        messages: [{ role: "user", content: `The learner asked: "${question}"` }],
-      } as Anthropic.MessageCreateParamsNonStreaming,
-      { signal: signal ? AbortSignal.any([signal, deadline]) : deadline },
-    );
-    const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
+    const text = (await stream.result()).text.trim();
     const m = /^(prior|focus)\s*:\s*(.+)$/im.exec(text);
     if (!m) throw new Error(`unexpected: ${text.slice(0, 80)}`);
     const r = { kind: m[1].toLowerCase() as IntakeKind, say: m[2] };
     const say = r.say.trim();
     if (!say.endsWith("?") || say.split(/\s+/).length > 20) throw new Error(`not one short question: ${say}`);
-    return { kind: r.kind === "focus" ? "focus" : "prior", say, ms: ms(), model: CONVERSE_MODEL, call: tracked.finish() };
+    return { kind: r.kind === "focus" ? "focus" : "prior", say, ms: ms(), model: CONVERSE_MODEL, call: stream.log };
   } catch (e) {
     if (signal?.aborted) throw e;
     console.warn(`[intake] fell back to a template (${deadline.aborted ? `over ${budgetMs} ms` : String((e as Error)?.message ?? e).slice(0, 120)})`);
-    return { ...fallbackIntake(question), ms: ms(), model: "template", call: tracked.finish(e) };
+    return { ...fallbackIntake(question), ms: ms(), model: "template", call: stream.log.totalMs === null ? stream.fail(e) : stream.log };
   }
 }
 
