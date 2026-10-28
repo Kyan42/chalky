@@ -10,6 +10,7 @@
  * the first sentence. "ok / got it / keep going" never reaches a model.
  */
 import "server-only";
+import { handoffQuestion } from "./conversation-handoff";
 import { researchQuery } from "@/lib/research/query";
 import Anthropic from "@anthropic-ai/sdk";
 import { trackCall } from "./calllog";
@@ -230,7 +231,7 @@ Choosing:
 - A question is never just a "say" that moves on: answer it (point, or sketch what is missing) and end with a short check question ("ask"), then wait. Only when they also said to go on does the lesson continue.
 - A hesitant yes ("yeah, I think so", "kind of"): ask ONE specific, low-pressure question that reveals the uncertain part, optionally after a small hint. Use "ask" and wait. Never treat hesitation as permission to continue.
 Never open with "good question", "great question" or similar, and never repeat their question back.
-- A new topic or a preferred approach takes priority over the plan. If they say this is boring, ask what kind of example would help, then use it. Do not steer back to the plan without their agreement.
+- When handing the turn back to the learner, end your spoken reply with one brief, natural question and wait. It can be an invitation or a simple check, not a test. Do not add a question to a goodbye or while handing off to a lesson that will continue speaking. A new topic or a preferred approach takes priority over the plan. If they say this is boring, ask what kind of example would help, then use it. Do not steer back to the plan without their agreement.
 - Off the lesson's path otherwise (a quick aside): answer briefly by the same rules.
 At most two spoken sentences, except a quick "say" answer may use three. Plain spoken words only: no lists, no markdown, no symbols that read badly aloud; write numbers and units as words.
 
@@ -802,10 +803,17 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
       } catch {
         trailer = fallbackTrailer(input, spoken);
       }
-      // An ask the reply never got to say aloud (it spoke no question): say it now, before the trailer.
-      if (trailer.check && !spoken.includes("?")) {
-        spoken += (spoken ? " " : "") + trailer.check;
-        yield { type: "sentence", text: trailer.check, tMs: ms() };
+      // Sentence limits or trailer normalization can otherwise leave an unexplained wait.
+      const canContinue = input.beats.length > 0 &&
+        (trailer.cut !== "next" || input.beatIndex < input.beats.length - 1);
+      const question = handoffQuestion(trailer, spoken, canContinue);
+      if (question) {
+        trailer.check = question;
+        trailer.resume = "wait";
+        trailer.actions = trailer.actions.filter((action) => action.type !== "ask" && action.type !== "resume");
+        trailer.actions.push({ type: "ask", question }, { type: "resume", how: "wait" });
+        spoken += (spoken ? " " : "") + question;
+        yield { type: "sentence", text: question, tMs: ms() };
       }
       yield { type: "trailer", trailer, tMs: ms(), modelCues };
       calls.push(tracked.finish());
