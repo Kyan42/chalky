@@ -139,4 +139,4 @@ waited for the 4-call cap, median 3.3 s.
     tag spoken, the open card highlights the matching sentence; the miss is the same script limit);
   - the quiz fixture 6/6 (label 100%, predict graded right in one line, sketch graded from the board picture);
   - "I'm done" 5/5.
-- Trailer parse rate on first turns after tuning: 26/26 parsed, with the intended actions.
+- Trailer parse rate on first turns after tuning: 29/29 parsed (CRISPR 15 with a lookup, sky 6, photosynthesis 5 with a lesson; Peru 3 as a quick answer).
