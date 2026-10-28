@@ -47,7 +47,7 @@ const MEMORY = [
 ].map((text, i) => ({ id: `m${i}`, text, meta: { kind: "line" } }));
 const MEMORY_ASKS = ["why does the plant need light", "is this like breathing", "what is chlorophyll again", "where does the oxygen come from"];
 
-async function sessionTimes(engine: "local" | "moss", name: string, docs: typeof BOARD, asks: string[], rounds: number) {
+async function sessionTimes(engine: "local" | "moss", name: string, docs: { id: string; text: string; meta: Record<string, string> }[], asks: string[], rounds: number) {
   process.env.RETRIEVAL_ENGINE = engine;
   const t0 = performance.now();
   await upsertDocs(name, docs);
