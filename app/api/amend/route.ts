@@ -6,7 +6,7 @@
  */
 import { amendLesson, type AmendOp } from "@/lib/lesson/planner";
 import { cleanLearner, type PlanEvent, type PlannedBeat } from "@/lib/lesson/types";
-import { prefetchBlocks } from "@/lib/moss/blocks";
+import { prefetchBlocks } from "@/lib/retrieval/blocks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     async pull(controller) {
       try {
         const { value, done } = await events.next();
-        // Start the beat's block pick now, seconds before it is drawn (lib/moss/blocks.ts).
+        // Start the beat's block pick now, seconds before it is drawn (lib/retrieval/blocks.ts).
         if (value?.type === "beat") prefetchBlocks(value.beat);
         if (done) return controller.close();
         controller.enqueue(encoder.encode(JSON.stringify(value) + "\n"));

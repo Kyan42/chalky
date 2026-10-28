@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PlanEvent, PlannedBeat } from "@/lib/lesson/types";
-import { prefetchBlocks } from "@/lib/moss/blocks";
+import { prefetchBlocks } from "@/lib/retrieval/blocks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

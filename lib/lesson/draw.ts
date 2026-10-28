@@ -22,7 +22,7 @@ import { fitToRegion, PRESET_KINDS, type PresetElement } from "./presets";
 import type { CallLog, PlannedBeat } from "./types";
 import { blockById, isLearned, registerBlocks, type Block } from "@/lib/blocks";
 import { cleanNewBlock } from "@/lib/blocks/learn";
-import { blocksForBeat } from "@/lib/moss/blocks";
+import { blocksForBeat } from "@/lib/retrieval/blocks";
 import { loadLearned, saveLearned } from "@/lib/blocks/learned";
 
 const FAST_MODEL = roleModel("draw-fast");

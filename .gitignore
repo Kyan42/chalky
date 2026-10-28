@@ -33,3 +33,6 @@ npm-debug.log*
 
 # slow-mode learned blocks (lib/blocks/learned.ts): kept on this machine, never in Moss
 /experiments/learned-blocks.json
+
+# local retrieval model files (lib/retrieval/embed.ts), downloaded on first use
+/.cache/

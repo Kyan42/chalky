@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * Which blocks Moss hands the drawer: /experiments/moss
+ * Which blocks the retrieval engine hands the drawer: /experiments/moss
  *
- * Type a beat's visual brief; see the blocks Moss ranks for it with their scores and the query's
- * latency, the keyword fallback's pick for comparison, and the drawer prompt's block section.
- * Backed by POST /api/moss-blocks; lib/moss/blocks.ts does the work.
+ * Type a beat's visual brief; see the blocks the engine (local by default, Moss with
+ * RETRIEVAL_ENGINE=moss) ranks for it with their scores and the query's latency, the keyword
+ * fallback's pick for comparison, and the drawer prompt's block section.
+ * Backed by POST /api/moss-blocks; lib/retrieval/blocks.ts does the work.
  */
 import { useState } from "react";
 
@@ -13,11 +14,11 @@ type Hit = { id: string; title: string; score: number };
 type Answer = {
   index: string;
   keys: boolean;
-  mode: "moss" | "all";
+  mode: "local" | "moss" | "all";
   status: "ok" | "off" | "no-key" | "loading" | "error";
   error?: string;
   ms: number;
-  mossMs?: number;
+  engineMs?: number;
   loadMs: number | null;
   hits: Hit[];
   keywords: string[];
@@ -56,14 +57,14 @@ export default function MossBlocksPage() {
     }
   }
 
-  // Moss ranks by its hybrid (semantic + keyword) match but reports the semantic score alone, so
-  // the top hit need not have the highest score; bars scale to the largest.
+  // Moss ranks by its hybrid (semantic + keyword) match but reports the semantic score alone, so its
+  // top hit need not have the highest score (the local engine reports the blend); bars scale to the largest.
   const top = Math.max(0.001, ...(answer?.hits ?? []).map((h) => h.score));
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px", fontFamily: "system-ui, sans-serif", color: "#222", background: "#f6f6f3", minHeight: "100vh" }}>
-      <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Moss block retrieval</h1>
+      <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Block retrieval</h1>
       <p style={{ margin: "0 0 16px", color: "#555", fontSize: 14 }}>
-        A beat&apos;s visual brief goes to the Moss index of the block catalog; the drawer prompt lists only the blocks it returns.
+        A beat&apos;s visual brief goes to the block index (local engine, or Moss with RETRIEVAL_ENGINE=moss); the drawer prompt lists only the blocks it returns.
       </p>
 
       <div style={{ ...box, display: "grid", gap: 8 }}>
@@ -102,12 +103,12 @@ export default function MossBlocksPage() {
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, marginTop: 12 }}>
             <div style={box}>
-              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Keyword fallback (used when Moss is off or not ready)</h2>
+              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Keyword fallback (used while the engine loads, or when retrieval is off)</h2>
               <pre style={pre}>{answer.keywords.join("\n") || "No keyword match."}</pre>
             </div>
             <div style={box}>
-              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Drawer prompt for Moss's pick {answer.after ? `(${answer.after.length} chars)` : ""}</h2>
-              <pre style={pre}>{answer.after ?? "No Moss result, so the drawer uses the keyword pick (left)."}</pre>
+              <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Drawer prompt for the engine&apos;s pick {answer.after ? `(${answer.after.length} chars)` : ""}</h2>
+              <pre style={pre}>{answer.after ?? "No engine result, so the drawer uses the keyword pick (left)."}</pre>
             </div>
           </div>
         </>
@@ -120,10 +121,10 @@ function Status({ answer }: { answer: Answer }) {
   const line = (color: string, text: React.ReactNode) => <p style={{ ...box, marginTop: 12, borderColor: color, color }}>{text}</p>;
   switch (answer.status) {
     case "ok":
-      return line("#2a6", <>Index <code>{answer.index}</code>: query {answer.ms} ms{answer.mossMs != null ? ` (Moss reports ${answer.mossMs} ms)` : ""}{answer.loadMs != null ? `; index loaded in ${answer.loadMs} ms` : ""}. Live beats use retrieval: {answer.mode === "moss" ? "yes" : "no (CHALKY_BLOCK_RETRIEVAL=all)"}.</>);
+      return line("#2a6", <>Index <code>{answer.index}</code>: query {answer.ms} ms{answer.engineMs != null ? ` (Moss reports ${answer.engineMs} ms)` : ""}{answer.loadMs != null ? `; loaded in ${answer.loadMs} ms` : ""}. Live beats use retrieval: {answer.mode === "all" ? "no (CHALKY_BLOCK_RETRIEVAL=all)" : `yes (${answer.mode})`}.</>);
     case "no-key":
-      return line("#b60", <>No key: MOSS_PROJECT_ID and MOSS_PROJECT_KEY are not set in .env.local, so the drawer gets the whole catalog. Create a project and an API key at portal.usemoss.dev, add both, restart the server, then run <code>npx tsx --env-file=.env.local scripts/moss-build-blocks.ts</code>.</>);
+      return line("#b60", <>No Moss keys: MOSS_PROJECT_ID and MOSS_PROJECT_KEY are not set, so RETRIEVAL_ENGINE=moss can&apos;t be used. Unset RETRIEVAL_ENGINE for the local engine.</>);
     default:
-      return line("#b00", <>Moss {answer.status}{answer.error ? `: ${answer.error}` : ""}. The drawer falls back to the whole catalog.</>);
+      return line("#b00", <>Retrieval {answer.status}{answer.error ? `: ${answer.error}` : ""}. The drawer falls back to the keyword pick.</>);
   }
 }

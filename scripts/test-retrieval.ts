@@ -1,11 +1,15 @@
-// npx tsx --env-file=.env.local scripts/test-moss-blocks.ts
+// npx tsx --env-file=.env.local scripts/test-retrieval.ts [--engine=local|moss]
 // Beat briefs in the planner's words (biology, computing, chemistry), each with the block the
-// drawer should get; the expected block must be in Moss's top 3. The keyword fallback
-// (lib/blocks/catalog.ts, used when Moss is off) is scored on the same briefs at its live size, 5,
-// for comparison. Exits 2 (not 0) when there are no Moss keys, so a missing key never reads as a
-// pass. Build the index first: scripts/moss-build-blocks.ts.
+// drawer should get; the expected block must be in the engine's top 3. The keyword fallback
+// (lib/blocks/catalog.ts, used while the engine loads) is scored on the same briefs at its live
+// size, 5, for comparison. The local engine (default) needs lib/blocks/vectors.json
+// (scripts/build-block-vectors.ts); --engine=moss needs the chalky-blocks index
+// (scripts/moss-build-blocks.ts) and exits 2 (not 0) without Moss keys, so a missing key never
+// reads as a pass.
 import { keywordBlocks } from "../lib/blocks/catalog";
-import { beatQuery, hasMossKeys, relevantBlocks } from "../lib/moss/blocks";
+import { beatQuery, hasMossKeys, relevantBlocks } from "../lib/retrieval/blocks";
+
+const engine = process.argv.find((a) => a.startsWith("--engine="))?.slice(9) === "moss" ? "moss" : "local";
 
 type Case = { visual: string; adds?: { id: string; what: string }[]; want: string };
 
@@ -51,7 +55,7 @@ for (const c of cases) {
 }
 console.log(`keyword fallback: ${cases.length - keywordMisses} of ${cases.length} in its top 5\n`);
 
-if (!hasMossKeys()) {
+if (engine === "moss" && !hasMossKeys()) {
   console.error("SKIPPED: no MOSS_PROJECT_ID / MOSS_PROJECT_KEY (add both to .env.local and run with --env-file=.env.local).");
   process.exit(2);
 }
@@ -60,7 +64,7 @@ async function main() {
   let failed = 0;
   const times: number[] = [];
   for (const c of cases) {
-    const r = await relevantBlocks(beatQuery({ visual: c.visual, adds: c.adds ?? [] }), 3, { waitForLoad: true, force: true });
+    const r = await relevantBlocks(beatQuery({ visual: c.visual, adds: c.adds ?? [] }), 3, { waitForLoad: true, force: true, engine });
     if (!r.hits) {
       console.error(`ERROR ${r.status}${r.error ? `: ${r.error}` : ""}`);
       process.exit(1);
@@ -68,9 +72,10 @@ async function main() {
     times.push(r.ms);
     const ok = r.hits.some((h) => h.id === c.want);
     if (!ok) failed++;
-    console.log(`${ok ? "PASS" : "FAIL"}  want ${c.want.padEnd(13)} got ${r.hits.map((h) => `${h.id} ${h.score.toFixed(3)}`).join(", ").padEnd(52)} ${r.ms} ms (moss ${r.mossMs ?? "?"} ms)  "${c.visual.slice(0, 60)}..."`);
+    console.log(`${ok ? "PASS" : "FAIL"}  want ${c.want.padEnd(13)} got ${r.hits.map((h) => `${h.id} ${h.score.toFixed(3)}`).join(", ").padEnd(52)} ${r.ms} ms ${r.engineMs !== undefined ? `(moss says ${r.engineMs} ms)` : ""}  "${c.visual.slice(0, 60)}..."`);
   }
   times.sort((a, b) => a - b);
+  console.log(`engine ${engine}`);
   console.log(`query latency: median ${times[Math.floor(times.length / 2)]} ms, max ${times[times.length - 1]} ms (each query, index already loaded)`);
   console.log(failed ? `${failed} of ${cases.length} failed` : `all ${cases.length} passed`);
   process.exit(failed ? 1 : 0);

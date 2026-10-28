@@ -4,7 +4,7 @@
  * prompts for scene-language elements.
  *
  * The catalog is about 300 blocks, far too many to list in a prompt, so each beat sees a few:
- * lib/moss/blocks.ts picks them with Moss, or with keywordBlocks() below when Moss is off, and
+ * lib/retrieval/blocks.ts picks them (local engine or Moss), or keywordBlocks() below while the engine loads, and
  * blockLanguageFor() writes the section for just those.
  */
 import { allBlocks, blocksVersion } from "./index";

@@ -383,7 +383,7 @@ export function makeAttention({ tokens = 4, from = 0, color = "purple" }: Attent
   return fit({
     id: "attention", title: "Attention",
     describe: "self-attention: a row of token boxes with arcs from one token to the others it attends to; set tokens (2-6) and from (index)",
-    tags: ["attention", "transformer", "tokens", "language model", "self-attention", "LLM"],
+    tags: ["attention", "transformer", "tokens", "words", "context", "language model", "self-attention", "LLM"],
     W, H, parts, anchors,
   });
 }

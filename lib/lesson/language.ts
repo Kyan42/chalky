@@ -105,7 +105,7 @@ const span = (r: PlannedBeat["region"]) => `x ${r.x}..${r.x + r.w}, y ${r.y}..${
 /**
  * The prompt for one beat. `earlier` are the draw beats before it in the same
  * scene: the model sees what they declared (ids, what, region), not what they drew.
- * `blocks` (picked per beat by lib/moss/blocks.ts) narrows the block catalog; null lists them all.
+ * `blocks` (picked per beat by lib/retrieval/blocks.ts) narrows the block catalog; null lists them all.
  */
 export function drawPrompt(question: string, beat: PlannedBeat, earlier: PlannedBeat[], blocks: Block[], free = false): string {
   const pointOnly = beat.mode === "point";

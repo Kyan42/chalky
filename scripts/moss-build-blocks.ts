@@ -6,7 +6,8 @@
 // name stays fixed (MOSS_BLOCK_INDEX, default "chalky-blocks").
 import { MossClient } from "@moss-js/moss";
 import { BLOCKS } from "../lib/blocks";
-import { BLOCK_INDEX, BLOCK_MODEL, blockDocs, hasMossKeys } from "../lib/moss/blocks";
+import { BLOCK_INDEX, BLOCK_MODEL } from "../lib/moss/blocks";
+import { blockDocs, hasMossKeys } from "../lib/retrieval/docs";
 
 if (!hasMossKeys()) {
   console.error("No MOSS_PROJECT_ID / MOSS_PROJECT_KEY in the environment. Add both to .env.local (portal.usemoss.dev: project id, API Keys page) and run with --env-file=.env.local.");
