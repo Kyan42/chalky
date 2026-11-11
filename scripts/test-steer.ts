@@ -1,6 +1,6 @@
 // What the learner's words mean after Chalky has answered a cut-in (lib/lesson/resume.ts).
 //   npx tsx scripts/test-steer.ts
-import { acceptsOffer, isResume, offersMore, wantsMore } from "@/lib/lesson/resume";
+import { acceptsOffer, isResume, offersMore, wantsMore, wantsSlower } from "@/lib/lesson/resume";
 
 let failed = 0;
 const check = (name: string, got: boolean, want: boolean) => {
@@ -10,6 +10,10 @@ const check = (name: string, got: boolean, want: boolean) => {
 // Asking to go deeper is a detour, not another one-line answer (from a live run, 2026-11-11).
 for (const s of ["Yeah, could you walk me through that?", "Can you explain that a bit more?", "Tell me more about the hidden layer.", "Go deeper on that.", "Can you break that down?"]) check(`wants more: "${s}"`, wantsMore(s), true);
 for (const s of ["What does hidden layer mean?", "Uh, yes.", "Okay, keep going.", "Is the red one the longer wave?", "No more questions."]) check(`not asking for more: "${s}"`, wantsMore(s), false);
+// Asking for a slower pace, or to stay on one part (from live runs, 2026-11-11: both were only acknowledged).
+for (const s of ["Can we actually go slower? I want to go like one thing at a time and spend some time on it. So start with just this part.", "Wait, hold on. Let's go a little slower. Um, start with just what this is.", "Slow down a bit.", "That was too fast.", "Can you take it step by step?"]) check(`wants slower: "${s}"`, wantsSlower(s), true);
+for (const s of ["Is the red one the slower wave?", "Why is training so slow?", "What does hidden layer mean?", "Okay, keep going."]) check(`not asking for slower: "${s}"`, wantsSlower(s), false);
+for (const s of ["So start with just this part.", "Yeah, maybe explain that separately first.", "Can we dive deeper into this?", "Let's focus on the tokens for a second.", "Can we spend some more time on this?", "Zoom in on that box."]) check(`wants more: "${s}"`, wantsMore(s), true);
 // A line that offers more, against one that asks whether to carry on.
 check("offer: explore", offersMore("That is the middle column. Would you like to explore that a little more?"), true);
 check("offer: want me to", offersMore("Want me to go deeper on that?"), true);

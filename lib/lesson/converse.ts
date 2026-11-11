@@ -14,7 +14,7 @@ import { handoffQuestion } from "./conversation-handoff";
 import { researchQuery } from "@/lib/research/query";
 import { apiError, modelFor, streamModel, type ModelRequest, type ModelStream } from "./provider";
 import { cleanId } from "./planner";
-import { acceptsOffer, isHesitant, isQuestion, isResume, isStillLost, wantsMore, wantsToEnd } from "./resume";
+import { acceptsOffer, isHesitant, isQuestion, isResume, isStillLost, wantsMore, wantsSlower, wantsToEnd } from "./resume";
 import { NOTE_RULES } from "./voice";
 import { withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type CallLog, type LearnerRecord } from "./types";
@@ -233,7 +233,7 @@ The actions (several per turn, applied in order):
 - "ask" {"question"}: one short question back to them, spoken as the last sentence of your reply; then you wait for the answer. Before a lesson starts, ask one question that would change how you teach it (what they already know, or what they need it for), together with "start_lesson": the lesson is planned while they answer. Not for a greeting or a quick question.
 - "point" [{"at", "target", "gesture", "to"}]: a cursor (a teacher's hand) moves over the board while you speak. One cue for each element you name, anchored to the exact word of your reply where you name it (as it appears; add #2 for its second occurrence, e.g. "orbit#2"), using only element ids from the board list. Gestures: "circle" to single out a shape (prefer it), "underline" for a label, a word or an equation, "tap" for a quick "this one", "point" to rest beside it, "sweep" to travel from it to another element ("to": that id).
 - "sketch" {"visual", "adds", "near", "side"}: one small drawing added while you speak, when the answer needs one small thing that is not on the board (they name something new: a cloud, the ocean, a person, violet light). One sentence saying what to draw, the new elements it introduces with short ids (one to three simple things), and where: "near" an element on the board and "side" (above, below, left, right, or on). Put it where it would really be, read from the positions: the sun, clouds and rain above the ground and the plants, roots and soil below the ground line, a part inside or on the thing it belongs to; use "on" only to mark the element itself. The board zooms out if there is no room, so never put a thing somewhere wrong to make it fit. Talk about it as it appears ("here's the prism..."). Never point at some other element instead of drawing the missing one.
-- "amend" {"op", "index", "note", "count"}: change the lesson's plan (beats are numbered as listed below). "insert_after" puts a short detour (a drawing from a fresh angle) after beat "index": use it only when they are still lost on what you just explained ("I still don't get it", "huh?"), ask you to go deeper or walk them through it ("could you walk me through that?", "tell me more about that"), or ask you to draw something. "replace_from" rewrites the lesson from beat "index" on: when a detour was already given and they are still lost, or the lesson should go another way (they know this part, they want something else). "delete" drops "count" beats from beat "index" (they no longer apply, e.g. a sketch already covered them). The "note" tells the planner, as instructions, what the learner needs and which picture or angle would show it. With "insert_after" or "replace_from", say EXACTLY ONE short hand-off sentence ("Let me draw that for you.", "Let me come at this from a different direction.") and do not start explaining: the drawing does that.
+- "amend" {"op", "index", "note", "count"}: change the lesson's plan (beats are numbered as listed below). "insert_after" puts a short detour (a drawing from a fresh angle) after beat "index": use it only when they are still lost on what you just explained ("I still don't get it", "huh?"), ask you to go deeper, walk them through it or stay on one part ("could you walk me through that?", "tell me more about that", "start with just this part"), or ask you to draw something. Agreeing in words is not enough: when they ask for a change in how you teach, the plan changes too. "replace_from" rewrites the lesson from beat "index" on: when a detour was already given and they are still lost, when they ask for a different pace ("can we go slower?", "one thing at a time"), or the lesson should go another way (they know this part, they want something else). "delete" drops "count" beats from beat "index" (they no longer apply, e.g. a sketch already covered them). The "note" tells the planner, as instructions, what the learner needs and which picture or angle would show it. With "insert_after" or "replace_from", say EXACTLY ONE short hand-off sentence ("Let me draw that for you.", "Let me come at this from a different direction.") and do not start explaining: the drawing does that.
 - "go_to" {"scene"} or {"element"}: the board is one long board with every scene the lesson drew on it, side by side; this moves the camera back to an earlier scene's place, or frames one element in any scene. For "show me where the diagram for X was": go_to that element or scene, then "highlight" it. The board stays there until the lesson's next beat brings the camera back.
 - "highlight" {"element"} or {"region": {"x", "y", "w", "h"}}: the cursor circles an element of the scene in view, or a spot on that scene's grid (the same coordinates as the element positions) when what they ask about is a place, not an element.
 - "delegate" {"request"}: when you cannot settle the request from what you are given here (they ask about something from another scene and neither the scene list nor the candidates name it, or it needs the whole lesson at once), say ONE short line that covers the wait ("Let me find that.") and hand over the request, in one sentence, to a slower helper who sees the whole board and lesson; its actions arrive a moment later. Never delegate pointing at something in the scene in view, or anything the candidates name.
@@ -378,6 +378,12 @@ const TIME_SENSITIVE = /\b(new|newest|latest|recent(ly)?|this (week|month|year)|
 /** Hand-off lines for a reply the server escalated: the drawing that follows does the explaining. */
 const HANDOFF: Partial<Record<ConverseLevel, string>> = { detour: "Let me draw that for you.", replan: "Let me come at this from a different direction." };
 
+/** The hand-off for an escalated reply: a request for a slower pace is not "a different direction". */
+function handoffLine(level: ConverseLevel, utterance: string): string {
+  if (level === "replan" && wantsSlower(utterance) && !isStillLost(utterance)) return "Okay, let me slow this down.";
+  return HANDOFF[level]!;
+}
+
 /**
  * The level the learner's words call for, whatever the model chose: still lost after an answer (a detour)
  * or after a detour (a new plan), or asking for a drawing or to go deeper. A new question is never escalated, even inside
@@ -389,7 +395,9 @@ export function forcedLevel(input: Pick<ConverseInput, "escalation" | "utterance
   const lost = isStillLost(input.utterance);
   if (lost && input.escalation >= 2) return "replan";
   if ((lost && input.escalation >= 1) || WANTS_DRAWING.test(input.utterance)) return "detour";
-  // "Could you walk me through that?": more than a one-line answer was asked for.
+  // "Can we go slower? One thing at a time.": the rest of the lesson changes pace, it is not just acknowledged.
+  if (wantsSlower(input.utterance)) return "replan";
+  // "Could you walk me through that?", "start with just this part": more than a one-line answer was asked for.
   if (wantsMore(input.utterance)) return "detour";
   return null;
 }
@@ -462,7 +470,7 @@ export function groundCues(cues: CursorCue[], spoken: string, board: BoardElemen
 }
 
 /** Checks the model's actions and fixes what it can; cursor targets must be on the board and anchored to a spoken word. */
-export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalation" | "board" | "utterance" | "beatIndex" | "wordIndex" | "beats" | "scenes" | "candidates"> & { history?: Exchange[] }, spoken: string): ConverseTrailer {
+export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalation" | "board" | "utterance" | "beatIndex" | "wordIndex" | "beats" | "scenes" | "candidates"> & { history?: Exchange[]; ink?: ConverseInk; followUp?: boolean }, spoken: string): ConverseTrailer {
   const t = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const ids = new Set(input.board.map((e) => e.id));
   const spokenWords = spoken.split(/\s+/).map(normWord);
@@ -546,9 +554,16 @@ export function cleanTrailer(raw: unknown, input: Pick<ConverseInput, "escalatio
   if (escalated) {
     level = forced;
     const lastSaid = [...(input.history ?? [])].reverse().find((h) => h.who === "chalky")?.text ?? "";
-    const note = wantsMore(input.utterance) && !isStillLost(input.utterance)
-      ? `The learner asked to go deeper: "${input.utterance}".${lastSaid ? ` That is about what you had just told them: "${lastSaid.slice(0, 300)}".` : ""} Teach exactly that, step by step, in two or three beats.`
-      : `The learner said "${input.utterance}" and is still lost; show it a different way.`;
+    // What "this" means in their words: their newest pen mark, else the beat they spoke over.
+    const marked = input.ink?.marks.filter((m) => m.latest).map((m) => `${m.id} ("${m.label}")`).join(", ");
+    const beatNow = input.beats[input.beatIndex]?.say ?? "";
+    const about = marked ? ` "This" is what they marked with the pen: ${marked}.` : input.followUp && lastSaid ? ` That is about what you had just told them: "${lastSaid.slice(0, 300)}".` : beatNow ? ` They said it while you were on: "${beatNow.slice(0, 200)}".` : "";
+    const closeUp = "Open with a draw beat that shows just that part as a new close-up (larger and simpler than before, with new ids; on the next scene if this one is full), and stay on it for two or three beats before anything else.";
+    const note = isStillLost(input.utterance)
+      ? `The learner said "${input.utterance}" and is still lost; show it a different way.`
+      : wantsSlower(input.utterance)
+        ? `The learner asked for a slower pace: "${input.utterance}".${about} Rewrite the rest slower: one small idea per beat, plain words, and a check-in after every two or three beats.${wantsMore(input.utterance) ? ` Start with the one part they asked about. ${closeUp}` : ""}`
+        : `The learner asked to go deeper: "${input.utterance}".${about} Teach exactly that, step by step. ${closeUp}`;
     amend = { op: forced === "replan" ? "replace_from" : "insert_after", index: input.beatIndex + 1, note: amend?.note || note };
     // Cut to the hand-off: a check it asked is not what Chalky does next.
     check = null;
@@ -776,7 +791,7 @@ export async function* converse(input: ConverseInput, signal: AbortSignal): Asyn
             budget = 1;
             yield { type: "actions", names, tMs: ms() };
             yield { type: "level", level: forced, tMs: ms() };
-            const ev = say(HANDOFF[forced]!);
+            const ev = say(handoffLine(forced, input.utterance));
             if (ev) yield ev;
             capped = true;
           } else if (m) {

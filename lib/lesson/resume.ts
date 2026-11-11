@@ -54,10 +54,37 @@ export function isQuestion(text: string): boolean {
  * The learner asks to go deeper into what was just said ("could you walk me through that?", "tell me more",
  * "explain that again"). Mid-lesson that is a short detour, not another one-line answer.
  */
-const WANTS_MORE = /\b(walk me through|talk me through|take me through|go (a bit |a little )?(deeper|further)|go into (more )?detail|(in )?more detail|tell me more|say more|explain (that|this|it|those|them)( part)? (more|further|again|in more|a bit more|a little more)|explain (more|further)|elaborate|expand on|dig into|unpack|break (that|this|it) down|explore (that|this|it))\b/i;
+const WANTS_MORE = new RegExp(
+  "\\b(" +
+    [
+      "walk me through|talk me through|take me through",
+      "go (a bit |a little )?(deeper|further)|go into (more )?detail|(in )?more detail|in depth",
+      "(dive|dig|digging|diving) (a bit |a little )?(deeper|in|into)|deep dive|dig into|unpack",
+      "tell me more|say more|more (on|about) (this|that|it|these|those)",
+      "explain (that|this|it|those|them)( part)? (more|further|again|in more|a bit more|a little more|separately|on its own|by itself|first)",
+      "explain (more|further)|elaborate|expand on|break (that|this|it) down|explore (that|this|it)",
+      // "Start with just this part", "focus on this", "spend some time on it": stay on one thing.
+      "start with (just |only )?(this|that|these|those|what)|just (this|that) (part|bit|piece)( first)?",
+      "focus on (just |only )?(this|that|these|those)|(let'?s|can we|can you|could we|could you|i want to|i'd like to|please) (just )?focus on|zoom in|stay on (this|that)",
+      "spend (some |more |a little |a bit )?(more )?time on",
+      "(take|cover|do) (that|this|it|those) (separately|on its own|by itself)",
+    ].join("|") +
+    ")\\b",
+  "i",
+);
 
 export function wantsMore(text: string): boolean {
   return WANTS_MORE.test(text.trim());
+}
+
+/**
+ * The learner asks for a slower pace ("can we go slower?", "one thing at a time", "slow down"): the rest
+ * of the lesson is rewritten at that pace, not just acknowledged.
+ */
+const WANTS_SLOWER = /\b(go(ing)? (a (little|bit|lot) |much |way |actually )?(more )?slow(er|ly)?|slow(ing)? (it |this |things |that )?down|(a (little|bit) |much )slower|too fast|not so fast|one (thing|step|piece|part|idea|bit|concept) at a time|step by step|take (it|this) (slow(ly|er)?|easy)|more slowly)\b/i;
+
+export function wantsSlower(text: string): boolean {
+  return WANTS_SLOWER.test(text.trim());
 }
 
 /**
