@@ -16,6 +16,7 @@ import "server-only";
 import { allBlocks } from "@/lib/blocks";
 import { modelFor, streamModel } from "./provider";
 import { MAX_DRAWS_PER_SCENE, SceneGuard } from "./scenes";
+import { splitBridge } from "./bridge";
 import { socraticOn, withVoiceRules } from "./preference-prompt";
 import { describeLearner, type BeatMode, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type Region } from "./types";
 
@@ -49,7 +50,7 @@ Skip a section only if it truly doesn't apply. Go deeper where the question need
 
 Write 12 to 18 beats. A beat is ONE idea in one to three short plain spoken sentences, 25 to 35 words, said while the board shows one thing. Sound like a person talking: no lists, no markdown, no symbols that read badly aloud (write "percent", not "%"; spell out units and abbreviations). No filler or "great question". Give the learner time: after a beat that draws something new, follow it with a point or talk beat that dwells on it before drawing the next thing; at most about half the beats draw.
 
-Split the lesson into sections of 2 or 3 beats, each with a one-line goal (what the learner should get from it). The first beat of a section carries "section": "<the goal, at most 12 words>". The last beat of every section except the recap ends with a short check-in question to the learner and is marked "check": true. The check-in is one specific question about what was just shown, answerable in a few words ("Which of these two gets the energy first?", "So where does the oxygen come from?"), never "does that make sense?". A check-in beat also carries "bridge": a short line, at most 12 words, that you say when the learner answers "yes" or "got it", like a teacher taking a breath and naming what comes next ("Okay, next is how the water gets in.").
+Split the lesson into sections of 2 or 3 beats, each with a one-line goal (what the learner should get from it). The first beat of a section carries "section": "<the goal, at most 12 words>". The last beat of every section except the recap ends with a short check-in question to the learner and is marked "check": true. The check-in is one specific question about what was just shown, answerable in a few words ("Which of these two gets the energy first?", "So where does the oxygen come from?"), never "does that make sense?". A check-in beat also carries "answer": the answer you are looking for, in a few words ("the chlorophyll", "from the water"); it is never spoken, it is how the learner's reply gets judged. And "bridge": a short line, at most 12 words, said as the lesson goes on, like a teacher taking a breath and naming what comes next ("Okay, next is how the water gets in."). The bridge is written before the learner answers, so it never states the answer and never says they were right ("Yes, cat." and "Right, it would blur." are wrong).
 
 Each beat has a "mode" for the board:
 - "draw": add a new drawing to the board for this beat. Use it when a new thing, part, or step appears.
@@ -67,9 +68,10 @@ The board is a 100 by 100 grid, x to the right and y down, shown 3:2 (wider than
 - "points": for point beats, 1 to 3 of {"id": a shape id added earlier in this scene, "word": the one word in this beat's text that names it, copied exactly}; the highlight appears as that word is spoken. [] for draw and talk.
 - "visual": for draw, one or two sentences describing exactly what to add (shapes, their arrangement inside the region, labels of 1 to 3 words) and which earlier ids it connects to. The drawing is made of circles, boxes, arrows between named elements, flows, cycles, equations, plots, bars, moving dots and short labels. For point, what to point at and why. For talk, "".
 
-Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat, "bridge": "..." on a check-in beat, and "quiz": "label" | "predict" | "sketch" on a quiz beat. Nothing else: no code fences, no commentary.`;
+Output format, exactly: first one line {"title": "<lesson title, max 6 words>"}, then one line per beat {"say": "...", "mode": "draw" | "point" | "talk", "scene": 1, "at": "...", "region": [x, y, w, h], "adds": [...], "points": [...], "visual": "...", "check": false}, adding "section": "..." on a section's first beat, "answer": "..." and "bridge": "..." on a check-in beat, and "quiz": "label" | "predict" | "sketch" on a quiz beat. Nothing else: no code fences, no commentary.`;
 
 const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 const MODES = new Set<BeatMode>(["draw", "point", "talk"]);
 const FULL_BOARD: Region = { x: 5, y: 5, w: 90, h: 90 };
 
@@ -227,7 +229,11 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const check = b.check === true || say.endsWith("?");
   const line = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
   const section = line(b.section, 120);
-  const bridge = check ? line(b.bridge, 120) : undefined;
+  // The bridge is written before the learner answers: an opening that confirms an answer ("Yes, cat. Now, ...")
+  // is taken off it, and kept as the expected answer when the planner gave none.
+  const split = check ? splitBridge(line(b.bridge, 120)) : {};
+  const bridge = split.bridge;
+  const answer = check ? line(b.answer, 120) ?? split.confirms : undefined;
   if (section || index === 0) {
     st.sections = (st.sections ?? 0) + 1;
     st.quizzed = false;
@@ -270,7 +276,7 @@ function checkBeat(raw: unknown, index: number, st: PlanState): PlannedBeat {
   const citeRaw = Array.isArray(b.cite) ? b.cite[0] : b.cite;
   const citeN = typeof citeRaw === "number" ? citeRaw : Number(String(citeRaw ?? "").replace(/\D/g, "")) || 0;
   const cite = citeN >= 1 && citeN <= 9 ? Math.round(citeN) : undefined;
-  return { id: `b${index + 1}`, say: sayOut, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : checkOut, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(quiz ? { quiz } : {}), ...(opener ? { opener } : {}), ...(cite ? { cite } : {}) };
+  return { id: `b${index + 1}`, say: sayOut, at: norm(at), visual, mode: quiz ? "talk" : mode, check: quiz ? false : checkOut, scene, region: quiz ? FULL_BOARD : region, adds: quiz ? [] : adds, points: quiz ? [] : points, ...(section ? { section } : {}), ...(bridge && !quiz ? { bridge } : {}), ...(answer && !quiz ? { answer } : {}), ...(quiz ? { quiz } : {}), ...(opener ? { opener } : {}), ...(cite ? { cite } : {}) };
 }
 
 /**

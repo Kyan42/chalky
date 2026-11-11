@@ -26,7 +26,7 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
         const o = (b ?? {}) as Record<string, unknown>;
         const mode: BeatMode = o.mode === "point" || o.mode === "talk" ? o.mode : "draw";
         const section = str(o.section, 160).trim();
-        return { id: str(o.id, 60) || `b${i + 1}`, say: str(o.say, 600), mode, ...(section ? { section } : {}), ...(o.check === true ? { check: true } : {}) };
+        return { id: str(o.id, 60) || `b${i + 1}`, say: str(o.say, 600), mode, ...(section ? { section } : {}), ...(o.check === true ? { check: true } : {}), ...(o.check === true && str(o.answer, 160) ? { answer: str(o.answer, 160) } : {}) };
       })
     : [];
   const board = Array.isArray(body.board)

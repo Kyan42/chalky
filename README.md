@@ -7,35 +7,73 @@ and remembers what you got stuck on.
 
 Built at Cal Hacks 13 by Keyon, Janani and Leo.
 
-## How we use Convex
+<img src="docs/media/opening.gif" width="820" alt="The start screen: Chalky's mascot, then Start talking, the greeting, and a tree and stones rising beside it.">
 
-Convex is Chalky's memory. Every lesson's transcript is mirrored into Convex as it plays (lessons, events, beats),
-and a learner record is merged across lessons, so the next lesson starts from what you got stuck on last time.
-`/log` shows lessons live through `useQuery`, no refresh. Evidence, files and a dated commit log: [hackathon.md](hackathon.md).
+To run it yourself, see [Setup](#setup). The clips below are from one unscripted lesson on how neural
+networks learn (the quiz clip skips ahead while the learner draws); the captions at the bottom of each show what was said, the learner's words in green.
 
-## A lesson in one minute
+## Just ask out loud
 
-Open `/lesson`, press **Start talking** and ask, for example, "how does photosynthesis work?".
+Press **Start talking** and ask anything: Chalky asks one short question about what you already know,
+and plans the lesson around your answer.
 
-1. Chalky answers within a second or two and asks one short intake question ("what do you already
-   know about it?"). Meanwhile the planner is already writing the lesson, shaped by your answer.
-2. The lesson plays as 12 to 18 short beats in sections, with check-ins. Each beat is spoken by
-   Cartesia Sonic, and its drawing appears on the board on the word it belongs to, built from a
-   catalogue of 300 line-art blocks (a leaf, a chloroplast, a water molecule) where one fits.
-3. Cut in whenever you like: just start talking, or hold **Space**. Chalky freezes on the exact word,
-   listens, and answers on the board: it points with its chalk hand, circles, sketches one missing
-   thing, or inserts a short detour of new beats. Then it goes on from the word it stopped on.
-4. Pick up the pen and circle something: "what is this?" Chalky reads what the circle goes round.
-5. The board is one long world. New scenes open beside the old ones and the camera glides between
-   them. "Show me where the leaf diagram was" glides back.
-6. A quiz asks you to label the numbered parts of a diagram, or to sketch it. Chalky grades it and
-   says what was right and what was missing.
-7. Ask something time-sensitive ("what's new in CRISPR this month") and Chalky looks it up on the
-   web while it asks the intake question, then teaches from what it found, with the sources on screen.
-8. Say "I'm done" to end. Your next lesson starts from what you got stuck on last time.
+<img src="docs/media/ask-out-loud.gif" width="820" alt="Start talking is pressed, Chalky greets, the learner asks how neural networks work, and the lesson title fades in while Chalky plans.">
 
-Pause, Stop and a Space tap freeze on the word and resume from it. Captions show every word as it is
-spoken, and your own words as you say them.
+## It draws while it talks
+
+Each drawing appears on the word it belongs to, because the voice's word timestamps are the clock the
+whole board runs on.
+
+<img src="docs/media/draws-while-it-talks.gif" width="820" alt="A neural network is drawn node by node while the caption follows the sentence describing it.">
+
+## It points at what it means
+
+A chalk hand moves to the part being talked about and circles it, so "this knob" is never a guess.
+
+<img src="docs/media/points-at-what-it-means.gif" width="820" alt="The chalk hand circles the sugar knob, then the cake, as each is named.">
+
+## Interrupt at any time
+
+Start talking, or hold **Space**: Chalky stops on the exact word, answers, and goes on from where it
+stopped.
+
+<img src="docs/media/interrupt-at-any-time.gif" width="820" alt="Chalky is mid-sentence when the learner circles a square and asks what it is; Chalky stops, points at it and answers.">
+
+## Circle it and ask
+
+Pick up the pen, circle anything on the board and ask "what is this?": Chalky reads what your circle
+goes round.
+
+<img src="docs/media/circle-it-and-ask.gif" width="820" alt="The learner circles the photo on the board and asks what this part is; Chalky points at it and explains.">
+
+## Lost? It takes a detour
+
+Say you're lost and Chalky stops, draws a new explanation from something you already know, then comes
+back to the lesson.
+
+<img src="docs/media/takes-a-detour.gif" width="820" alt="The learner says they are lost; Chalky says let me draw that for you and draws a baking recipe with three knobs.">
+
+## Quiz me
+
+Ask for a quiz and Chalky numbers the parts of the diagram for you to name, or asks you to sketch it,
+then says what was right and what was missing.
+
+<img src="docs/media/quiz-me.gif" width="820" alt="The learner asks to be quizzed, Chalky asks for a drawing of what was just covered, the learner sketches it, and Chalky says what it liked and what to add.">
+
+## It remembers you
+
+Your next lesson starts from what you covered and where you got stuck last time.
+
+<img src="docs/media/remembers-you.gif" width="820" alt="Opening a new lesson, Chalky says it connects to what we did on attention and tokens.">
+
+## Also
+
+- **One long board.** New scenes open beside the old ones and the camera glides between them; "show me where the network diagram was" glides back.
+- **Check-ins.** Each section ends with one specific question, and the lesson waits for your answer.
+- **Captions.** Every word shows as it is spoken, and your own words as you say them.
+- **Pause and end by voice.** A tap of Space pauses on the word and resumes from it; "I'm done" ends the lesson.
+- **Preferences.** Voice, speaking speed, teaching pace, learning approach, how much is drawn, and the lesson's language.
+- **A live log.** `/log` follows a lesson as it plays: every beat, decision and timing.
 
 ## Sponsors, and what each one does here
 
@@ -58,14 +96,18 @@ speech clock each frame, which is what makes a line appear on its word. The 300 
 biology, chemistry and computing) are hand-built vector scenes; every part of every block has a
 name, so a lesson can point at a cell's nucleus or one node of a neural network.
 
-**Moss** picks the blocks and finds things on the board. Listing 300 blocks in every prompt was too
-much, so each beat's description is searched against a Moss index of the catalogue and the drawer
-gets the four best matches (about a millisecond inside Moss, around 20 ms round trip). Before every
-reply to an interruption, a Moss session over the board's elements and the learner's memory ranks
-what "that arrow" most likely means.
+**Moss** picked the blocks and found things on the board at the hackathon. Listing 300 blocks in every
+prompt was too much, so each beat's description is searched against an index of the catalogue and the
+drawer gets the best matches. Before every reply to an interruption, a search over the board's
+elements and the learner's memory ranks what "that arrow" most likely means. Since then the same
+searches run by default on a local engine inside the Node server (a small sentence model plus BM25, no
+key); Moss is still there behind `RETRIEVAL_ENGINE=moss`. Both engines side by side:
+[docs/retrieval.md](docs/retrieval.md).
 
-**Convex** stores everything: lessons, their events and beats, and a learner record merged across
-lessons. The `/log` page follows a lesson live. Details in [hackathon.md](hackathon.md).
+**Convex** is Chalky's memory. Every lesson's transcript is mirrored into Convex as it plays (lessons,
+events, beats), and a learner record is merged across lessons, so the next lesson starts from what you
+got stuck on last time. `/log` shows lessons live through `useQuery`, no refresh. Evidence, files and a
+dated commit log: [hackathon.md](hackathon.md).
 
 **Apify** answers the questions a model can't: anything time-sensitive. A question that asks for
 what's new, latest, a version or a date triggers one call to Apify's browser actor, which searches
@@ -97,8 +139,8 @@ when it arrives.
 | Time-sensitive questions: web search and page extraction | Apify `apify/rag-web-browser` | `lib/research/`, `app/api/research/`, `components/ResearchCards.tsx` |
 | Layout compiler: places labels, arrows, flows; owns geometry | our code | `lib/lesson/presets.ts`, `lib/lesson/board.ts` |
 | 300 line-art blocks (biology, chemistry, computing) | hand-built | `presets/`, `lib/blocks/` |
-| Block retrieval per beat | Moss index, keyword fallback | `lib/moss/blocks.ts`, `lib/blocks/catalog.ts` |
-| Board and learner memory search on every reply | Moss sessions in the server process | `lib/moss/session.ts`, `lib/moss/memory.ts`, `app/api/board-index/route.ts` |
+| Block retrieval per beat | local sentence model plus BM25 (Moss behind a switch), keyword fallback | `lib/retrieval/blocks.ts`, `lib/retrieval/hybrid.ts`, `lib/blocks/vectors.json`, `lib/moss/blocks.ts` |
+| Board and learner memory search on every reply | local index per lesson and per learner, in the server process (Moss sessions behind the same switch) | `lib/retrieval/session.ts`, `lib/retrieval/memory.ts`, `lib/moss/session.ts`, `app/api/board-index/route.ts` |
 | Animation | Clayzo WebGL player | `@clayzo/webgl-player`, `components/Lesson.tsx` |
 | Lessons, events, beats, learners; live log | Convex | `convex/`, `lib/convexMirror.ts`, `app/api/live-log/route.ts`, `app/log/` |
 | Learner's pen, Chalky's cursor | perfect-freehand, SVG overlay | `components/InkLayer.tsx`, `lib/lesson/ink.ts`, `components/ChalkyCursor.tsx` |
@@ -120,21 +162,27 @@ values, which are not secrets.
 |---|---|---|
 | `CARTESIA_API_KEY` | yes | Cartesia dashboard, API keys |
 | `ANTHROPIC_API_KEY` | yes | console.anthropic.com, API keys |
-| `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` | for Moss retrieval (without them, keyword match and word overlap) | portal.usemoss.dev |
+| `RETRIEVAL_ENGINE`, `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` | only to search with Moss instead of the local engine: `RETRIEVAL_ENGINE=moss` plus both keys | portal.usemoss.dev |
 | `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT` | for Convex records and the live `/log` | written by `npx convex dev --once --configure new --project chalky --dev-deployment cloud` (see `docs/convex.md`) |
+| `CHALKY_WRITE_SECRET` | with Convex: the same value here and on the deployment (`npx convex env set CHALKY_WRITE_SECRET <value>`); without it nothing is written to Convex | any long random string, e.g. `openssl rand -hex 32` |
+| `MODEL_PROVIDER`, `OPENAI_API_KEY` | only to run the lesson on OpenAI models (`MODEL_PROVIDER=openai`; see `docs/openai.md`) | platform.openai.com |
 | `APIFY_TOKEN` | for time-sensitive questions (without it, Chalky teaches from what it knows) | console.apify.com, Settings, API & Integrations |
 | `CHALKY_LIVE_LOG` | `1` to write transcripts to `experiments/live-runs/` | none |
 | `NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN` | `1` to have voice interrupt on by default (the header switch overrides it per browser) | none |
 | `NEXT_PUBLIC_CHALKY_THEME` | `chalk` (default), `chalkboard` or `whiteboard` | none |
 | `SONIC_SPEED` | optional, 0.6 to 1.5, default 0.92; `1` turns it off | none |
 | `CARTESIA_VOICE_ID`, `CARTESIA_MODEL_ID` | optional voice and model overrides | Cartesia voice library |
-| `CHALKY_BLOCK_RETRIEVAL` | optional, `moss` or `all` | none |
+| `CHALKY_BLOCK_RETRIEVAL` | optional, `all` turns block retrieval off (every block is listed) | none |
 
-Build the Moss block index once (and after changing blocks):
+Block search needs no setup: the block vectors are in the repo (`lib/blocks/vectors.json`) and the
+sentence model (about 23 MB) is downloaded into `.cache/transformers/` the first time the server
+starts. After changing blocks, rebuild the vectors (`npm run build` stops if they are out of date):
 
 ```bash
-npx tsx --env-file=.env.local scripts/moss-build-blocks.ts
+npx tsx scripts/build-block-vectors.ts
 ```
+
+To compare against Moss, also build its index: `npx tsx --env-file=.env.local scripts/moss-build-blocks.ts`.
 
 Run it:
 
@@ -142,7 +190,7 @@ Run it:
 npm run dev
 ```
 
-Open http://localhost:3000/lesson. (`/` is an early one-beat demo page; the app is `/lesson`.)
+Open http://localhost:3000/lesson. (`/` is the landing page; **Start learning** goes to `/lesson`.)
 
 For a demo, use a production build. The dev server compiles each route on its first request, which
 makes a cold first sound several seconds slower.
@@ -152,7 +200,7 @@ npm run build
 npm run start
 ```
 
-At start the server loads the Moss block index and makes spare Moss sessions ahead of time
+At start the server loads the retrieval model and the block index ahead of time
 (`instrumentation.ts`), so the first lesson after a boot can still be a few seconds slower. Run one
 throwaway lesson first. On the dev server, `scripts/warm.sh` compiles every route the lesson uses
 (it reads `BASE_URL`).
@@ -167,12 +215,13 @@ npx tsx scripts/test-turn-merger.ts      # Ink turns merged into one utterance
 npx tsx scripts/test-layout.ts           # labels and blocks move off each other; circle-to-block swap
 npx tsx scripts/test-amend-scenes.ts     # scene rules on a plan change
 npx tsx scripts/test-first-person.ts     # Chalky speaks as "I"
+npx tsx scripts/test-bridge.ts           # a check-in's bridge never confirms an answer nobody gave
 ```
 
-With Moss keys:
+Retrieval (no keys for the local engine; `--engine=moss` needs the Moss keys):
 
 ```bash
-npx tsx --env-file=.env.local scripts/test-moss-blocks.ts   # 26 briefs; expected block in Moss's top 3; exits 2 without keys
+npx tsx scripts/test-retrieval.ts --engine=local   # 26 briefs; expected block in the top 3 (25 of 26; `h2o` is the known miss)
 ```
 
 Against a running server (Playwright; `npx playwright install chromium` once). Each script states its
@@ -180,6 +229,7 @@ options at the top. Set `BASE_URL` to your server.
 
 | Script | What it drives |
 |---|---|
+| `scripts/rehearse-demo.mjs` | a live lesson by scripted mic on any server, `next start` included: question, intake, two Space-held cut-ins, a quiz, "I'm done"; timeline and screenshots |
 | `scripts/e2e-lesson.mjs "Why is the sky blue?"` | a whole lesson, typed or by fake mic, screenshot per beat |
 | `scripts/e2e-voice-ask.mjs`, `e2e-intake.mjs`, `e2e-intake-rewrite.mjs` | asking by voice; the intake and a plan rewrite |
 | `scripts/e2e-cut-resume.mjs`, `e2e-cut-detour.mjs`, `e2e-toggle.mjs`, `e2e-stop-mic.mjs` | cut-ins, detours, Pause and Stop resuming on the word |
@@ -202,7 +252,9 @@ development: `/lesson?fixture=why-is-the-sky-blue&beats=3`.
 | `app/experiments/` | dev pages: blocks gallery, chalk theme, cursor, mic, Moss, board view |
 | `lib/lesson/` | planner, conversation layer, intake, drawing, scene language, compiler, quiz, ink |
 | `lib/voice/`, `lib/sonic.ts`, `lib/audio/` | Ink-2, Sonic, audio playback and the clock |
-| `lib/moss/` | block retrieval, board and learner memory sessions |
+| `lib/retrieval/` | block retrieval, board and learner memory search (local engine); `docs/retrieval.md` |
+| `lib/moss/` | the same searches on Moss, behind `RETRIEVAL_ENGINE=moss` |
+| `lib/lesson/provider.ts` | the one adapter every model call goes through (Anthropic or OpenAI); `docs/openai.md` |
 | `lib/research/` | time-sensitive questions: Apify fetch, cache, the contract the lesson reads |
 | `lib/blocks/`, `presets/` | the 300 blocks and how the compiler draws them |
 | `lib/board/` | themes and the chalk look |
@@ -243,9 +295,9 @@ Fonts are under the OFL (`public/fonts/OFL.txt`).
 - **Misheard first turn.** Ink-2 can end a turn after "Hey Chalky" or mishear a topic word. A bare
   greeting no longer starts a lesson, and key terms help, but a misheard question can start the wrong
   lesson.
-- **Convex writes are public.** `upsertLesson` is a public mutation: anyone with the deployment URL can
-  write. Fine for a hackathon, not for real learners.
+- **Convex records are readable by anyone with the deployment URL.** Writes need `CHALKY_WRITE_SECRET`,
+  but the queries behind `/log` are public and there are no accounts. Not for real learners.
 - **One browser is one learner.** The learner id is a cookie. No accounts.
-- **Laptop only.** Transcripts are files in the working directory; Moss sessions live in the server
-  process. A serverless host would lose both (Convex still keeps the records).
+- **Laptop only.** Transcripts are files in the working directory; the board and memory indexes live
+  in the server process. A serverless host would lose both (Convex still keeps the records).
 - **Clayzo can't edit a running document**, so the board document is rebuilt per beat.

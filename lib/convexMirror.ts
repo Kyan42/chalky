@@ -2,7 +2,8 @@
  * Mirrors a lesson transcript into Convex (convex/lessons.ts upsertLesson) from
  * the /api/live-log route, after the file write. A no-op, logged once, when no
  * Convex deployment is configured (NEXT_PUBLIC_CONVEX_URL); a Convex failure is
- * logged and never changes the route's answer.
+ * logged and never changes the route's answer. The write carries CHALKY_WRITE_SECRET,
+ * which must match the value set on the Convex deployment (docs/convex.md).
  */
 import "server-only";
 import { execSync } from "node:child_process";
@@ -43,7 +44,8 @@ export async function mirrorLesson(transcript: string, learnerId: string | null)
   client ??= new ConvexHttpClient(url);
   const t0 = Date.now();
   try {
-    await client.mutation(api.lessons.upsertLesson, { transcript, ...(learnerId ? { learnerId } : {}), ...(buildId() ? { build: buildId()! } : {}) });
+    const secret = process.env.CHALKY_WRITE_SECRET;
+    await client.mutation(api.lessons.upsertLesson, { transcript, ...(learnerId ? { learnerId } : {}), ...(buildId() ? { build: buildId()! } : {}), ...(secret ? { secret } : {}) });
   } catch (e) {
     console.error(`[live-log] Convex mirror failed after ${Date.now() - t0} ms:`, (e as Error).message ?? e);
   }

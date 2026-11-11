@@ -2439,7 +2439,7 @@ export default function Lesson() {
           {
             utterance,
             question: lessonStarted ? q : "",
-            beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, section: s.beat.section, check: s.beat.check })),
+            beats: list.map((s) => ({ id: s.beat.id, say: s.beat.say, mode: s.beat.mode, section: s.beat.section, check: s.beat.check, ...(s.beat.answer ? { answer: s.beat.answer } : {}) })),
             beatIndex: i,
             wordIndex,
             board: boardRef.current.list.map((e) => ({ ...e, ...(boardRef.current.boxes[e.id] ? { box: localBox(boardRef.current.boxes[e.id], boardRef.current.scene) } : {}) })),
@@ -3537,10 +3537,12 @@ export default function Lesson() {
           <div className="visual" style={{ position: "relative", visibility: showWelcome ? "hidden" : "visible" }}>
             <canvas key={canvasKey} ref={canvasRef} aria-label="The whiteboard" />
             {question && current < 0 && (
-              // Before the first beat draws: the topic in chalk, so the board is never blank while Chalky plans.
+              // Before the first beat draws: the pieces orbit an empty space while Chalky plans, and the lesson's
+              // title fades in there once the planner has it. The learner's words as heard are never shown here
+              // (they used to be, then the model's rewording, then the title: three texts in two seconds).
               <div className="chalk-title" data-testid="chalk-title">
                 <div className="thinking-topic">
-                  <span>{title && title !== "Planning…" ? title : question}</span>
+                  {title && title !== "Planning…" ? <span key={title} className="thinking-title">{title}</span> : <span className="thinking-title-wait" aria-hidden="true" />}
                   {/* Paper-cut pieces orbit the topic while Chalky plans; they hold still while it is paused or listening. */}
                   <div className="thinking-shapes" aria-hidden="true" data-paused={status === "paused" || status === "listening"}>
                     <span className="thinking-shape shape-diamond" />

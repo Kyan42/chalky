@@ -22,10 +22,16 @@ function cleanLearner(raw: unknown) {
  * page only ever appends events and beats, so only the rows past what is stored
  * are inserted; if the stored tail no longer matches, the lesson's rows are
  * rewritten. With a learner id, the lesson's learner record is merged into it.
+ * Public by name but closed by a shared secret: see the first lines of the handler.
  */
 export const upsertLesson = mutation({
-  args: { transcript: v.string(), learnerId: v.optional(v.string()), build: v.optional(v.string()) },
-  handler: async (ctx, { transcript, learnerId, build }) => {
+  args: { transcript: v.string(), learnerId: v.optional(v.string()), build: v.optional(v.string()), secret: v.optional(v.string()) },
+  handler: async (ctx, { transcript, learnerId, build, secret }) => {
+    // Writes need the deployment's CHALKY_WRITE_SECRET (npx convex env set CHALKY_WRITE_SECRET <value>),
+    // sent by the Next server only (lib/convexMirror.ts). No secret on the deployment means no writes.
+    const expected = process.env.CHALKY_WRITE_SECRET;
+    if (!expected) throw new Error("writes are off: CHALKY_WRITE_SECRET is not set on this Convex deployment");
+    if (secret !== expected) throw new Error("not allowed");
     const t = JSON.parse(transcript) as Row;
     const lessonId = str(t.id);
     if (!/^[a-z0-9-]{8,100}$/.test(lessonId)) throw new Error("bad lesson id");

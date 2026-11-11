@@ -133,6 +133,8 @@ export interface ConverseBeat {
   section?: string;
   /** The beat ends with a check-in question. */
   check?: boolean;
+  /** On a check-in beat: the answer the planner was looking for. */
+  answer?: string;
 }
 
 export interface BoardElementRef {
@@ -298,6 +300,7 @@ function context(o: ConverseInput): string {
     const next = o.beats.slice(o.beatIndex + 1, o.beatIndex + 3).map((b, k) => `${k + 1}. ${b.say}`);
     where = [
       `You had just asked a check-in question: "${asked}"`,
+      now.answer ? `The answer you had in mind when you planned it: "${now.answer}". The learner has not heard it. Weigh their reply against it silently, then answer them directly ("you", never "they said ..."); how you respond is yours to decide. Never tell them they were right about something they did not say.` : "",
       goal ? `This section's goal: ${goal}` : "",
       next.length ? `What you will say next:\n${next.join("\n")}` : "Nothing more is planned after this.",
     ]

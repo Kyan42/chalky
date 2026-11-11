@@ -7,7 +7,7 @@ is mirrored into Convex when a deployment is configured, next to the file in
 - `convex/schema.ts`: `lessons` (one per transcript id), `lessonEvents` (one row
   per event, by lesson and seq / t), `beats` (one per played beat), `learners`
   (one per learner id, merged across lessons). Event and beat payloads are JSON text.
-- `convex/lessons.ts`: `upsertLesson({ transcript, learnerId?, build? })` takes the
+- `convex/lessons.ts`: `upsertLesson({ transcript, learnerId?, build?, secret })` takes the
   transcript JSON as posted and appends only new rows (idempotent);
   `lessonLive({ lessonId })`, `recentLessons({ limit? })`.
 - `convex/learners.ts`: `learnerMemory({ learnerId, before? })` returns a few lines
@@ -27,7 +27,8 @@ is mirrored into Convex when a deployment is configured, next to the file in
    `CONVEX_URL` was written, add `NEXT_PUBLIC_CONVEX_URL=<same url>`.
 3. Copy those two lines into every checkout's `.env.local` that runs the app, and
    restart `next dev` (`NEXT_PUBLIC_*` is read at build time).
-4. After changing anything in `convex/`, push again: `npx convex dev --once`
+4. Set the write secret (see "Who can write" below).
+5. After changing anything in `convex/`, push again: `npx convex dev --once`
    (or `npx convex dev` to watch). A production deployment for the demo:
    `npx convex deploy`, then use its URL.
 
@@ -52,6 +53,16 @@ A later lesson can read what this learner got stuck on before with
 `learnerMemory`, e.g. from a route:
 `new ConvexHttpClient(url).query(api.learners.learnerMemory, { learnerId, before: lessonId })`.
 
-`upsertLesson` is a public mutation: anyone with the deployment URL can write.
-Fine for the hackathon; make it internal behind an HTTP action with a secret
+## Who can write
+
+`upsertLesson` is public by name but only writes when its `secret` argument matches the
+deployment's `CHALKY_WRITE_SECRET`. Set the same value in both places:
+
+    npx convex env set CHALKY_WRITE_SECRET "$(openssl rand -hex 32)"
+    npx convex env get CHALKY_WRITE_SECRET     # copy into .env.local as CHALKY_WRITE_SECRET=...
+
+With no secret on the deployment every write is refused; with none in `.env.local` the
+mirror logs `Convex mirror failed` and the lesson carries on (files only). The queries
+(`recentLessons`, `lessonLive`, `learnerMemory`, `get`) are still public: anyone with the
+deployment URL can read lessons and learner records. Gate those too, or add accounts,
 before anything real.

@@ -52,7 +52,7 @@ check('circle "a cell" becomes cell', swap("circle", "a cell", [50, 50, 10, 1])?
 check('circle "CO2" becomes co2 with diameter size', JSON.stringify(swap("circle", "CO2", [50, 50, 4, 1])?.[0].args) === "[50,50,8]");
 check('"Water drop" matches the drop block', swap("circle", "Water drop", [10, 10, 5, 1])?.[0].text === "drop");
 check('"Leaf cell" is not a block', swap("box", "Leaf cell", [0, 0, 10, 10]) === null);
-check('"Chloroplast" is not a block', swap("circle", "Chloroplast", [0, 0, 5, 1]) === null);
+check('circle "Chloroplast" becomes chloroplast', swap("circle", "Chloroplast", [0, 0, 5, 1])?.[0].text === "chloroplast");
 check("a line is never swapped", swap("line", "leaf", [0, 0, 10, 10]) === null);
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");

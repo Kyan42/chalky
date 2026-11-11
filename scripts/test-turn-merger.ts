@@ -95,5 +95,20 @@ const expect = (name: string, got: unknown, want: unknown) => {
   expect("flushes after release", out, [["hold on what was that", 2]]);
   expect("buffer empty afterwards", m.buffered, "");
 }
+{
+  // Key released after Ink closed the turn (useHybridMic's onUp): flush, then the hold comes off, so the
+  // next open-mic turn is emitted on its own window and not kept until another key release.
+  const { m, out } = make();
+  m.setHold(true);
+  m.turnStart();
+  m.turnEnd("what does that mean");
+  m.flush();
+  m.setHold(false);
+  expect("release after the turn ended flushes at once", out, [["what does that mean", 1]]);
+  m.turnStart();
+  m.turnEnd("ok keep going");
+  advance(700);
+  expect("the next open-mic turn is emitted", out, [["what does that mean", 1], ["ok keep going", 1]]);
+}
 console.log(failed ? `\n${failed} check(s) failed` : "\nall turn-merger checks passed");
 process.exit(failed ? 1 : 0);
