@@ -7,35 +7,79 @@ and remembers what you got stuck on.
 
 Built at Cal Hacks 13 by Keyon, Janani and Leo.
 
-## How we use Convex
+<img src="docs/media/opening.gif" width="820" alt="The start screen: Chalky's mascot, then Start talking, the greeting, and a tree and stones rising beside it.">
 
-Convex is Chalky's memory. Every lesson's transcript is mirrored into Convex as it plays (lessons, events, beats),
-and a learner record is merged across lessons, so the next lesson starts from what you got stuck on last time.
-`/log` shows lessons live through `useQuery`, no refresh. Evidence, files and a dated commit log: [hackathon.md](hackathon.md).
+To run it yourself, see [Setup](#setup). The clips below are from one unscripted lesson on how neural
+networks learn; the captions at the bottom of each show what was said, the learner's words in green.
 
-## A lesson in one minute
+## Just ask out loud
 
-Open `/lesson`, press **Start talking** and ask, for example, "how does photosynthesis work?".
+Press **Start talking** and ask anything: Chalky asks one short question about what you already know,
+and plans the lesson around your answer.
 
-1. Chalky answers within a second or two and asks one short intake question ("what do you already
-   know about it?"). Meanwhile the planner is already writing the lesson, shaped by your answer.
-2. The lesson plays as 12 to 18 short beats in sections, with check-ins. Each beat is spoken by
-   Cartesia Sonic, and its drawing appears on the board on the word it belongs to, built from a
-   catalogue of 300 line-art blocks (a leaf, a chloroplast, a water molecule) where one fits.
-3. Cut in whenever you like: just start talking, or hold **Space**. Chalky freezes on the exact word,
-   listens, and answers on the board: it points with its chalk hand, circles, sketches one missing
-   thing, or inserts a short detour of new beats. Then it goes on from the word it stopped on.
-4. Pick up the pen and circle something: "what is this?" Chalky reads what the circle goes round.
-5. The board is one long world. New scenes open beside the old ones and the camera glides between
-   them. "Show me where the leaf diagram was" glides back.
-6. A quiz asks you to label the numbered parts of a diagram, or to sketch it. Chalky grades it and
-   says what was right and what was missing.
-7. Ask something time-sensitive ("what's new in CRISPR this month") and Chalky looks it up on the
-   web while it asks the intake question, then teaches from what it found, with the sources on screen.
-8. Say "I'm done" to end. Your next lesson starts from what you got stuck on last time.
+<img src="docs/media/ask-out-loud.gif" width="820" alt="Start talking is pressed, Chalky greets, the learner asks how neural networks work, and the lesson title fades in while Chalky plans.">
 
-Pause, Stop and a Space tap freeze on the word and resume from it. Captions show every word as it is
-spoken, and your own words as you say them.
+## It draws while it talks
+
+Each drawing appears on the word it belongs to, because the voice's word timestamps are the clock the
+whole board runs on.
+
+<img src="docs/media/draws-while-it-talks.gif" width="820" alt="A neural network is drawn node by node while the caption follows the sentence describing it.">
+
+## It points at what it means
+
+A chalk hand moves to the part being talked about and circles it, so "this knob" is never a guess.
+
+<img src="docs/media/points-at-what-it-means.gif" width="820" alt="The chalk hand circles the sugar knob, then the cake, as each is named.">
+
+## Interrupt at any time
+
+Start talking, or hold **Space**: Chalky stops on the exact word, answers, and goes on from where it
+stopped.
+
+<!-- clip to record: docs/media/interrupt-at-any-time.gif (a cut-in while Chalky is mid-sentence) -->
+
+## Circle it and ask
+
+Pick up the pen, circle anything on the board and ask "what is this?": Chalky reads what your circle
+goes round.
+
+<img src="docs/media/circle-it-and-ask.gif" width="820" alt="The learner circles the photo on the board and asks what this part is; Chalky points at it and explains.">
+
+## Lost? It takes a detour
+
+Say you're lost and Chalky stops, draws a new explanation from something you already know, then comes
+back to the lesson.
+
+<img src="docs/media/takes-a-detour.gif" width="820" alt="The learner says they are lost; Chalky says let me draw that for you and draws a baking recipe with three knobs.">
+
+## Quiz me
+
+Ask for a quiz and Chalky numbers the parts of the diagram for you to name, or asks you to sketch it,
+then says what was right and what was missing.
+
+<!-- clip to record: docs/media/quiz-me.gif ("quiz me, label the parts", an answer, the grading) -->
+
+## One long board
+
+The board is one continuous world: new scenes open beside the old ones, and "show me where the network
+diagram was" glides the camera back.
+
+<!-- clip to record: docs/media/one-long-board.gif ("show me where ... was" and the camera gliding back) -->
+
+## It remembers you
+
+Your next lesson starts from what you covered and where you got stuck last time.
+
+<img src="docs/media/remembers-you.gif" width="820" alt="Opening a new lesson, Chalky says it connects to what we did on attention and tokens.">
+
+## Also
+
+- **Check-ins.** Each section ends with one specific question, and the lesson waits for your answer.
+- **Captions.** Every word shows as it is spoken, and your own words as you say them.
+- **Pause and end by voice.** A tap of Space pauses on the word and resumes from it; "I'm done" ends the lesson.
+- **Preferences.** Voice, speaking speed, teaching pace, learning approach, how much is drawn, and the lesson's language.
+- **A live log.** `/log` follows a lesson as it plays: every beat, decision and timing.
 
 ## Sponsors, and what each one does here
 
@@ -66,8 +110,10 @@ searches run by default on a local engine inside the Node server (a small senten
 key); Moss is still there behind `RETRIEVAL_ENGINE=moss`. Both engines side by side:
 [docs/retrieval.md](docs/retrieval.md).
 
-**Convex** stores everything: lessons, their events and beats, and a learner record merged across
-lessons. The `/log` page follows a lesson live. Details in [hackathon.md](hackathon.md).
+**Convex** is Chalky's memory. Every lesson's transcript is mirrored into Convex as it plays (lessons,
+events, beats), and a learner record is merged across lessons, so the next lesson starts from what you
+got stuck on last time. `/log` shows lessons live through `useQuery`, no refresh. Evidence, files and a
+dated commit log: [hackathon.md](hackathon.md).
 
 **Apify** answers the questions a model can't: anything time-sensitive. A question that asks for
 what's new, latest, a version or a date triggers one call to Apify's browser actor, which searches
