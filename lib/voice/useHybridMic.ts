@@ -335,9 +335,10 @@ export function useHybridMic(options: HybridMicOptions) {
         }
       }, tailMs);
       tail.current = { timer, holdMs };
-      // Ink already closed the turn(s): the key release is the end of the utterance.
+      // Ink already closed the turn(s): the key release is the end of the utterance. Either way the hold is
+      // over: left on after the flush, it kept every later open-mic turn buffered until the next key release.
       if (!merger.current?.active && merger.current?.buffered) merger.current.flush();
-      else merger.current?.setHold(false);
+      merger.current?.setHold(false);
       refreshMode();
     };
     window.addEventListener("keydown", onDown);

@@ -188,6 +188,7 @@ options at the top. Set `BASE_URL` to your server.
 
 | Script | What it drives |
 |---|---|
+| `scripts/rehearse-demo.mjs` | a live lesson by scripted mic on any server, `next start` included: question, intake, two Space-held cut-ins, a quiz, "I'm done"; timeline and screenshots |
 | `scripts/e2e-lesson.mjs "Why is the sky blue?"` | a whole lesson, typed or by fake mic, screenshot per beat |
 | `scripts/e2e-voice-ask.mjs`, `e2e-intake.mjs`, `e2e-intake-rewrite.mjs` | asking by voice; the intake and a plan rewrite |
 | `scripts/e2e-cut-resume.mjs`, `e2e-cut-detour.mjs`, `e2e-toggle.mjs`, `e2e-stop-mic.mjs` | cut-ins, detours, Pause and Stop resuming on the word |
