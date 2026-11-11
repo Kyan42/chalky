@@ -225,7 +225,13 @@ html, body { margin: 0; height: 100%; background: var(--frame); color: var(--ink
 
 /* Paper-cut pieces travel around the topic (in the chalk title) without crossing its readable area. */
 .chalk-title { display: flex; align-items: center; justify-content: center; }
-.thinking-topic { position: relative; width: fit-content; max-width: 100%; padding: 12px 8px; }
+.thinking-topic { position: relative; width: fit-content; min-width: min(12em, 80%); min-height: 1.5em; max-width: 100%; padding: 12px 8px;
+  display: grid; place-items: center; }
+/* The lesson title arrives a second or two after the pieces: it fades up into the space they circle. */
+.thinking-title { display: inline-block; animation: thinking-title-in 700ms ease-out both; }
+.thinking-title-wait { display: block; height: 1.5em; }
+@keyframes thinking-title-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .thinking-title { animation: none; } }
 .thinking-shapes { position: absolute; inset: -42px -48px; pointer-events: none; }
 .thinking-shape { position: absolute; display: block; width: 24px; height: 26px; background: var(--ochre);
   offset-path: inset(0 round 999px); offset-anchor: center; offset-rotate: auto;

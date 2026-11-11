@@ -44,8 +44,10 @@ export interface PlannedBeat {
   cite?: number;
   /** Socratic ("Ask me first"): the predict question that opens its section, asked before the section teaches it. */
   opener?: boolean;
-  /** On a check-in beat: what Chalky says when the learner answers "got it" (no model call), naming what comes next. */
+  /** On a check-in beat: what Chalky says when the lesson goes on (no model call), naming what comes next. It never states or confirms the answer. */
   bridge?: string;
+  /** On a check-in beat: the answer the question is looking for, for the conversation model to judge the learner's reply by. Never spoken as it is. */
+  answer?: string;
 }
 
 /**
