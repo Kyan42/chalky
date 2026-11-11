@@ -58,11 +58,13 @@ speech clock each frame, which is what makes a line appear on its word. The 300 
 biology, chemistry and computing) are hand-built vector scenes; every part of every block has a
 name, so a lesson can point at a cell's nucleus or one node of a neural network.
 
-**Moss** picks the blocks and finds things on the board. Listing 300 blocks in every prompt was too
-much, so each beat's description is searched against a Moss index of the catalogue and the drawer
-gets the four best matches (about a millisecond inside Moss, around 20 ms round trip). Before every
-reply to an interruption, a Moss session over the board's elements and the learner's memory ranks
-what "that arrow" most likely means.
+**Moss** picked the blocks and found things on the board at the hackathon. Listing 300 blocks in every
+prompt was too much, so each beat's description is searched against an index of the catalogue and the
+drawer gets the best matches. Before every reply to an interruption, a search over the board's
+elements and the learner's memory ranks what "that arrow" most likely means. Since then the same
+searches run by default on a local engine inside the Node server (a small sentence model plus BM25, no
+key); Moss is still there behind `RETRIEVAL_ENGINE=moss`. Both engines side by side:
+[docs/retrieval.md](docs/retrieval.md).
 
 **Convex** stores everything: lessons, their events and beats, and a learner record merged across
 lessons. The `/log` page follows a lesson live. Details in [hackathon.md](hackathon.md).
@@ -97,8 +99,8 @@ when it arrives.
 | Time-sensitive questions: web search and page extraction | Apify `apify/rag-web-browser` | `lib/research/`, `app/api/research/`, `components/ResearchCards.tsx` |
 | Layout compiler: places labels, arrows, flows; owns geometry | our code | `lib/lesson/presets.ts`, `lib/lesson/board.ts` |
 | 300 line-art blocks (biology, chemistry, computing) | hand-built | `presets/`, `lib/blocks/` |
-| Block retrieval per beat | Moss index, keyword fallback | `lib/moss/blocks.ts`, `lib/blocks/catalog.ts` |
-| Board and learner memory search on every reply | Moss sessions in the server process | `lib/moss/session.ts`, `lib/moss/memory.ts`, `app/api/board-index/route.ts` |
+| Block retrieval per beat | local sentence model plus BM25 (Moss behind a switch), keyword fallback | `lib/retrieval/blocks.ts`, `lib/retrieval/hybrid.ts`, `lib/blocks/vectors.json`, `lib/moss/blocks.ts` |
+| Board and learner memory search on every reply | local index per lesson and per learner, in the server process (Moss sessions behind the same switch) | `lib/retrieval/session.ts`, `lib/retrieval/memory.ts`, `lib/moss/session.ts`, `app/api/board-index/route.ts` |
 | Animation | Clayzo WebGL player | `@clayzo/webgl-player`, `components/Lesson.tsx` |
 | Lessons, events, beats, learners; live log | Convex | `convex/`, `lib/convexMirror.ts`, `app/api/live-log/route.ts`, `app/log/` |
 | Learner's pen, Chalky's cursor | perfect-freehand, SVG overlay | `components/InkLayer.tsx`, `lib/lesson/ink.ts`, `components/ChalkyCursor.tsx` |
@@ -120,21 +122,27 @@ values, which are not secrets.
 |---|---|---|
 | `CARTESIA_API_KEY` | yes | Cartesia dashboard, API keys |
 | `ANTHROPIC_API_KEY` | yes | console.anthropic.com, API keys |
-| `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` | for Moss retrieval (without them, keyword match and word overlap) | portal.usemoss.dev |
+| `RETRIEVAL_ENGINE`, `MOSS_PROJECT_ID`, `MOSS_PROJECT_KEY` | only to search with Moss instead of the local engine: `RETRIEVAL_ENGINE=moss` plus both keys | portal.usemoss.dev |
 | `NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT` | for Convex records and the live `/log` | written by `npx convex dev --once --configure new --project chalky --dev-deployment cloud` (see `docs/convex.md`) |
+| `CHALKY_WRITE_SECRET` | with Convex: the same value here and on the deployment (`npx convex env set CHALKY_WRITE_SECRET <value>`); without it nothing is written to Convex | any long random string, e.g. `openssl rand -hex 32` |
+| `MODEL_PROVIDER`, `OPENAI_API_KEY` | only to run the lesson on OpenAI models (`MODEL_PROVIDER=openai`; see `docs/openai.md`) | platform.openai.com |
 | `APIFY_TOKEN` | for time-sensitive questions (without it, Chalky teaches from what it knows) | console.apify.com, Settings, API & Integrations |
 | `CHALKY_LIVE_LOG` | `1` to write transcripts to `experiments/live-runs/` | none |
 | `NEXT_PUBLIC_CHALKY_VOICE_BARGE_IN` | `1` to have voice interrupt on by default (the header switch overrides it per browser) | none |
 | `NEXT_PUBLIC_CHALKY_THEME` | `chalk` (default), `chalkboard` or `whiteboard` | none |
 | `SONIC_SPEED` | optional, 0.6 to 1.5, default 0.92; `1` turns it off | none |
 | `CARTESIA_VOICE_ID`, `CARTESIA_MODEL_ID` | optional voice and model overrides | Cartesia voice library |
-| `CHALKY_BLOCK_RETRIEVAL` | optional, `moss` or `all` | none |
+| `CHALKY_BLOCK_RETRIEVAL` | optional, `all` turns block retrieval off (every block is listed) | none |
 
-Build the Moss block index once (and after changing blocks):
+Block search needs no setup: the block vectors are in the repo (`lib/blocks/vectors.json`) and the
+sentence model (about 23 MB) is downloaded into `.cache/transformers/` the first time the server
+starts. After changing blocks, rebuild the vectors (`npm run build` stops if they are out of date):
 
 ```bash
-npx tsx --env-file=.env.local scripts/moss-build-blocks.ts
+npx tsx scripts/build-block-vectors.ts
 ```
+
+To compare against Moss, also build its index: `npx tsx --env-file=.env.local scripts/moss-build-blocks.ts`.
 
 Run it:
 
@@ -142,7 +150,7 @@ Run it:
 npm run dev
 ```
 
-Open http://localhost:3000/lesson. (`/` is an early one-beat demo page; the app is `/lesson`.)
+Open http://localhost:3000/lesson. (`/` is the landing page; **Start learning** goes to `/lesson`.)
 
 For a demo, use a production build. The dev server compiles each route on its first request, which
 makes a cold first sound several seconds slower.
@@ -152,7 +160,7 @@ npm run build
 npm run start
 ```
 
-At start the server loads the Moss block index and makes spare Moss sessions ahead of time
+At start the server loads the retrieval model and the block index ahead of time
 (`instrumentation.ts`), so the first lesson after a boot can still be a few seconds slower. Run one
 throwaway lesson first. On the dev server, `scripts/warm.sh` compiles every route the lesson uses
 (it reads `BASE_URL`).
@@ -169,10 +177,10 @@ npx tsx scripts/test-amend-scenes.ts     # scene rules on a plan change
 npx tsx scripts/test-first-person.ts     # Chalky speaks as "I"
 ```
 
-With Moss keys:
+Retrieval (no keys for the local engine; `--engine=moss` needs the Moss keys):
 
 ```bash
-npx tsx --env-file=.env.local scripts/test-moss-blocks.ts   # 26 briefs; expected block in Moss's top 3; exits 2 without keys
+npx tsx scripts/test-retrieval.ts --engine=local   # 26 briefs; expected block in the top 3 (25 of 26; `h2o` is the known miss)
 ```
 
 Against a running server (Playwright; `npx playwright install chromium` once). Each script states its
@@ -202,7 +210,9 @@ development: `/lesson?fixture=why-is-the-sky-blue&beats=3`.
 | `app/experiments/` | dev pages: blocks gallery, chalk theme, cursor, mic, Moss, board view |
 | `lib/lesson/` | planner, conversation layer, intake, drawing, scene language, compiler, quiz, ink |
 | `lib/voice/`, `lib/sonic.ts`, `lib/audio/` | Ink-2, Sonic, audio playback and the clock |
-| `lib/moss/` | block retrieval, board and learner memory sessions |
+| `lib/retrieval/` | block retrieval, board and learner memory search (local engine); `docs/retrieval.md` |
+| `lib/moss/` | the same searches on Moss, behind `RETRIEVAL_ENGINE=moss` |
+| `lib/lesson/provider.ts` | the one adapter every model call goes through (Anthropic or OpenAI); `docs/openai.md` |
 | `lib/research/` | time-sensitive questions: Apify fetch, cache, the contract the lesson reads |
 | `lib/blocks/`, `presets/` | the 300 blocks and how the compiler draws them |
 | `lib/board/` | themes and the chalk look |
@@ -243,9 +253,9 @@ Fonts are under the OFL (`public/fonts/OFL.txt`).
 - **Misheard first turn.** Ink-2 can end a turn after "Hey Chalky" or mishear a topic word. A bare
   greeting no longer starts a lesson, and key terms help, but a misheard question can start the wrong
   lesson.
-- **Convex writes are public.** `upsertLesson` is a public mutation: anyone with the deployment URL can
-  write. Fine for a hackathon, not for real learners.
+- **Convex records are readable by anyone with the deployment URL.** Writes need `CHALKY_WRITE_SECRET`,
+  but the queries behind `/log` are public and there are no accounts. Not for real learners.
 - **One browser is one learner.** The learner id is a cookie. No accounts.
-- **Laptop only.** Transcripts are files in the working directory; Moss sessions live in the server
-  process. A serverless host would lose both (Convex still keeps the records).
+- **Laptop only.** Transcripts are files in the working directory; the board and memory indexes live
+  in the server process. A serverless host would lose both (Convex still keeps the records).
 - **Clayzo can't edit a running document**, so the board document is rebuilt per beat.
