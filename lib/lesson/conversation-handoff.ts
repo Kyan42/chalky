@@ -9,5 +9,7 @@ export function handoffQuestion(trailer: Handoff, spoken: string, canContinue: b
       trailer.level === 'replan' || trailer.level === 'detour') return null;
   if (canContinue && trailer.resume !== 'wait') return null;
   if (/[?？؟][\s"'”’]*$/.test(spoken.trim())) return null;
-  return trailer.check || 'Would you like to explore that a little more?';
+  // A "yes" to this must mean what the lesson then does: go on (isResume). The line used to offer to
+  // "explore that a little more", and a "yes" went on with the lesson without exploring anything.
+  return trailer.check || 'Shall I keep going?';
 }

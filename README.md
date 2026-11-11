@@ -216,6 +216,7 @@ npx tsx scripts/test-layout.ts           # labels and blocks move off each other
 npx tsx scripts/test-amend-scenes.ts     # scene rules on a plan change
 npx tsx scripts/test-first-person.ts     # Chalky speaks as "I"
 npx tsx scripts/test-bridge.ts           # a check-in's bridge never confirms an answer nobody gave
+npx tsx scripts/test-steer.ts            # "walk me through that" is a detour; "yes" to an offer accepts it
 ```
 
 Retrieval (no keys for the local engine; `--engine=moss` needs the Moss keys):

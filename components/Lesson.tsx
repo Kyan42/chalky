@@ -49,7 +49,7 @@ import { PREFERENCES_CHANGED, readPreferences, socratic, voiceInterruptOn } from
 import { registerBlocks, type Block } from "@/lib/blocks";
 import { NEW_LEARNER, type CallLog, type LearnerRecord, type PlanEvent, type PlannedBeat, type QuizKind, type QuizResult, type Region } from "@/lib/lesson/types";
 import type { BeatAudioEvent } from "@/lib/sonic";
-import { isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
+import { acceptsOffer, isHesitant, isResume, isStillLost } from "@/lib/lesson/resume";
 import { firstPerson } from "@/lib/lesson/voice";
 import { holdAudio, unlockAudio } from "@/lib/voice/audio";
 import { buildKeyterms, topicWords } from "@/lib/voice/keyterms";
@@ -1679,6 +1679,8 @@ export default function Lesson() {
     // ---------- The conversation layer ----------
     /** Escalation reached for the current confusion: 0 none, 1 a brief answer, 2 a detour. Kept across the detour's beats. */
     let escalation: 0 | 1 | 2 = 0;
+    /** This wait has already had a reply from Chalky: the learner's next words answer that reply, not the beat. */
+    let followUp = false;
     /** Answers that drew a sketch so far, for unique beat ids. */
     let sketchCount = 0;
     /** Each scene's view of the board: the whole board, until answers needed room and it zoomed out. */
@@ -2448,6 +2450,7 @@ export default function Lesson() {
             lesson: transcript.id,
             history: history.slice(-6),
             escalation,
+            followUp,
             learner,
             ...(inkPayload ? { ink: inkPayload } : {}),
           },
@@ -2626,6 +2629,7 @@ export default function Lesson() {
     const converseAt = (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> =>
       converseTurns(i, wordIndex, resumeAt, bridge).finally(() => showInk([]));
     const converseTurns = async (i: number, wordIndex: number, resumeAt: number, bridge?: string): Promise<number> => {
+      followUp = false;
       setStatus("waiting");
       /**
        * Cut off mid-beat, the lesson goes on from the word they cut in at, unless the last reply said
@@ -2655,6 +2659,11 @@ export default function Lesson() {
       for (;;) {
         const heardText = await awaitTurn(abort.signal);
         if (abort.signal.aborted) return -1;
+        // "Yes" to an offer Chalky just made ("want me to go deeper on that?") accepts the offer: the model
+        // answers it. Only a "yes" to nothing in particular, or "keep going", carries the lesson on by itself.
+        const offered = followUp ? [...history].reverse().find((h) => h.who === "chalky")?.text ?? "" : "";
+        const accepts = heardText !== null && acceptsOffer(heardText, offered);
+        const goesOn = heardText === null || (isResume(heardText) && !accepts);
         logEv({
           kind: "learner",
           via: heardText === null ? "button" : inputViaRef.current,
@@ -2662,7 +2671,8 @@ export default function Lesson() {
           beatId: list[i]?.beat.id ?? null,
           wordIndex,
           text: heardText ?? "(Continue)",
-          local: heardText === null || isResume(heardText),
+          local: goesOn,
+          ...(accepts ? { acceptsOffer: offered.slice(-120) } : {}),
           escalation,
         });
         // The lesson started on the intake's silence and this came right after: it is the intake answer.
@@ -2680,7 +2690,7 @@ export default function Lesson() {
           learner.replies = [...learner.replies, heardText].slice(-5);
           noteLearner();
         }
-        if (heardText === null || isResume(heardText)) {
+        if (goesOn) {
           escalation = 0;
           dropDraft();
           setPausedAt(null);
@@ -2735,6 +2745,7 @@ export default function Lesson() {
           continue;
         }
         history.push({ who: "chalky", text: reply.said });
+        followUp = true;
         let trailer = reply.trailer;
         // "I'm done": the goodbye (the reply's, or ours when the model missed it), then back to the home screen.
         if (trailer.end && lessonStarted) {

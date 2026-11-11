@@ -79,6 +79,7 @@ function parse(body: Record<string, unknown>): ConverseInput | string {
     board,
     history,
     escalation: esc >= 2 ? 2 : esc === 1 ? 1 : 0,
+    followUp: body.followUp === true,
     learner: cleanLearner(body.learner),
     ...(marks.length || loose > 0 ? { ink: { marks, loose: Math.min(20, Math.max(0, loose)), ...(image ? { image } : {}) } } : {}),
   };
