@@ -300,7 +300,7 @@ function context(o: ConverseInput): string {
     const next = o.beats.slice(o.beatIndex + 1, o.beatIndex + 3).map((b, k) => `${k + 1}. ${b.say}`);
     where = [
       `You had just asked a check-in question: "${asked}"`,
-      now.answer ? `The answer you had in mind when you planned it: "${now.answer}". This is only for judging what they said: they have not heard it. How you respond is yours to decide from their reply. Never tell them they were right about something they did not say.` : "",
+      now.answer ? `The answer you had in mind when you planned it: "${now.answer}". The learner has not heard it. Weigh their reply against it silently, then answer them directly ("you", never "they said ..."); how you respond is yours to decide. Never tell them they were right about something they did not say.` : "",
       goal ? `This section's goal: ${goal}` : "",
       next.length ? `What you will say next:\n${next.join("\n")}` : "Nothing more is planned after this.",
     ]

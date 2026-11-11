@@ -10,7 +10,7 @@ Built at Cal Hacks 13 by Keyon, Janani and Leo.
 <img src="docs/media/opening.gif" width="820" alt="The start screen: Chalky's mascot, then Start talking, the greeting, and a tree and stones rising beside it.">
 
 To run it yourself, see [Setup](#setup). The clips below are from one unscripted lesson on how neural
-networks learn; the captions at the bottom of each show what was said, the learner's words in green.
+networks learn (the quiz clip skips ahead while the learner draws); the captions at the bottom of each show what was said, the learner's words in green.
 
 ## Just ask out loud
 
@@ -37,7 +37,7 @@ A chalk hand moves to the part being talked about and circles it, so "this knob"
 Start talking, or hold **Space**: Chalky stops on the exact word, answers, and goes on from where it
 stopped.
 
-<!-- clip to record: docs/media/interrupt-at-any-time.gif (a cut-in while Chalky is mid-sentence) -->
+<img src="docs/media/interrupt-at-any-time.gif" width="820" alt="Chalky is mid-sentence when the learner circles a square and asks what it is; Chalky stops, points at it and answers.">
 
 ## Circle it and ask
 
@@ -58,14 +58,7 @@ back to the lesson.
 Ask for a quiz and Chalky numbers the parts of the diagram for you to name, or asks you to sketch it,
 then says what was right and what was missing.
 
-<!-- clip to record: docs/media/quiz-me.gif ("quiz me, label the parts", an answer, the grading) -->
-
-## One long board
-
-The board is one continuous world: new scenes open beside the old ones, and "show me where the network
-diagram was" glides the camera back.
-
-<!-- clip to record: docs/media/one-long-board.gif ("show me where ... was" and the camera gliding back) -->
+<img src="docs/media/quiz-me.gif" width="820" alt="The learner asks to be quizzed, Chalky asks for a drawing of what was just covered, the learner sketches it, and Chalky says what it liked and what to add.">
 
 ## It remembers you
 
@@ -75,6 +68,7 @@ Your next lesson starts from what you covered and where you got stuck last time.
 
 ## Also
 
+- **One long board.** New scenes open beside the old ones and the camera glides between them; "show me where the network diagram was" glides back.
 - **Check-ins.** Each section ends with one specific question, and the lesson waits for your answer.
 - **Captions.** Every word shows as it is spoken, and your own words as you say them.
 - **Pause and end by voice.** A tap of Space pauses on the word and resumes from it; "I'm done" ends the lesson.
