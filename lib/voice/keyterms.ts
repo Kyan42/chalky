@@ -51,3 +51,14 @@ export function buildKeyterms(topic: string[] = []): string[] {
   }
   return out;
 }
+
+/**
+ * Ink-2 still hears "Chalky" as "Chucky" now and then, key term or not. The learner's words show on screen
+ * as they speak (and go to the model and the transcript), so the name is put right as it arrives. Only
+ * spellings that are mishearings of the name, not names a learner might really say ("Charlie", "Jackie").
+ */
+const MISHEARD_NAME = /\b(chuck(y|ie)|chalk(ie|ey)|chock(y|ie)|chaki|choky)\b/gi;
+
+export function hearName(transcript: string): string {
+  return transcript.replace(MISHEARD_NAME, "Chalky");
+}

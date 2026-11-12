@@ -1,6 +1,7 @@
 // What the learner's words mean after Chalky has answered a cut-in (lib/lesson/resume.ts).
 //   npx tsx scripts/test-steer.ts
 import { acceptsOffer, isResume, offersMore, wantsMore, wantsSlower } from "@/lib/lesson/resume";
+import { hearName } from "@/lib/voice/keyterms";
 
 let failed = 0;
 const check = (name: string, got: boolean, want: boolean) => {
@@ -25,5 +26,8 @@ check("not an offer: a check question", offersMore("So which layer do we never s
 check('"Uh, yes." to an offer accepts it', acceptsOffer("Uh, yes.", "Want me to go deeper on that?"), true);
 check('"Uh, yes." to "Shall I keep going?" carries on', isResume("Uh, yes.") && !acceptsOffer("Uh, yes.", "Shall I keep going?"), true);
 check('"Yeah, keep going." carries on even after an offer', acceptsOffer("Yeah, keep going.", "Want me to go deeper on that?"), false);
+// The recogniser's "Chucky" is shown, sent and logged as "Chalky"; real names are left alone.
+check("Chucky -> Chalky", hearName("All right, Chucky. can you quiz me on how LLMs work?") === "All right, Chalky. can you quiz me on how LLMs work?", true);
+check("Charlie stays", hearName("My friend Charlie asked about this.") === "My friend Charlie asked about this.", true);
 console.log(failed ? `\n${failed} check(s) failed` : "\nall steering checks passed");
 process.exit(failed ? 1 : 0);
