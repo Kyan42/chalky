@@ -50,6 +50,61 @@ export function isQuestion(text: string): boolean {
   return QUESTION.test(text.trim());
 }
 
+/**
+ * The learner asks to go deeper into what was just said ("could you walk me through that?", "tell me more",
+ * "explain that again"). Mid-lesson that is a short detour, not another one-line answer.
+ */
+const WANTS_MORE = new RegExp(
+  "\\b(" +
+    [
+      "walk me through|talk me through|take me through",
+      "go (a bit |a little )?(deeper|further)|go into (more )?detail|(in )?more detail|in depth",
+      "(dive|dig|digging|diving) (a bit |a little )?(deeper|in|into)|deep dive|dig into|unpack",
+      "tell me more|say more|more (on|about) (this|that|it|these|those)",
+      "explain (that|this|it|those|them)( part)? (more|further|again|in more|a bit more|a little more|separately|on its own|by itself|first)",
+      "explain (more|further)|elaborate|expand on|break (that|this|it) down|explore (that|this|it)",
+      // "Start with just this part", "focus on this", "spend some time on it": stay on one thing.
+      "start with (just |only )?(this|that|these|those|what)|just (this|that) (part|bit|piece)( first)?",
+      "focus on (just |only )?(this|that|these|those)|(let'?s|can we|can you|could we|could you|i want to|i'd like to|please) (just )?focus on|zoom in|stay on (this|that)",
+      "spend (some |more |a little |a bit )?(more )?time on",
+      "(take|cover|do) (that|this|it|those) (separately|on its own|by itself)",
+    ].join("|") +
+    ")\\b",
+  "i",
+);
+
+export function wantsMore(text: string): boolean {
+  return WANTS_MORE.test(text.trim());
+}
+
+/**
+ * The learner asks for a slower pace ("can we go slower?", "one thing at a time", "slow down"): the rest
+ * of the lesson is rewritten at that pace, not just acknowledged.
+ */
+const WANTS_SLOWER = /\b(go(ing)? (a (little|bit|lot) |much |way |actually )?(more )?slow(er|ly)?|slow(ing)? (it |this |things |that )?down|(a (little|bit) |much )slower|too fast|not so fast|one (thing|step|piece|part|idea|bit|concept) at a time|step by step|take (it|this) (slow(ly|er)?|easy)|more slowly)\b/i;
+
+export function wantsSlower(text: string): boolean {
+  return WANTS_SLOWER.test(text.trim());
+}
+
+/**
+ * Chalky's last line offered something more ("Want me to go deeper on that?", "Would you like to explore
+ * that?"), as opposed to asking whether to carry on. A bare "yes" to an offer accepts it: it goes to the
+ * model, and is not the "carry on" that a "yes" otherwise is (isResume).
+ */
+const OFFERS_MORE = /\b(explore|go deeper|deeper|more detail|in detail|walk (you )?through|break (it|that|this) down|show you|draw (it|that|this|one)|another (way|example)|an example|(want|like) me to|should i (show|draw|explain|go through)|shall i (show|draw|explain|go through))\b/i;
+const ASKS_TO_GO_ON = /\b(keep going|go on|carry on|continue|move on|ready)\b/i;
+
+export function offersMore(line: string): boolean {
+  const asked = line.trim().split(/(?<=[.!?])\s+/).filter((x) => x.trim().endsWith("?")).pop() ?? "";
+  return !!asked && OFFERS_MORE.test(asked) && !ASKS_TO_GO_ON.test(asked);
+}
+
+/** A bare "yes" / "sure" (no "keep going") said to a line of Chalky's that offered more: it accepts the offer. */
+export function acceptsOffer(text: string, lastLine: string): boolean {
+  return isResume(text) && !new RegExp(`\\b(${GO})\\b`, "i").test(text) && offersMore(lastLine);
+}
+
 export function isStillLost(text: string): boolean {
   return STILL_LOST.test(text.trim());
 }

@@ -1,6 +1,7 @@
 // Ported from Janani's PR #2 (lib/voice/stt.ts), unchanged.
 // Cartesia Ink 2 with built-in turn detection, straight from the browser.
 import { STT_SAMPLE_RATE } from "./audio";
+import { hearName } from "./keyterms";
 
 export type TurnEvents = {
   onStart?: () => void;
@@ -75,13 +76,13 @@ export class InkSession {
       case "turn.start":
         return this.events.onStart?.();
       case "turn.update":
-        return this.events.onUpdate?.(message.transcript ?? "");
+        return this.events.onUpdate?.(hearName(message.transcript ?? ""));
       case "turn.eager_end":
-        return this.events.onEagerEnd?.(message.transcript ?? "");
+        return this.events.onEagerEnd?.(hearName(message.transcript ?? ""));
       case "turn.resume":
         return this.events.onResume?.();
       case "turn.end":
-        return this.events.onEnd?.(message.transcript ?? "");
+        return this.events.onEnd?.(hearName(message.transcript ?? ""));
       case "error":
         return this.events.onError?.(message.message ?? "Speech recognition error");
     }

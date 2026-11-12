@@ -1,5 +1,7 @@
 # Chalky
 
+**Runner-up for Best Use of Cartesia at Cal Hacks 13**, out of about 190 teams on the track.
+
 Ask an LLM to explain something and you get a wall of text. Chalky replaces the chat box for
 understanding things: you ask out loud, and it explains on a whiteboard, in a voice you can interrupt
 mid-word. It draws while it talks, points at what it means, asks what you already know, quizzes you,
@@ -216,6 +218,7 @@ npx tsx scripts/test-layout.ts           # labels and blocks move off each other
 npx tsx scripts/test-amend-scenes.ts     # scene rules on a plan change
 npx tsx scripts/test-first-person.ts     # Chalky speaks as "I"
 npx tsx scripts/test-bridge.ts           # a check-in's bridge never confirms an answer nobody gave
+npx tsx scripts/test-steer.ts            # "walk me through that" is a detour; "yes" to an offer accepts it
 ```
 
 Retrieval (no keys for the local engine; `--engine=moss` needs the Moss keys):
